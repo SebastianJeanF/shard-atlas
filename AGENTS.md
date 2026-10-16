@@ -1,0 +1,19 @@
+# Working on Shard Atlas
+
+When asked to add or save knowledge, first read `static/ai-instructions.md` and use the `add-to-shard-atlas` skill or local contribution tools. This is a knowledge operation. Do not modify app code, starter notes, the public release catalog, or SQLite directly to add personal knowledge. Search existing notes, retain source attribution and uncertainty, reuse suitable topics, add meaningful connections, and verify saved content. Requests to modify the application itself follow the development guidance below.
+
+Preserve user knowledge. The default working database is under `~/Library/Application Support/Shard Atlas`, outside the source checkout. Never use it for automated or destructive tests. Use temporary databases and make a consistent SQLite backup before changing a real database schema or importing existing knowledge.
+
+Shard Atlas focuses on technical understanding: programming languages, CS, mathematics, and ML or AI theory. The current personal collection is C++. News, company announcements, career and compensation tracking, and forecasts belong outside this atlas. Preserve legacy storage and archive compatibility for recovery, but do not reintroduce retired news, entity, comparison, inbox, or Ask interfaces. Canvas is the retained freeform spatial view over shared technical notes.
+
+The user prefers a local app with an attractive interface and source that an AI can maintain. The Python storage service uses only the standard library. KaTeX is vendored for offline math rendering with its license. Preserve stable shard IDs, typed relationship direction, portable exports, revision history, trash, images, drafts, and legacy recall data. Recall must not reappear in the interface. Keep starter content separate from personal data. Do not reseed a collection that the user emptied.
+
+Follow the user's supplied editorial standards when writing documentation. Preserve exact C++ source text in rendering and the established syntax palette. Unresolved identifiers should remain neutral. Do not commit private editorial documents or identifiers into this source repository.
+
+Storage and local HTTP tests live in `tests/test_server.py`. Run `python3 -m unittest discover -s tests -v` for persistence changes and `node --check static/app.js` for interface changes. Verify changed user workflows in a real browser, including narrow screens when layout changes. Keep test notes and screenshots out of the user's working collection.
+
+This repository does not contain the user's live database or backup snapshots. Source Git history and knowledge backups serve separate purposes. The current integration boundary with History Atlas is stable IDs and dated views, not a merged datastore.
+
+Keep working databases, exported personal archives, backups, retrieved Lucid content, local diagnostics, and test artifacts out of Git. Commit and push verified source changes when completing an authorized implementation update. Preparing a public release does not authorize changing repository visibility or publishing personal data. The public C++ release reference lives in `static/cpp-releases.json` and must remain separate from personal knowledge. Preserve source attribution and coverage boundaries. C++26 remains labeled as a working draft until publication is verified. Lucid conversion uses stable source IDs and preserves original text and assets. Do not infer prerequisite semantics from diagram arrows.
+
+Shard Atlas is now a native macOS app window implemented in `desktop/ShardAtlas.swift` with an embedded WKWebView. Preserve native dialogs, export downloads, the clipboard bridge, menu commands, and unsaved-edit checks on close and quit. Rebuild with `python3 desktop/build.py` after changing bundled assets. Generated app bundles are ignored by Git. Build an isolated QA app using `--output PATH --qa-db PATH` and keep all test records out of the user's working database.

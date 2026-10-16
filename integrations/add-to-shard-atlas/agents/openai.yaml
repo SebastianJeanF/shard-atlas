@@ -1,0 +1,6 @@
+interface:
+  display_name: "Add to Shard Atlas"
+  short_description: "Save technical knowledge into Shard Atlas"
+  default_prompt: "Use $add-to-shard-atlas to save the relevant technical knowledge from this conversation into Shard Atlas."
+policy:
+  allow_implicit_invocation: true

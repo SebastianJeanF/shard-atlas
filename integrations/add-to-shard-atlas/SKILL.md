@@ -1,0 +1,18 @@
+---
+name: add-to-shard-atlas
+description: Add technical notes and useful connections to Shard Atlas when the user says "Add this to Shard Atlas", "save this in Shard Atlas", or asks to capture/import knowledge into their atlas. Supports direct local saves or an importable JSON handoff. Does not apply to changing the application's code.
+---
+
+# Add to Shard Atlas
+
+Read `static/ai-instructions.md` in the Shard Atlas checkout. This skill is stored at `integrations/add-to-shard-atlas/SKILL.md`, so the guide is `../../static/ai-instructions.md` relative to this file's real location. Resolve an installed symlink before locating the checkout. It defines the supported route, schema, source attribution, topic reuse, relationship direction, and verification requirements. If local files are unavailable, retrieve the guide from the user's source repository through an available GitHub connection, or use the guide copied from **Use with AI** in the app. Disclose missing access rather than assuming a particular machine or installation path.
+
+Interpret “this” using the relevant current conversation or supplied source. Shard Atlas stores technical understanding: programming languages, computer science, mathematics, and ML or AI theory. Capture reusable explanations, definitions, exact code, examples, and caveats. Exclude world news, company announcements, model-release news, compensation, career tracking, and forecasts. For mixed material, save the technical knowledge and report what was excluded. If it contains only news, explain the scope and suggest History Atlas without writing there automatically. The explicit add/save request authorizes additions to the local knowledge collection and useful connections within that scope. It does not authorize unrelated edits, deletions, source-code changes, or sending content to other services.
+
+Prefer `shard_atlas_search`, `shard_atlas_read`, and `shard_atlas_add_knowledge` from the local `shard_atlas` server. Search and read likely matches before saving. Reuse existing topics and complementary notes. Preserve code, sources, caveats, and uncertainty. Do not mark knowledge as confident without evidence from the user. Add meaningful relationships with reasons, using the correct direction.
+
+If the MCP tools are unavailable but local execution is available, use `tools/shard_atlas_client.py` in the project. Run its `--help` for current syntax. It locates or starts the correct local service without opening a browser. Do not write directly to the database or modify seed/source files to add knowledge.
+
+Give each add request and new note stable IDs. Preserve the exact request ID and payload when retrying after a timeout. Read the actual saved IDs from the receipt and verify the notes and links. If a replay warns that content changed or was deleted after the original save, preserve the later user changes and report the current state. Report titles added or reused and useful connections. Do not treat an attempted write, generated file, or app launch as proof of a save.
+
+When the chat has no local access, produce the complete portable JSON file described by the guide. Use verified IDs from a supplied export when available. Tell the user the file is ready for **Use with AI → Import a file**. Never claim a direct save in this fallback.

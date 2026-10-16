@@ -1,0 +1,564 @@
+{
+  "schemaVersion": 1,
+  "shards": [
+    {
+      "id": "cpp-raii",
+      "title": "RAII makes cleanup follow object lifetime",
+      "content": "Resource Acquisition Is Initialization binds cleanup to an owning object's destructor. Scope exit and exception unwinding then release resources automatically.\n\nCaveat: RAII handles cleanup, not rollback of every change an operation makes.",
+      "prompt": "What responsibility does an RAII object's destructor carry?",
+      "tags": [
+        "C++",
+        "RAII",
+        "Resources",
+        "Destructors"
+      ],
+      "kind": "concept",
+      "status": "learning",
+      "sourceUrl": "https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#Rr-raii",
+      "languageVersion": "C++98+",
+      "createdAt": "2026-10-12T17:29:14Z",
+      "updatedAt": "2026-10-12T17:29:14Z",
+      "reviewCount": 0,
+      "lastReviewedAt": null,
+      "nextReviewAt": null,
+      "eventDate": ""
+    },
+    {
+      "id": "cpp-object-lifetime",
+      "title": "Storage and object lifetime are different",
+      "content": "An object's lifetime usually begins when suitable storage exists and initialization finishes. For a class object, its lifetime ends when the destructor starts. Having an address does not prove that a live object remains there.\n\nCaveat: construction, destruction, unions, and reused storage have additional rules. Treat this as the ordinary-object model, not a replacement for those rules.",
+      "prompt": "What must be true besides having allocated storage before you can use an object normally?",
+      "tags": [
+        "C++",
+        "Lifetime",
+        "Objects",
+        "Memory"
+      ],
+      "kind": "concept",
+      "status": "learning",
+      "sourceUrl": "https://eel.is/c++draft/basic.life",
+      "languageVersion": "C++98+",
+      "createdAt": "2026-10-12T17:29:14Z",
+      "updatedAt": "2026-10-12T17:29:14Z",
+      "reviewCount": 0,
+      "lastReviewedAt": null,
+      "nextReviewAt": null,
+      "eventDate": ""
+    },
+    {
+      "id": "cpp-ownership",
+      "title": "Ownership names who must release a resource",
+      "content": "Ownership is responsibility for release. Make it visible in types such as `std::unique_ptr`. Treat raw pointers and references as borrowed access in new code.\n\nCaveat: that borrowing convention is guidance, not a language guarantee for legacy pointers.",
+      "prompt": "What question does ownership answer that a raw address does not?",
+      "tags": [
+        "C++",
+        "Ownership",
+        "Resources",
+        "Pointers"
+      ],
+      "kind": "concept",
+      "status": "learning",
+      "sourceUrl": "https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#Rr-ptr",
+      "languageVersion": "C++11+",
+      "createdAt": "2026-10-12T17:29:14Z",
+      "updatedAt": "2026-10-12T17:29:14Z",
+      "reviewCount": 0,
+      "lastReviewedAt": null,
+      "nextReviewAt": null,
+      "eventDate": ""
+    },
+    {
+      "id": "cpp-unique-ptr",
+      "title": "unique_ptr transfers ownership without copying it",
+      "content": "`std::unique_ptr<T>` owns an object and invokes its deleter when needed. It can be moved but cannot be copied.\n\n```cpp\n#include <memory>\n#include <utility>\n\nauto first = std::make_unique<int>(7);\nauto second = std::move(first);\n// second owns the int and first is null\n```\n\nCaveat: `get()` supplies a borrowed pointer. It neither creates another owner nor keeps the pointee alive.",
+      "prompt": "After moving a unique_ptr into another unique_ptr, who owns the object and what is the source pointer's state?",
+      "tags": [
+        "C++",
+        "Ownership",
+        "RAII",
+        "Smart pointers",
+        "Move semantics"
+      ],
+      "kind": "example",
+      "status": "learning",
+      "sourceUrl": "https://eel.is/c++draft/unique.ptr",
+      "languageVersion": "C++14+",
+      "createdAt": "2026-10-12T17:29:14Z",
+      "updatedAt": "2026-10-12T17:29:14Z",
+      "reviewCount": 0,
+      "lastReviewedAt": null,
+      "nextReviewAt": null,
+      "eventDate": ""
+    },
+    {
+      "id": "cpp-move",
+      "title": "std::move enables an operation to move",
+      "content": "`std::move(x)` casts an expression to an rvalue reference. The cast itself transfers nothing. A constructor or assignment selected afterward may implement a move.\n\n```cpp\n#include <string>\n#include <utility>\n\nstd::string original = \"hello\";\nauto&& alias = std::move(original);\n// original is still \"hello\"\nstd::string destination = std::move(alias);\n```\n\nCaveat: a moved-from standard-library object is generally valid with an unspecified value unless its type promises more. Do not assume a moved-from string is empty. See the [moved-from rule](https://eel.is/c++draft/lib.types.movedfrom).",
+      "prompt": "Which line actually performs a string move, and why does std::move alone not empty the string?",
+      "tags": [
+        "C++",
+        "Move semantics",
+        "Value categories",
+        "Strings"
+      ],
+      "kind": "fact",
+      "status": "learning",
+      "sourceUrl": "https://eel.is/c++draft/forward",
+      "languageVersion": "C++11+",
+      "createdAt": "2026-10-12T17:29:14Z",
+      "updatedAt": "2026-10-12T17:29:14Z",
+      "reviewCount": 0,
+      "lastReviewedAt": null,
+      "nextReviewAt": null,
+      "eventDate": ""
+    },
+    {
+      "id": "cpp-const-reference",
+      "title": "A const reference restricts an access path",
+      "content": "`const T&` gives read-only access through that reference. It does not make a non-const object immutable through every other alias.\n\n```cpp\nint value = 3;\nconst int& view = value;\nvalue = 4;\n// view now observes 4\n// view = 5 would be ill-formed\n```\n\nCaveat: borrowing through a reference does not generally prolong an existing object's lifetime. A reference can outlive the object it names.",
+      "prompt": "Why can a value observed through a const reference change?",
+      "tags": [
+        "C++",
+        "References",
+        "Const",
+        "Aliasing",
+        "Lifetime"
+      ],
+      "kind": "fact",
+      "status": "learning",
+      "sourceUrl": "https://eel.is/c++draft/dcl.type.cv",
+      "languageVersion": "C++98+",
+      "createdAt": "2026-10-12T17:29:14Z",
+      "updatedAt": "2026-10-12T17:29:14Z",
+      "reviewCount": 0,
+      "lastReviewedAt": null,
+      "nextReviewAt": null,
+      "eventDate": ""
+    },
+    {
+      "id": "cpp-vector-invalidation",
+      "title": "Vector reallocation breaks borrowed element access",
+      "content": "When a vector reallocates, its old element pointers, references, and iterators are invalidated. Reserve capacity before taking borrowed element access if you need to avoid later growth reallocations.\n\n```cpp\n#include <vector>\n\nstd::vector<int> values{1};\nconst int& first = values[0];\nvalues.reserve(values.capacity() + 1);\n// first is now dangling and must not be read\n```\n\nCaveat: reserve does not increase size. It also does not prevent invalidation caused by insertion or erase at affected positions. See the [modifier rules](https://eel.is/c++draft/vector.modifiers).",
+      "prompt": "Why does keeping the vector alive not guarantee that a reference to one of its old elements stays valid?",
+      "tags": [
+        "C++",
+        "Containers",
+        "Vector",
+        "Lifetime",
+        "Invalidation"
+      ],
+      "kind": "fact",
+      "status": "learning",
+      "sourceUrl": "https://eel.is/c++draft/vector.capacity",
+      "languageVersion": "C++98+",
+      "createdAt": "2026-10-12T17:29:14Z",
+      "updatedAt": "2026-10-12T17:29:14Z",
+      "reviewCount": 0,
+      "lastReviewedAt": null,
+      "nextReviewAt": null,
+      "eventDate": ""
+    },
+    {
+      "id": "cpp-undefined-behavior",
+      "title": "Undefined behavior removes the language's guarantees",
+      "content": "For undefined behavior, the C++ standard imposes no requirements on the resulting behavior. A crash is not required, and a successful run does not establish correctness.\n\n```cpp\n#include <limits>\n\nint value = std::numeric_limits<int>::max();\n// ++value would overflow signed int\n// Do not execute that increment\n```\n\nCaveat: compilation errors and undefined behavior are different categories. Some invalid programs require a diagnostic. Signed arithmetic overflow is covered by the [expression rule](https://eel.is/c++draft/expr.pre).",
+      "prompt": "Why is a test run that happens to work insufficient evidence that undefined behavior is safe?",
+      "tags": [
+        "C++",
+        "Correctness",
+        "Undefined behavior",
+        "Arithmetic"
+      ],
+      "kind": "concept",
+      "status": "learning",
+      "sourceUrl": "https://eel.is/c++draft/defns.undefined",
+      "languageVersion": "C++98+",
+      "createdAt": "2026-10-12T17:29:14Z",
+      "updatedAt": "2026-10-12T17:29:14Z",
+      "reviewCount": 0,
+      "lastReviewedAt": null,
+      "nextReviewAt": null,
+      "eventDate": ""
+    },
+    {
+      "id": "cpp-exception-safety",
+      "title": "Cleanup and rollback are different guarantees",
+      "content": "Exception safety describes the state left after failure. The basic guarantee preserves valid state without leaks. The strong guarantee also leaves the observable state unchanged. A no-throw guarantee prevents exceptions from escaping.\n\nCaveat: RAII supports cleanup, but rollback needs deliberate design.",
+      "prompt": "What does the strong exception guarantee add beyond the basic guarantee?",
+      "tags": [
+        "C++",
+        "Exceptions",
+        "Correctness",
+        "RAII",
+        "Invariants"
+      ],
+      "kind": "concept",
+      "status": "learning",
+      "sourceUrl": "https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#Rc-copy-assignment",
+      "languageVersion": "C++98+",
+      "createdAt": "2026-10-12T17:29:14Z",
+      "updatedAt": "2026-10-12T17:29:14Z",
+      "reviewCount": 0,
+      "lastReviewedAt": null,
+      "nextReviewAt": null,
+      "eventDate": ""
+    },
+    {
+      "id": "cpp-class-invariants",
+      "title": "An invariant makes a class safe to use",
+      "content": "An invariant is a condition that valid objects maintain, such as a range's `lower <= upper`. Constructors establish it and public operations preserve it.\n\nCaveat: private fields help control updates, but access control alone cannot make an invariant true.",
+      "prompt": "What must a constructor and a mutating operation do to protect a class invariant?",
+      "tags": [
+        "C++",
+        "Classes",
+        "Invariants",
+        "Correctness"
+      ],
+      "kind": "concept",
+      "status": "learning",
+      "sourceUrl": "https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#Rc-struct",
+      "languageVersion": "C++98+",
+      "createdAt": "2026-10-12T17:29:14Z",
+      "updatedAt": "2026-10-12T17:29:14Z",
+      "reviewCount": 0,
+      "lastReviewedAt": null,
+      "nextReviewAt": null,
+      "eventDate": ""
+    },
+    {
+      "id": "cpp-complete-class-context",
+      "title": "A method body can use a later-declared nested type",
+      "content": "An in-class member function body is a complete-class context. Its member lookup can see a nested type declared later in that class.\n\n```cpp\nclass Example {\npublic:\n    int read() const {\n        Later value{7};\n        return value.number;\n    }\nprivate:\n    struct Later { int number; };\n};\n```\n\nCaveat: this does not permit arbitrary use before declaration. Writing `Later read()` before declaring `Later` does not get the same rule for that return type. Templates add separate lookup considerations. See [complete-class contexts](https://eel.is/c++draft/class.mem.general).",
+      "prompt": "Why does Later work inside read's body, while an earlier return type using Later needs separate care?",
+      "tags": [
+        "C++",
+        "Classes",
+        "Nested types",
+        "Name lookup",
+        "Compilation"
+      ],
+      "kind": "fact",
+      "status": "learning",
+      "sourceUrl": "https://eel.is/c++draft/class.member.lookup",
+      "languageVersion": "C++98+",
+      "createdAt": "2026-10-12T17:29:14Z",
+      "updatedAt": "2026-10-12T17:29:14Z",
+      "reviewCount": 0,
+      "lastReviewedAt": null,
+      "nextReviewAt": null,
+      "eventDate": ""
+    },
+    {
+      "id": "cpp-mistake-reference-ownership",
+      "title": "Common mistake: a reference keeps its object alive",
+      "content": "Misconception: once a reference names an object, the object must remain alive for as long as the reference exists.\n\nA reference is borrowed access, not an owner. Resetting the owner can destroy the object while the reference remains.\n\n```cpp\n#include <memory>\n\nauto owner = std::make_unique<int>(7);\nconst int& borrowed = *owner;\nowner.reset();\n// borrowed is dangling and must not be read\n```\n\nCaveat: some direct bindings extend a temporary's lifetime under specific rules. That does not apply to this already-owned object.",
+      "prompt": "After owner.reset(), why is reading borrowed invalid even though borrowed is still in scope?",
+      "tags": [
+        "C++",
+        "Mistakes",
+        "References",
+        "Ownership",
+        "Lifetime"
+      ],
+      "kind": "mistake",
+      "status": "learning",
+      "sourceUrl": "https://eel.is/c++draft/basic.life",
+      "languageVersion": "C++14+",
+      "createdAt": "2026-10-12T17:29:14Z",
+      "updatedAt": "2026-10-12T17:29:14Z",
+      "reviewCount": 0,
+      "lastReviewedAt": null,
+      "nextReviewAt": null,
+      "eventDate": ""
+    }
+  ],
+  "links": [
+    {
+      "id": "link-cpp-raii-depends_on-cpp-object-lifetime",
+      "fromId": "cpp-raii",
+      "toId": "cpp-object-lifetime",
+      "type": "depends_on",
+      "note": "Cleanup is attached to the owning object's destruction.",
+      "createdAt": "2026-10-12T17:29:14Z"
+    },
+    {
+      "id": "link-cpp-ownership-explains-cpp-raii",
+      "fromId": "cpp-ownership",
+      "toId": "cpp-raii",
+      "type": "explains",
+      "note": "The owner is responsible for the cleanup that RAII automates.",
+      "createdAt": "2026-10-12T17:29:14Z"
+    },
+    {
+      "id": "link-cpp-unique-ptr-example_of-cpp-raii",
+      "fromId": "cpp-unique-ptr",
+      "toId": "cpp-raii",
+      "type": "example_of",
+      "note": "unique_ptr uses destruction to invoke its owned object's deleter.",
+      "createdAt": "2026-10-12T17:29:14Z"
+    },
+    {
+      "id": "link-cpp-unique-ptr-example_of-cpp-ownership",
+      "fromId": "cpp-unique-ptr",
+      "toId": "cpp-ownership",
+      "type": "example_of",
+      "note": "The pointer type expresses exclusive ownership.",
+      "createdAt": "2026-10-12T17:29:14Z"
+    },
+    {
+      "id": "link-cpp-unique-ptr-depends_on-cpp-move",
+      "fromId": "cpp-unique-ptr",
+      "toId": "cpp-move",
+      "type": "depends_on",
+      "note": "Moving the smart pointer transfers its ownership.",
+      "createdAt": "2026-10-12T17:29:14Z"
+    },
+    {
+      "id": "link-cpp-move-related_to-cpp-ownership",
+      "fromId": "cpp-move",
+      "toId": "cpp-ownership",
+      "type": "related_to",
+      "note": "Move operations can transfer ownership, but the cast alone does not.",
+      "createdAt": "2026-10-12T17:29:14Z"
+    },
+    {
+      "id": "link-cpp-const-reference-contrasts_with-cpp-ownership",
+      "fromId": "cpp-const-reference",
+      "toId": "cpp-ownership",
+      "type": "contrasts_with",
+      "note": "A borrowed read-only access path does not carry release responsibility.",
+      "createdAt": "2026-10-12T17:29:14Z"
+    },
+    {
+      "id": "link-cpp-const-reference-depends_on-cpp-object-lifetime",
+      "fromId": "cpp-const-reference",
+      "toId": "cpp-object-lifetime",
+      "type": "depends_on",
+      "note": "A reference must still refer to an object whose lifetime permits access.",
+      "createdAt": "2026-10-12T17:29:14Z"
+    },
+    {
+      "id": "link-cpp-vector-invalidation-explains-cpp-object-lifetime",
+      "fromId": "cpp-vector-invalidation",
+      "toId": "cpp-object-lifetime",
+      "type": "explains",
+      "note": "The container can remain alive after the referenced old elements are gone.",
+      "createdAt": "2026-10-12T17:29:14Z"
+    },
+    {
+      "id": "link-cpp-vector-invalidation-related_to-cpp-undefined-behavior",
+      "fromId": "cpp-vector-invalidation",
+      "toId": "cpp-undefined-behavior",
+      "type": "related_to",
+      "note": "Reading through invalidated element references can violate object lifetime rules.",
+      "createdAt": "2026-10-12T17:29:14Z"
+    },
+    {
+      "id": "link-cpp-exception-safety-depends_on-cpp-raii",
+      "fromId": "cpp-exception-safety",
+      "toId": "cpp-raii",
+      "type": "depends_on",
+      "note": "Automatic cleanup supports leak prevention during failure.",
+      "createdAt": "2026-10-12T17:29:14Z"
+    },
+    {
+      "id": "link-cpp-exception-safety-depends_on-cpp-class-invariants",
+      "fromId": "cpp-exception-safety",
+      "toId": "cpp-class-invariants",
+      "type": "depends_on",
+      "note": "Objects that survive an operation's failure must still be valid.",
+      "createdAt": "2026-10-12T17:29:14Z"
+    },
+    {
+      "id": "link-cpp-class-invariants-related_to-cpp-ownership",
+      "fromId": "cpp-class-invariants",
+      "toId": "cpp-ownership",
+      "type": "related_to",
+      "note": "Resource ownership can be part of a class's valid-state conditions.",
+      "createdAt": "2026-10-12T17:29:14Z"
+    },
+    {
+      "id": "link-cpp-mistake-reference-ownership-contrasts_with-cpp-ownership",
+      "fromId": "cpp-mistake-reference-ownership",
+      "toId": "cpp-ownership",
+      "type": "contrasts_with",
+      "note": "The mistaken model assigns ownership to a borrowed reference.",
+      "createdAt": "2026-10-12T17:29:14Z"
+    },
+    {
+      "id": "link-cpp-mistake-reference-ownership-example_of-cpp-object-lifetime",
+      "fromId": "cpp-mistake-reference-ownership",
+      "toId": "cpp-object-lifetime",
+      "type": "example_of",
+      "note": "A live reference can name an object whose lifetime has already ended.",
+      "createdAt": "2026-10-12T17:29:14Z"
+    },
+    {
+      "id": "link-cpp-mistake-reference-ownership-related_to-cpp-unique-ptr",
+      "fromId": "cpp-mistake-reference-ownership",
+      "toId": "cpp-unique-ptr",
+      "type": "related_to",
+      "note": "Resetting the owner destroys the object, despite outstanding references.",
+      "createdAt": "2026-10-12T17:29:14Z"
+    },
+    {
+      "id": "link-cpp-mistake-reference-ownership-related_to-cpp-undefined-behavior",
+      "fromId": "cpp-mistake-reference-ownership",
+      "toId": "cpp-undefined-behavior",
+      "type": "related_to",
+      "note": "Reading the destroyed int through the dangling reference is invalid.",
+      "createdAt": "2026-10-12T17:29:14Z"
+    },
+    {
+      "id": "link-cpp-complete-class-context-related_to-cpp-class-invariants",
+      "fromId": "cpp-complete-class-context",
+      "toId": "cpp-class-invariants",
+      "type": "related_to",
+      "note": "Member bodies can use nested implementation types that help represent valid state.",
+      "createdAt": "2026-10-12T17:29:14Z"
+    }
+  ],
+  "reviews": [],
+  "boards": [
+    {
+      "id": "sample-cpp-foundations",
+      "title": "C++ foundations",
+      "description": "Sample notes arranged around ownership, borrowing, and program correctness. Open a card to read its explanation or follow a typed connection.",
+      "sourceUrl": "",
+      "items": [
+        {
+          "shardId": "cpp-ownership",
+          "sectionId": "resources",
+          "x": 30,
+          "y": 65,
+          "width": 285,
+          "height": 270
+        },
+        {
+          "shardId": "cpp-raii",
+          "sectionId": "resources",
+          "x": 340,
+          "y": 65,
+          "width": 285,
+          "height": 270
+        },
+        {
+          "shardId": "cpp-unique-ptr",
+          "sectionId": "resources",
+          "x": 30,
+          "y": 365,
+          "width": 285,
+          "height": 270
+        },
+        {
+          "shardId": "cpp-move",
+          "sectionId": "resources",
+          "x": 340,
+          "y": 365,
+          "width": 285,
+          "height": 270
+        },
+        {
+          "shardId": "cpp-object-lifetime",
+          "sectionId": "borrowing",
+          "x": 740,
+          "y": 65,
+          "width": 285,
+          "height": 270
+        },
+        {
+          "shardId": "cpp-const-reference",
+          "sectionId": "borrowing",
+          "x": 1050,
+          "y": 65,
+          "width": 285,
+          "height": 270
+        },
+        {
+          "shardId": "cpp-vector-invalidation",
+          "sectionId": "borrowing",
+          "x": 740,
+          "y": 365,
+          "width": 285,
+          "height": 270
+        },
+        {
+          "shardId": "cpp-mistake-reference-ownership",
+          "sectionId": "borrowing",
+          "x": 1050,
+          "y": 365,
+          "width": 285,
+          "height": 270
+        },
+        {
+          "shardId": "cpp-undefined-behavior",
+          "sectionId": "correctness",
+          "x": 1450,
+          "y": 65,
+          "width": 285,
+          "height": 270
+        },
+        {
+          "shardId": "cpp-class-invariants",
+          "sectionId": "correctness",
+          "x": 1760,
+          "y": 65,
+          "width": 285,
+          "height": 270
+        },
+        {
+          "shardId": "cpp-exception-safety",
+          "sectionId": "correctness",
+          "x": 1450,
+          "y": 365,
+          "width": 285,
+          "height": 270
+        },
+        {
+          "shardId": "cpp-complete-class-context",
+          "sectionId": "correctness",
+          "x": 1760,
+          "y": 365,
+          "width": 285,
+          "height": 270
+        }
+      ],
+      "sections": [
+        {
+          "id": "resources",
+          "title": "Ownership and resources",
+          "x": 0,
+          "y": 0,
+          "width": 650,
+          "height": 690,
+          "collapsed": false
+        },
+        {
+          "id": "borrowing",
+          "title": "Lifetimes and borrowed access",
+          "x": 710,
+          "y": 0,
+          "width": 650,
+          "height": 690,
+          "collapsed": false
+        },
+        {
+          "id": "correctness",
+          "title": "Correctness and guarantees",
+          "x": 1420,
+          "y": 0,
+          "width": 650,
+          "height": 690,
+          "collapsed": false
+        }
+      ],
+      "viewport": {
+        "x": 20,
+        "y": 25,
+        "zoom": 0.55
+      },
+      "createdAt": "2026-10-16T00:00:00.000Z",
+      "updatedAt": "2026-10-16T00:00:00.000Z"
+    }
+  ]
+}
