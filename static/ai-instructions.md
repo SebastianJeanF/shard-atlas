@@ -20,6 +20,12 @@ Markdown, fenced code, `$inline math$`, and `$$display math$$` are supported. Pu
 
 Assign a C++ version only when supported by the source or verified reference. Recognized timeline labels are `C++98`, `C++03`, `C++11`, `C++14`, `C++17`, `C++20`, `C++23`, and `C++26`. Leave version blank for general or uncertain material. C++26 is a working draft in the reference catalog. Do not turn reference entries into a claim about what the user has learned.
 
+Use `C++98 baseline` for confirmed C++ foundations already present in the first standard. This is a baseline placement, not a claim that the idea was invented in 1998. A shard covering substantive changes across releases can use several labels, such as `C++98 baseline / C++11 / C++17`. The app derives timeline placement, world icons, and card colors from this field automatically. Do not choose colors or add world metadata.
+
+Keep build tools such as CMake independent of C++ release years and use the `Tooling` topic. Use `General concepts` for material that spans languages without a specific C++ facility, `Source material` for preserved discussions, and `Needs clarification` for unresolved fragments. These can remain in the timeline's **No release assigned** column. A broad C++ topic can use the baseline when its meaning is clear, while its linked notes retain their own release assignments.
+
+When a shard cites the C++ standard, a proposal, or other technical documentation, also include a descriptive link to the corresponding concept or API page on `https://en.cppreference.com` when one exists. Verify the destination and preserve the original references. For mixed-language material, label a C++-specific link as a counterpart rather than implying that every example is a C++ API. Do not substitute an unrelated cppreference page for a tool's own documentation.
+
 Add connections when the relationship helps explain the knowledge. Supply a concise reason. Direction matters: `fromId` is the note making the relationship and `toId` is its target. Use `related_to` when a stronger relationship is unsupported. Do not guess prerequisite direction from proximity or a diagram arrow.
 
 ## Use the local tools

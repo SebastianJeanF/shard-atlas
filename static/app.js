@@ -57,7 +57,7 @@ const formValues=form=>Object.fromEntries(new FormData(form));
 const formSnapshot=form=>JSON.stringify(formValues(form));
 const dateLabel=date=>{if(!date)return 'Unknown date';if(/^\d{4}$/.test(date))return date;if(/^\d{4}-\d{2}$/.test(date))return new Intl.DateTimeFormat(undefined,{month:'long',year:'numeric'}).format(new Date(date+'-15T12:00:00'));const d=new Date(date.length===10?date+'T12:00:00':date);return Number.isNaN(d.getTime())?'Unknown date':new Intl.DateTimeFormat(undefined,{month:'short',day:'numeric',year:'numeric'}).format(d);};
 const dateTimeLabel=date=>date?new Intl.DateTimeFormat(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(date)):'Unknown date';
-const excerpt=text=>String(text||'').replace(/```[\s\S]*?```/g,' [code example] ').replace(/!\[[^\]]*\]\([^)]*\)/g,' [image] ').replace(/^#{1,6}\s+|^>\s+/gm,'').replace(/[*`]/g,'').replace(/\s+/g,' ').trim();
+const excerpt=text=>String(text||'').replace(/```[\s\S]*?```/g,' [code example] ').replace(/!\[[^\]]*\]\([^)]*\)/g,' [image] ').replace(/^cppreference:[^\n]*(?:\n|$)/gmi,'').replace(/^#{1,6}\s+|^>\s+/gm,'').replace(/[*`]/g,'').replace(/\s+/g,' ').trim();
 const allTags=()=>[...new Set(state.data.shards.flatMap(s=>s.tags))].sort((a,b)=>a.localeCompare(b));
 const hasFilters=()=>!!(state.query||state.tags.length||state.kind!=='all'||state.status!=='all');
 function clearFilters(){state.query='';state.topicQuery='';state.tags=[];state.kind='all';state.status='all';state.releaseCategory='all';$('#search').value='';}

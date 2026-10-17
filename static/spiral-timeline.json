@@ -231,6 +231,18 @@
             {
               "title": "C++ draft variant synopsis",
               "url": "https://eel.is/c++draft/variant.syn"
+            },
+            {
+              "title": "cppreference: std::optional",
+              "url": "https://en.cppreference.com/cpp/utility/optional"
+            },
+            {
+              "title": "cppreference: std::variant",
+              "url": "https://en.cppreference.com/cpp/utility/variant"
+            },
+            {
+              "title": "cppreference: std::visit",
+              "url": "https://en.cppreference.com/cpp/utility/variant/visit2"
             }
           ]
         }
@@ -300,6 +312,18 @@
             {
               "title": "Requires expressions",
               "url": "https://eel.is/c++draft/expr.prim.req"
+            },
+            {
+              "title": "cppreference: constraints and concepts",
+              "url": "https://en.cppreference.com/cpp/language/constraints"
+            },
+            {
+              "title": "cppreference: requires expressions",
+              "url": "https://en.cppreference.com/cpp/language/requires"
+            },
+            {
+              "title": "cppreference: std::same_as",
+              "url": "https://en.cppreference.com/cpp/concepts/same_as"
             }
           ]
         },
@@ -331,6 +355,14 @@
             {
               "title": "Transform view specification",
               "url": "https://eel.is/c++draft/range.transform"
+            },
+            {
+              "title": "cppreference: filter views",
+              "url": "https://en.cppreference.com/cpp/ranges/filter_view"
+            },
+            {
+              "title": "cppreference: transform views",
+              "url": "https://en.cppreference.com/cpp/ranges/transform_view"
             }
           ]
         }
@@ -492,6 +524,10 @@
           {
             "title": "C++ draft constexpr declarations",
             "url": "https://eel.is/c++draft/dcl.constexpr"
+          },
+          {
+            "title": "cppreference: constexpr functions and variables",
+            "url": "https://en.cppreference.com/cpp/language/constexpr"
           }
         ]
       },
@@ -515,6 +551,10 @@
           {
             "title": "C++ draft constexpr declarations",
             "url": "https://eel.is/c++draft/dcl.constexpr"
+          },
+          {
+            "title": "cppreference: constexpr function rules by release",
+            "url": "https://en.cppreference.com/cpp/language/constexpr"
           }
         ]
       },
@@ -539,6 +579,10 @@
           {
             "title": "constexpr if statement",
             "url": "https://eel.is/c++draft/stmt.if"
+          },
+          {
+            "title": "cppreference: if constexpr",
+            "url": "https://en.cppreference.com/cpp/language/if"
           }
         ]
       },
@@ -566,6 +610,10 @@
           {
             "title": "C++ draft constexpr declarations",
             "url": "https://eel.is/c++draft/dcl.constexpr"
+          },
+          {
+            "title": "cppreference: consteval immediate functions",
+            "url": "https://en.cppreference.com/cpp/language/consteval"
           }
         ]
       },
@@ -593,6 +641,10 @@
           {
             "title": "Clang C++23 feature history",
             "url": "https://clang.llvm.org/cxx_status.html"
+          },
+          {
+            "title": "cppreference: if consteval",
+            "url": "https://en.cppreference.com/cpp/language/if"
           }
         ]
       },
@@ -620,6 +672,14 @@
           {
             "title": "C++ draft reflection facilities",
             "url": "https://eel.is/c++draft/meta"
+          },
+          {
+            "title": "cppreference: reflection library",
+            "url": "https://en.cppreference.com/cpp/meta/reflection"
+          },
+          {
+            "title": "cppreference: reflection operator",
+            "url": "https://en.cppreference.com/cpp/language/operator_reflection"
           }
         ]
       }
