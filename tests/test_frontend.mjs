@@ -513,6 +513,41 @@ try {
       assert.ok(!/data-spiral-release=|spiral-world-emblem|spiral-portal-emblem/.test(t.renderTimeline()));
     });
   });
+  await check('Shard details automatically show only assigned release worlds, including groups and Plain mode', async () => {
+    await withWorldTimeline(async () => {
+      const shard=t.state.data.shards[0],before=JSON.stringify(t.state.data);
+      let output=t.renderDetail({...shard,languageVersion:'C++98+'});
+      assert.match(output,/aria-label="C\+\+98: Dragonspyre"/);
+      assert.equal((output.match(/class="note-world-badge"/g)||[]).length,1);
+      output=t.renderDetail({...shard,languageVersion:'C++20 / C++11 / C++20'});
+      assert.equal((output.match(/class="note-world-badge"/g)||[]).length,2);
+      assert.ok(output.indexOf('aria-label="C++11: Celestia"')<output.indexOf('aria-label="C++20: Castle Darkmoor"'));
+      t.state.timelineTheme='plain';
+      output=t.renderDetail({...shard,languageVersion:'C++14 / C++26'});
+      assert.match(output,/C\+\+14: Zafaria, Avalon, Azteca/);
+      assert.match(output,/C\+\+26 \(draft\): Karamelle, Lemuria, Novus, Wallaru/);
+      const badges=output.slice(output.indexOf('class="note-world-badges"'),output.indexOf('class="note-actions"'));
+      assert.equal((badges.match(/<img /g)||[]).length,7);
+      for(const languageVersion of ['','C++ notes','pre-C++11, before C++17'])assert.ok(!t.renderDetail({...shard,languageVersion}).includes('note-world-badges'));
+      assert.equal(JSON.stringify(t.state.data),before);
+    });
+  });
+  await check('A late world catalog updates only the selected shard heading and fails gracefully', async () => {
+    await withWorldTimeline(async () => {
+      const heading=new Element('div',{'class':'note-heading','data-shard-id':'explicit'},document),query=document.querySelector;
+      const workspaceBefore=$('#workspace').innerHTML;
+      document.querySelector=function(selector,inside){return selector==='.note-heading'?heading:query.call(this,selector,inside);};
+      try{
+        t.state.view='library';t.state.selectedId='explicit';t.state.spiralCatalog=null;
+        await t.loadSpiralCatalog();
+        assert.match(heading.innerHTML,/C\+\+11: Celestia/);assert.match(heading.innerHTML,/C\+\+26 \(draft\): Karamelle/);
+        assert.equal($('#workspace').innerHTML,workspaceBefore);
+        failSpiralLoad=true;await t.loadSpiralCatalog();
+        assert.ok(!heading.innerHTML.includes('note-world-badges'));assert.match(heading.innerHTML,/My move note/);
+        assert.equal($('#workspace').innerHTML,workspaceBefore);
+      }finally{failSpiralLoad=false;document.querySelector=query;}
+    });
+  });
   await check('Portal keyboard navigation and activation reach every release with reduced-motion support', async () => {
     await withWorldTimeline(async () => {
       const ids = t.state.releaseCatalog.releases.map(release => release.id);

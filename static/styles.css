@@ -150,6 +150,17 @@ kbd { font-family: inherit; font-size: 10px; line-height: 1.6; white-space: nowr
 .note-header { padding: 23px 25px 19px; border-bottom: 1px solid var(--line-soft); }
 .note-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 11px; font-size: 10px; color: var(--muted); }
 .note-title { font-family: Georgia, "Times New Roman", serif; font-size: 26px; line-height: 1.22; font-weight: 400; letter-spacing: -.55px; margin: 0 0 17px; overflow-wrap: anywhere; }
+.note-heading-row { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 17px; }
+.note-heading-text { flex: 1 1 0; min-width: 0; }
+.note-heading-text .note-title { margin-bottom: 0; }
+.note-world-badges { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-content: flex-start; justify-content: flex-end; gap: 7px 6px; max-width: 106px; margin-left: auto; }
+.note-world-badge { display: grid; justify-items: center; align-content: start; gap: 3px; width: 50px; min-width: 0; }
+.note-world-icons { display: grid; place-items: center; align-content: center; gap: 2px; width: 42px; height: 42px; }
+.note-world-icons img { display: block; width: 40px; height: 40px; object-fit: contain; }
+.note-world-icons[data-world-count="3"], .note-world-icons[data-world-count="4"] { grid-template-columns: repeat(2,20px); grid-template-rows: repeat(2,20px); }
+.note-world-icons[data-world-count="3"] img, .note-world-icons[data-world-count="4"] img { width: 20px; height: 20px; }
+.note-world-icons[data-world-count="3"] > img:last-child { grid-column: 1 / -1; justify-self: center; }
+.note-world-release { color: var(--world-ink,var(--muted)); font-size: 9px; font-weight: 500; line-height: 1.35; text-align: center; overflow-wrap: anywhere; }
 .note-actions { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
 .note-actions .secondary, .note-actions .text-button { font-size: 10px; min-height: 30px; padding: 6px 9px; }
 .note-actions .icon-button { margin-left: auto; font-size: 15px; }
@@ -669,6 +680,9 @@ dialog::backdrop { background: #22382950; backdrop-filter: blur(3px); }
   .note-header { padding: 22px 20px 17px; }
   .note-body { padding: 20px; }
   .note-title { font-size: 27px; }
+  .note-heading-row { gap: 10px; }
+  .note-world-badges { max-width: 94px; gap: 6px; }
+  .note-world-badge { width: 44px; }
   .markdown { font-size: 13px; line-height: 1.85; }
   .markdown pre code, .code-block code { font-size: 10.5px; padding: 13px; }
   .note-footer { padding: 14px 20px; font-size: 10px; }
