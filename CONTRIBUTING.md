@@ -14,7 +14,7 @@ Preserve stable note IDs, relationship direction, portable archives, revisions, 
 
 The Python service uses the standard library. Avoid adding dependencies without a concrete reason. Keep offline rendering available. Preserve the native window, file dialogs, clipboard, downloads, menu commands, and checks for unsaved edits.
 
-Use clear labels and explain technical choices only when they help the person using the app. Technical notes, connections, the canvas, and the C++ release reference are the current focus. Do not reintroduce retired news, company, comparison, or recall interfaces through an unrelated change.
+Use clear labels and explain technical choices only when they help the person using the app. Technical notes, the automatic topic map, connections, and the C++ release reference are the current focus. Preserve legacy canvas data for recovery without reintroducing manual Canvas navigation. Do not reintroduce retired news, company, comparison, or recall interfaces through an unrelated change.
 
 ## Verify and submit
 

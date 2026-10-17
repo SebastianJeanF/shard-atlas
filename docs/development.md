@@ -53,11 +53,11 @@ The server and native builder both accept `--backup-dir PATH`. The native app de
 | Location | Responsibility |
 | --- | --- |
 | `server.py` | SQLite storage, validation, local HTTP routes, exports, recovery, and additive contributions |
-| `static/app.js` | Interface behavior, note rendering, connection map, canvas, and release reference |
+| `static/app.js` | Interface behavior, note rendering, automatic topic map, connection map, and release reference |
 | `static/styles.css` | Layout and visual styles |
 | `desktop/ShardAtlas.swift` | AppKit window, WKWebView, menus, clipboard, file dialogs, and service lifecycle |
 | `desktop/ImageText.swift` | Local macOS image text recognition |
-| `seed.json` | Generic starter notes, connections, and canvas |
+| `seed.json` | Generic starter notes, connections, and legacy board recovery data |
 | `static/cpp-releases.json` | Separate sourced C++ release reference |
 | `static/spiral-timeline.json` | Optional world associations, historical sources, programming examples, and learning trail |
 | `static/spiral/` | Original offline landscape illustrations for the optional timeline theme |
@@ -75,6 +75,8 @@ The native app discovers a compatible loopback service by app identity, backend 
 The working database is `~/Library/Application Support/Shard Atlas/shards.sqlite3`. Keep it, its snapshots, personal archives, retrieved private sources, screenshots of personal collections, and diagnostics out of Git. The repository's sample data and documentation images should contain only material intended for publication.
 
 Collection writes belong to the storage service. Use its validated routes or contribution tools rather than editing a live SQLite file. Before a schema change or import affecting real data, make a consistent SQLite backup. Preserve compatibility for stable IDs, typed connection direction, revisions, Trash, images, drafts, and older archives.
+
+Topic map is generated from saved topics and relationships. Keep layout deterministic, preserve all topic memberships, and distinguish shared-topic overlap from typed conceptual relationships. Its expansion controls change the view rather than the collection. Manual Canvas navigation is retired, while legacy board data and archive routes remain available for recovery.
 
 ### Local service boundary
 

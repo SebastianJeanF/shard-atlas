@@ -2,7 +2,7 @@
 
 **A local workspace for technical ideas and the connections between them.**
 
-Write an explanation, keep the code and sources beside it, and connect it to what you already know. Shard Atlas brings notes, a connection map, and a freeform canvas into a macOS app that works offline.
+Write an explanation, keep the code and sources beside it, and connect it to what you already know. Shard Atlas brings notes, an automatic topic map, and a connection map into a macOS app that works offline.
 
 [User guide](docs/guide.md) · [Development](docs/development.md) · [Contributing](CONTRIBUTING.md)
 
@@ -12,17 +12,15 @@ Write an explanation, keep the code and sources beside it, and connect it to wha
 
 - **Keep the details.** Notes support Markdown, highlighted C++ code, mathematics, images, source references, and links to other notes.
 - **Explain the relationship.** Connect ideas with labels such as *depends on*, *contrasts with*, and *is an example of*, with a reason for each connection.
-- **Arrange your thinking.** Place shared notes on a canvas, group them into sections, and move between the overview and an individual explanation.
+- **See how topics fit together.** Explore automatic neighborhoods, find shards shared by several topics, and expand saved relationships without arranging cards or drawing lines.
 - **Keep your bearings.** Search notes or find topics by typing, then filter by topic, kind, or understanding. Topics grow freely with your notes. Explore the separate, sourced C++ release reference from C++98 through the C++26 working draft.
 - **Give each release a familiar place.** An optional Wizard101 inspired timeline pairs C++ releases with illustrated worlds, distinct emblems, coordinated column colors, source-linked context, and small programming examples. Grouped releases show every mapped world. Switch to Plain for the original timeline presentation. The public source includes original artwork, with support for a separate local game-icon pack.
 
 ![The Library view with a sample C++ explanation and its connected notes](docs/images/library.png)
 
-The same note can appear on several canvases. Editing its explanation updates the shared note, while moving a card only changes that canvas.
+Topic map uses every topic assigned to a shard, so an idea can bridge several neighborhoods. Shared topics and saved conceptual relationships have distinct visual styles. Broad organizational tags are hidden by default and can be shown when useful. Layout is generated consistently from your collection and filters. Legacy saved canvases remain in archives and backups for recovery.
 
-![The sample C++ canvas with grouped notes and typed connections](docs/images/canvas.png)
-
-The included collection has **12 C++ notes, 18 connections, and one canvas**. It is a starting point to explore and replace with your own explanations. Shard Atlas also fits computer science, mathematics, and ML or AI theory.
+The included collection has **12 C++ notes and 18 connections**. It is a starting point to explore and replace with your own explanations. Shard Atlas also fits computer science, mathematics, and ML or AI theory.
 
 ## Build and open
 

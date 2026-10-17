@@ -1,6 +1,6 @@
 # Using Shard Atlas
 
-Shard Atlas stores explanations and the relationships between them. A *shard* is a note about one technical idea. The Library, connection map, and canvases are different views of the same notes.
+Shard Atlas stores explanations and the relationships between them. A *shard* is a note about one technical idea. The Library, Topic map, and connection map are different views of the same notes.
 
 [Back to the project](../README.md) · [Build and development](development.md) · [AI contribution guide](../static/ai-instructions.md)
 
@@ -10,7 +10,7 @@ Create a shard with a descriptive title and an explanation in your own words. Ad
 
 Understanding has three states: **Learning**, **Confident**, and **Needs verification**. These describe your understanding, rather than whether an AI generated the text.
 
-The initial collection includes 12 C++ examples, 18 connections, and a sample canvas. Edit or delete the examples as you build your own collection. Deleting all notes does not cause the app to insert the examples again.
+The initial collection includes 12 C++ examples and 18 connections. Edit or delete the examples as you build your own collection. Deleting all notes does not cause the app to insert the examples again.
 
 Use the atlas for programming languages, computer science, mathematics, and ML or AI theory. Capture reusable mechanisms, definitions, code, and distinctions. News, company announcements, compensation, career tracking, and forecasts are outside its intended scope.
 
@@ -42,13 +42,15 @@ Direction matters. An arrow runs from the note making the relationship to its ta
 
 The connection map shows the filtered collection or a selected neighborhood. Color and group by topic or kind, use the legend to read the colors, and select a node to open its explanation.
 
-## Arrange ideas on a canvas
+## Explore the Topic map
 
-**Canvas** is a spatial view of saved notes. It preserves positions and sizes, labeled sections, collapsed groups, and pan and zoom. The same note can appear on several canvases without copying its content.
+**Topic map** automatically arranges your collection into topic neighborhoods. Open a neighborhood to explore its shards. Every assigned topic counts, so a shard about both Classes and Templates can bridge those neighborhoods. Search and filters narrow the view without changing your saved notes.
 
-Use **Add note** to place an existing explanation, **Add section** to group ideas, and **Connect** to describe a relationship. Existing connections appear between their cards. Search, jump to a section, use the minimap, or choose **Fit canvas** to find your place.
+Shared-topic links show which subjects overlap. Saved conceptual relationships have a distinct style and retain their labels and direction. Select a shard to explore its saved relationships, then expand a neighboring shard to follow another step. A shared topic does not imply that one idea explains or depends on another.
 
-Moving a card changes the canvas arrangement. Editing its explanation changes the shared note everywhere it appears.
+Broad organizational tags, such as C++, LucidChart, and Images, are hidden by default. Show them when they are useful. The same data and view settings generate the same layout, without manually arranging cards or drawing connections.
+
+Topic map replaces the manual Canvas interface. Existing saved canvases remain in the collection, archives, and backups for recovery. Imported Lucid notes, images, sources, and relationships remain available through the shared collection.
 
 ## Explore the C++ release reference
 

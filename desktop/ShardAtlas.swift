@@ -270,7 +270,7 @@ final class DesktopDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, 
         addMenu(edit, to: main)
         let view = NSMenu(title: "View")
         for (title, command, key) in [("Library", "library", "1"), ("Connections", "graph", "2"),
-                                      ("Canvas", "boards", "3"), ("C++ Releases", "timeline", "4")] {
+                                      ("Topic Map", "atlas", "3"), ("C++ Releases", "timeline", "4")] {
             view.addItem(menuItem(title, command: command, key: key))
         }
         addMenu(view, to: main)
@@ -297,7 +297,7 @@ final class DesktopDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, 
     @objc private func runCommand(_ sender: NSMenuItem) {
         guard loaded, !checkingQuit, window.attachedSheet == nil,
               let command = sender.representedObject as? String,
-              ["new", "search", "library", "graph", "timeline", "settings", "boards"].contains(command) else { return }
+              ["new", "search", "library", "graph", "atlas", "timeline", "settings", "boards"].contains(command) else { return }
         window.makeKeyAndOrderFront(nil)
         webView.evaluateJavaScript("window.shardAtlasDesktop?.command('\(command)')", completionHandler: nil)
     }

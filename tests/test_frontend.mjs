@@ -131,6 +131,7 @@ try {
     server.once('exit', code => { clearTimeout(deadline); reject(new Error('Temporary server exited (' + code + '). ' + serverLog)); });
   });
   const document = new DocumentFixture(html), storage = new Map();
+  let apiWrites = 0;
   let ocrResponse = null, failBoardPut=false, boardPutGate=null, boardPutStarted=false;
   let failDelete = false, failDraftPut = false, failReleaseLoad = false, releaseResponse = null, failSpiralLoad = false, spiralResponse = null, reducedMotion = false, activeWrites = 0, maxActiveWrites = 0;
   let failAiInstructions = false, failClipboard = false, aiInstructionsRequests = 0;
@@ -138,7 +139,7 @@ try {
   const instructionText = '# Add knowledge to Shard Atlas\n\nCheck for duplicates and verify every saved note.\n', clipboardWrites = [];
   const browserFetch = async (url, options = {}) => {
     const full = new URL(url, base), method = options.method || 'GET';
-    if (method !== 'GET') { activeWrites++; maxActiveWrites = Math.max(maxActiveWrites, activeWrites); }
+    if (method !== 'GET') { apiWrites++; activeWrites++; maxActiveWrites = Math.max(maxActiveWrites, activeWrites); }
     try {
       if(method==='PUT'&&full.pathname.startsWith('/api/boards/')&&failBoardPut)return {ok:false,json:async()=>({error:'Simulated board save failure'})};
       if(method==='PUT'&&full.pathname.startsWith('/api/boards/')&&boardPutGate){const gate=boardPutGate;boardPutGate=null;const response=await fetch(full,options);boardPutStarted=true;await gate;return response;}
@@ -161,7 +162,7 @@ try {
   const w = { document, matchMedia: () => ({ matches: reducedMotion }), addEventListener(name, callback) { const listeners = windowListeners.get(name) || []; listeners.push(callback); windowListeners.set(name, listeners); }, katex: require(path.join(project, 'static/vendor/katex/katex.min.js')), confirm: () => true };
   context = vm.createContext({ window: w, document, fetch: browserFetch, FormData: FixtureFormData, FileReader: FixtureFileReader, navigator: { clipboard: { writeText: async text => { if (failClipboard) throw new Error('Clipboard permission denied'); clipboardWrites.push(text); } } }, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key=>storage.delete(key) }, setTimeout: trackedSetTimeout, clearTimeout: timer => { timers.delete(timer); clearTimeout(timer); }, console, Blob, URL });
   const code = fs.readFileSync(path.join(project, 'static/app.js'), 'utf8');
-  vm.runInContext(code + '\nwindow.testAtlas={state,drafts,filteredShards,markdown,stabilizeWikiLinks,renderNav,renderLibrary,renderGraphPage,renderTimeline,renderBoards,renderDetail,dateLabel,previewImport,saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,renderReleaseFeature,loadReleaseCatalog,loadSpiralCatalog,setTimelineTheme,savedTimelineTheme,filteredSpiralExamples,handlePortalKey,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,uploadImage,showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
+  vm.runInContext(code + '\nwindow.testAtlas={state,drafts,filteredShards,markdown,stabilizeWikiLinks,renderNav,renderLibrary,renderGraphPage,renderTimeline,renderBoards,atlasModel,atlasRelationshipModel,renderAtlas,renderDetail,dateLabel,previewImport,saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,renderReleaseFeature,loadReleaseCatalog,loadSpiralCatalog,setTimelineTheme,savedTimelineTheme,filteredSpiralExamples,handlePortalKey,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,uploadImage,showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
   const t = w.testAtlas, $ = selector => document.querySelector(selector), results = [];
   async function until(predicate) { for (let i = 0; i < 300; i++) { if (predicate()) return; await delay(10); } throw new Error('Timed out waiting for frontend state'); }
   async function get(url) { const response = await fetch(base + url), data = await response.json(); assert.ok(response.ok, JSON.stringify(data)); return data; }
@@ -192,6 +193,32 @@ try {
       await test();
     } finally { Object.assign(t.state, previous); $('#search').value = t.state.query; t.renderNav(); }
   }
+  async function withAtlasCollection(test, records = null) {
+    const previous = { ...t.state }, baseShard = previous.data.shards[0];
+    const shards = records || [
+      { ...baseShard, id: 'atlas-a', title: 'Alpha classes', content: 'alpha-only marker', tags: ['Templates', 'Classes', 'templates', ' C++ '] },
+      { ...baseShard, id: 'atlas-b', title: 'Beta memory', content: 'beta-only marker', tags: ['Classes', 'Memory'] },
+      { ...baseShard, id: 'atlas-c', title: 'Gamma templates', content: 'gamma-only marker', tags: ['Templates', 'Memory', 'LucidChart'] },
+      { ...baseShard, id: 'atlas-d', title: 'Organizational note', content: 'organization-only marker', tags: ['C++', 'Images'] },
+      { ...baseShard, id: 'atlas-e', title: 'Untagged note', content: 'untagged-only marker', tags: [] }
+    ];
+    try {
+      t.state.data = { ...previous.data, shards, links: records ? [] : [
+        { id: 'atlas-ab', fromId: 'atlas-a', toId: 'atlas-b', type: 'depends_on', note: 'A needs B first.' },
+        { id: 'atlas-bc', fromId: 'atlas-b', toId: 'atlas-c', type: 'explains', note: 'B explains C.' },
+        { id: 'atlas-cd', fromId: 'atlas-c', toId: 'atlas-d', type: 'related_to', note: 'Recorded association.' },
+        { id: 'atlas-missing', fromId: 'atlas-a', toId: 'missing-shard', type: 'related_to', note: 'An unavailable archive endpoint.' }
+      ] };
+      t.clearFilters(); Object.assign(t.state, { atlasMode: 'topics', atlasTopic: null, atlasSelectedId: null, atlasInspectId: null, atlasExpandedIds: [], atlasShowOrganizational: false, atlasRelation: 'all', atlasBridge: null, atlasLimit: 12, atlasZoom: 1, atlasFit: false });
+      await test();
+    } finally { Object.assign(t.state, previous); $('#search').value = t.state.query; t.renderNav(); }
+  }
+  const atlasSnapshot = model => JSON.stringify({
+    shards: Array.from(model.shards, shard => shard.id),
+    topics: model.topics,
+    overlaps: model.overlaps,
+    memberships: Array.from(model.memberships)
+  });
   const timelineShardIds = output => [...output.matchAll(/class="release-note"[^>]*data-shard-id="([^"]+)"/g)].map(match => match[1]);
   async function withWorldTimeline(test) {
     await withTimelineCollection(async () => {
@@ -233,13 +260,117 @@ try {
     assert.ok(!/recall|least reviewed|practice|questions to revisit/i.test(html + t.renderLibrary()));
     assert.equal($('[name=prompt]'), null); assert.ok(!/review/.test(t.renderLibrary()));
   });
-  await check('Technical navigation exposes a focused library, graph, canvas and C++ reference', async () => {
-    const nav=html.match(/<nav>([\s\S]*?)<\/nav>/)[1];assert.deepEqual([...nav.matchAll(/data-view="([^"]+)"/g)].map(match=>match[1]),['library','graph','boards','timeline']);assert.match(nav,/> Canvas</);assert.match(nav,/C\+\+ timeline/);
+  await check('Technical navigation replaces manual Canvas with the automatic Topic map', async () => {
+    const nav=html.match(/<nav>([\s\S]*?)<\/nav>/)[1];assert.deepEqual([...nav.matchAll(/data-view="([^"]+)"/g)].map(match=>match[1]),['library','graph','atlas','timeline']);assert.match(nav,/> Topic map</);assert.ok(!/data-view="boards"|> Canvas</.test(nav));assert.match(nav,/C\+\+ timeline/);
     for(const retired of ['entities','inbox','compare','ask']){t.changeView(retired);assert.equal(t.state.view,'library');}
+    t.changeView('boards');assert.equal(t.state.view,'atlas');assert.equal($('#view-label').textContent,'Topic map');assert.ok(!/data-action="(?:new-board|edit-board|add-board-item|add-section)"/.test($('#workspace').innerHTML));t.changeView('library');
     assert.equal(t.state.timelineMode,'releases');assert.ok(!/AI &amp; your events|Dated notes|timeline-modes/.test(t.renderTimeline()));assert.ok(!/\/api\/(?:ask|entities|capture\/preview)/.test(code));
   });
-  await check('An empty atlas provides a concrete technical canvas creation path', async () => {
-    const prior=t.state.data.boards;t.state.data.boards=[];const output=t.renderBoards();assert.match(output,/Create a technical canvas/);assert.match(output,/ownership and lifetimes/);assert.match(output,/data-action="new-board"/);assert.ok(!/career|salary|news|comparisons/i.test(output));t.state.data.boards=prior;
+  await check('Topic neighborhoods retain every membership and count case variants once', async () => {
+    await withAtlasCollection(async () => {
+      const model=t.atlasModel(),topics=Object.fromEntries(Array.from(model.topics,topic=>[topic.key,topic]));
+      assert.deepEqual(Object.keys(topics).sort(),['classes','memory','templates']);
+      assert.deepEqual(Array.from(topics.classes.shardIds),['atlas-a','atlas-b']);
+      assert.deepEqual(Array.from(topics.templates.shardIds),['atlas-a','atlas-c']);
+      assert.deepEqual(Array.from(model.memberships.get('atlas-a')),['classes','templates']);
+      for(const topic of model.topics){assert.equal(topic.count,2);assert.match(topic.color,/^#[a-f0-9]{6}$/i);}
+      const overlaps=Array.from(model.overlaps,pair=>({a:pair.a,b:pair.b,count:pair.count,ids:Array.from(pair.shardIds)})).sort((a,b)=>(a.a+a.b).localeCompare(b.a+b.b));
+      assert.deepEqual(overlaps,[{a:'classes',b:'memory',count:1,ids:['atlas-b']},{a:'classes',b:'templates',count:1,ids:['atlas-a']},{a:'memory',b:'templates',count:1,ids:['atlas-c']}]);
+      assert.deepEqual(Array.from(model.unmappedShards,shard=>shard.id).sort(),['atlas-d','atlas-e']);
+    });
+  });
+  await check('Organizational topics can be included without losing untagged notes', async () => {
+    await withAtlasCollection(async () => {
+      const hidden=t.atlasModel(),shown=t.atlasModel(t.filteredShards(),true),topics=new Map(Array.from(shown.topics,topic=>[topic.key,topic]));
+      assert.equal(hidden.topics.some(topic=>topic.key==='c++'),false);assert.deepEqual(Array.from(topics.get('c++').shardIds),['atlas-a','atlas-d']);
+      assert.equal(topics.get('lucidchart').count,1);assert.equal(topics.get('images').count,1);
+      assert.deepEqual(Array.from(shown.unmappedShards,shard=>shard.id),['atlas-e']);
+      t.state.atlasShowOrganizational=true;assert.equal(t.atlasModel().topics.length,shown.topics.length);
+      const tags=['C++','LucidChart','Images','Links','Source material','Tables','Code examples'];
+      const organizationalOnly={...t.state.data.shards[0],id:'org-only',tags};assert.equal(t.atlasModel([organizationalOnly],false).topics.length,0);assert.equal(t.atlasModel([organizationalOnly],true).topics.length,tags.length);
+    });
+  });
+  await check('Automatic topic models and rendering are stable without changing saved knowledge', async () => {
+    await withAtlasCollection(async () => {
+      const original=JSON.stringify(t.state.data),first=atlasSnapshot(t.atlasModel()),markup=t.renderAtlas();
+      t.state.data={...t.state.data,shards:[...t.state.data.shards].reverse(),links:[...t.state.data.links].reverse()};
+      assert.equal(atlasSnapshot(t.atlasModel()),first);assert.equal(t.renderAtlas(),markup);
+      t.state.data={...t.state.data,shards:[...t.state.data.shards].reverse(),links:[...t.state.data.links].reverse()};
+      assert.equal(JSON.stringify(t.state.data),original);assert.ok(!/data-action="(?:new-board|edit-board|add-board-item|add-section)"/.test(markup));
+      assert.match(markup,/shared shards/i);assert.match(markup,/Untagged note/);assert.match(markup,/Organizational note/);
+    });
+  });
+  await check('Topic maps honor filters and provide useful empty states', async () => {
+    await withAtlasCollection(async () => {
+      t.state.query='gamma-only';const filtered=t.atlasModel();assert.deepEqual(Array.from(filtered.shards,shard=>shard.id),['atlas-c']);
+      assert.deepEqual(Array.from(filtered.topics,topic=>topic.key).sort(),['memory','templates']);assert.ok(filtered.topics.every(topic=>topic.count===1));
+      t.state.query='no-such-topic-map-note';assert.equal(t.atlasModel().shards.length,0);assert.match(t.renderAtlas(),/No (?:matching|shards match)/i);
+    });
+    await withAtlasCollection(async () => {assert.equal(t.atlasModel().topics.length,0);const output=t.renderAtlas();assert.match(output,/shard/i);assert.ok(!/data-action="new-board"/.test(output));},[]);
+  });
+  await check('A filtered-out neighborhood cannot leave an invisible overlap filter active', async () => {
+    const baseShard=t.state.data.shards[0];
+    await withAtlasCollection(async () => {
+      await t.runAction('atlas-overlap',{dataset:{id:'classes',other:'templates'}});
+      const cardIds=()=>openingAttributes(t.renderAtlas(),'button','atlas-shard-open').map(attrs=>attrs['data-id']);
+      assert.deepEqual(cardIds(),['bridge-origin']);
+      t.state.query='filtered-map';const model=t.atlasModel();assert.equal(model.topics.some(topic=>topic.key==='classes'),false);assert.equal(model.topics.some(topic=>topic.key==='templates'),true);
+      assert.deepEqual(cardIds().sort(),['eligible-memory','eligible-template']);
+      assert.match(t.renderAtlas(),/Explore your shards/);assert.ok(!t.renderAtlas().includes('Classes ∩ Templates'));
+    },[
+      {...baseShard,id:'bridge-origin',title:'Original bridge',content:'Original intersection.',tags:['Classes','Templates']},
+      {...baseShard,id:'eligible-template',title:'Template result',content:'filtered-map result',tags:['Templates']},
+      {...baseShard,id:'eligible-memory',title:'Memory result',content:'filtered-map result',tags:['Memory']}
+    ]);
+  });
+  await check('Topic shard lists honor selected sorting while map neighborhoods remain stable', async () => {
+    const baseShard=t.state.data.shards[0];
+    await withAtlasCollection(async () => {
+      const cardIds=()=>openingAttributes(t.renderAtlas(),'button','atlas-shard-open').map(attrs=>attrs['data-id']);
+      const model=atlasSnapshot(t.atlasModel());
+      t.state.sort='updated';assert.deepEqual(cardIds(),['sort-zeta','sort-beta','sort-alpha']);assert.equal(atlasSnapshot(t.atlasModel()),model);
+      t.state.sort='title';assert.deepEqual(cardIds(),['sort-alpha','sort-beta','sort-zeta']);assert.equal(atlasSnapshot(t.atlasModel()),model);
+      t.state.sort='created';assert.deepEqual(cardIds(),['sort-alpha','sort-zeta','sort-beta']);assert.equal(atlasSnapshot(t.atlasModel()),model);
+    },[
+      {...baseShard,id:'sort-zeta',title:'Zeta',content:'Sorting example.',tags:['Templates'],updatedAt:'2026-10-16T12:00:00Z',createdAt:'2026-02-01T12:00:00Z'},
+      {...baseShard,id:'sort-alpha',title:'Alpha',content:'Sorting example.',tags:['Classes'],updatedAt:'2026-10-14T12:00:00Z',createdAt:'2026-03-01T12:00:00Z'},
+      {...baseShard,id:'sort-beta',title:'Beta',content:'Sorting example.',tags:['Memory'],updatedAt:'2026-10-15T12:00:00Z',createdAt:'2026-01-01T12:00:00Z'}
+    ]);
+  });
+  await check('Focused exploration uses directed recorded links rather than topic overlap', async () => {
+    await withAtlasCollection(async () => {
+      t.state.atlasMode='connections';t.state.atlasSelectedId='atlas-a';
+      let model=t.atlasRelationshipModel();assert.deepEqual(Array.from(model.nodes,shard=>shard.id).sort(),['atlas-a','atlas-b']);
+      assert.deepEqual(Array.from(model.edges,link=>({id:link.id,fromId:link.fromId,toId:link.toId,type:link.type})),[{id:'atlas-ab',fromId:'atlas-a',toId:'atlas-b',type:'depends_on'}]);
+      assert.equal(model.frontierCount,1);assert.equal(model.hiddenByNode.get('atlas-b'),1);
+      // A and C share Templates, but only the recorded A→B link belongs in this first step.
+      assert.equal(model.nodes.some(shard=>shard.id==='atlas-c'),false);
+      t.state.atlasExpandedIds=['atlas-b'];model=t.atlasRelationshipModel();assert.deepEqual(Array.from(model.nodes,shard=>shard.id).sort(),['atlas-a','atlas-b','atlas-c']);
+      assert.deepEqual(Array.from(model.edges,link=>link.id).sort(),['atlas-ab','atlas-bc']);assert.equal(model.frontierCount,1);
+      t.state.atlasExpandedIds=['atlas-b','atlas-c'];model=t.atlasRelationshipModel();assert.deepEqual(Array.from(model.nodes,shard=>shard.id).sort(),['atlas-a','atlas-b','atlas-c','atlas-d']);assert.equal(model.frontierCount,0);
+      t.state.atlasSelectedId='atlas-b';t.state.atlasExpandedIds=[];model=t.atlasRelationshipModel();const incoming=model.edges.find(link=>link.id==='atlas-ab');assert.equal(incoming.fromId,'atlas-a');assert.equal(incoming.toId,'atlas-b');
+    });
+  });
+  await check('Relationship exploration respects filters and refuses hidden or unreachable expansions', async () => {
+    await withAtlasCollection(async () => {
+      t.state.atlasMode='connections';t.state.atlasSelectedId='atlas-a';t.state.atlasExpandedIds=['atlas-c'];
+      assert.deepEqual(Array.from(t.atlasRelationshipModel().nodes,shard=>shard.id).sort(),['atlas-a','atlas-b']);
+      t.state.atlasRelation='depends_on';t.state.atlasExpandedIds=['atlas-b'];const typed=t.atlasRelationshipModel();assert.deepEqual(Array.from(typed.nodes,shard=>shard.id).sort(),['atlas-a','atlas-b']);assert.equal(typed.edges[0].type,'depends_on');
+      t.state.atlasRelation='all';t.state.tags=['Classes'];const filtered=t.atlasRelationshipModel();assert.deepEqual(Array.from(filtered.nodes,shard=>shard.id).sort(),['atlas-a','atlas-b']);assert.ok(filtered.edges.every(link=>link.fromId!=='atlas-c'&&link.toId!=='atlas-c'));
+      t.state.tags=[];t.state.atlasSelectedId='atlas-e';t.state.atlasExpandedIds=[];const isolated=t.atlasRelationshipModel();assert.deepEqual(Array.from(isolated.nodes,shard=>shard.id),['atlas-e']);assert.equal(isolated.edges.length,0);assert.equal(isolated.frontierCount,0);
+    });
+  });
+  await check('Topic and connection exploration changes only local view state', async () => {
+    await withAtlasCollection(async () => {
+      await until(()=>t.pending===0);const before=JSON.stringify(t.state.data),writes=apiWrites;
+      t.changeView('atlas');await t.runAction('atlas-topic',{dataset:{id:'templates'}});assert.equal(t.state.atlasTopic,'templates');
+      await t.runAction('atlas-select',{dataset:{id:'atlas-a'}});assert.equal(t.state.atlasMode,'connections');assert.equal(t.state.atlasSelectedId,'atlas-a');
+      await t.runAction('atlas-expand',{dataset:{id:'atlas-b'}});assert.ok(t.state.atlasExpandedIds.includes('atlas-b'));
+      await t.runAction('atlas-inspect',{dataset:{id:'atlas-c'}});assert.equal(t.state.atlasInspectId,'atlas-c');assert.equal(t.state.atlasSelectedId,'atlas-a');
+      t.state.tags=['Classes'];await t.runAction('atlas-reset',{dataset:{}});assert.deepEqual(Array.from(t.state.tags),['Classes']);assert.equal(t.state.atlasExpandedIds.length,0);
+      await t.runAction('atlas-mode',{dataset:{id:'topics'}});assert.equal(t.state.atlasMode,'topics');
+      assert.equal(apiWrites,writes);assert.equal(JSON.stringify(t.state.data),before);t.changeView('library');
+    });
   });
   await check('Use with AI is discoverable and failed instruction loading can be retried', async () => {
     assert.ok((html.match(/data-action="use-ai"/g) || []).length >= 2);
