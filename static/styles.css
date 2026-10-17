@@ -17,6 +17,14 @@
   --peach: #f6e8dc;
   --danger: #963e35;
   --radius: 12px;
+  --cpp98-accent: #934c3c; --cpp98-ink: #65382f; --cpp98-muted: #796156; --cpp98-soft: #f4e9e2; --cpp98-line: #d5b6a5; --cpp98-seam: linear-gradient(90deg,#6e3940,#b66a43);
+  --cpp03-accent: #426d65; --cpp03-ink: #2e524b; --cpp03-muted: #586c64; --cpp03-soft: #e9efea; --cpp03-line: #b6cbc1; --cpp03-seam: linear-gradient(90deg,#426d65,#9ab8bf);
+  --cpp11-accent: #387c87; --cpp11-ink: #2a5963; --cpp11-muted: #536d6f; --cpp11-soft: #e5eff0; --cpp11-line: #abcbd0; --cpp11-seam: linear-gradient(90deg,#286778,#b89a50);
+  --cpp14-accent: #8c7040; --cpp14-ink: #645332; --cpp14-muted: #706651; --cpp14-soft: #f2eddf; --cpp14-line: #cfc3a1; --cpp14-seam: linear-gradient(90deg,#b88142 0 33.33%,#66816b 33.33% 66.66%,#58948c 66.66% 100%);
+  --cpp17-accent: #80638e; --cpp17-ink: #5c456c; --cpp17-muted: #706077; --cpp17-soft: #eee8f1; --cpp17-line: #c7b6d1; --cpp17-seam: linear-gradient(90deg,#514269,#9e7b9d);
+  --cpp20-accent: #586b8c; --cpp20-ink: #3e4b67; --cpp20-muted: #60697b; --cpp20-soft: #e8ecf2; --cpp20-line: #b6c1d3; --cpp20-seam: linear-gradient(90deg,#3f506f,#a4aec1);
+  --cpp23-accent: #5a799b; --cpp23-ink: #3c5673; --cpp23-muted: #5a6d7f; --cpp23-soft: #e8eff3; --cpp23-line: #b5c8d5; --cpp23-seam: linear-gradient(90deg,#729eb9 0 33.33%,#b78d50 33.33% 66.66%,#777bb0 66.66% 100%);
+  --cpp26-accent: #936c8a; --cpp26-ink: #694b66; --cpp26-muted: #736170; --cpp26-soft: #f1e9ee; --cpp26-line: #d0b6c9; --cpp26-seam: linear-gradient(90deg,#c48699 0 25%,#66829b 25% 50%,#8c7cac 50% 75%,#b28a57 75% 100%);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 14px;
   line-height: 1.5;
@@ -132,7 +140,7 @@ kbd { font-family: inherit; font-size: 10px; line-height: 1.6; white-space: nowr
 .filter-row select, .graph-controls select { border: 1px solid var(--line); border-radius: 5px; background: #f7f7f0; padding: 6px 7px; max-width: 100%; min-width: 0; font-size: 10px; color: #63705b; }
 .filter-row select { flex: 1; }
 .shard-list { display: flex; flex-direction: column; padding: 6px; max-height: calc(100vh - 320px); min-height: 365px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #d5d8cd transparent; }
-.shard-card { width: 100%; text-align: left; border: 1px solid transparent; background: transparent; border-radius: 7px; padding: 13px 11px; margin: 2px 0; cursor: pointer; transition: background .15s, border-color .15s; }
+.shard-card { flex-shrink: 0; width: 100%; text-align: left; border: 1px solid transparent; background: transparent; border-radius: 7px; padding: 13px 11px; margin: 2px 0; cursor: pointer; transition: background .15s, border-color .15s; }
 .shard-card:hover { background: #f3f5ed; }
 .shard-card.active { background: #edf1e6; border-color: #dce4d2; }
 .card-top { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
@@ -154,7 +162,10 @@ kbd { font-family: inherit; font-size: 10px; line-height: 1.6; white-space: nowr
 .note-heading-text { flex: 1 1 0; min-width: 0; }
 .note-heading-text .note-title { margin-bottom: 0; }
 .note-world-badges { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-content: flex-start; justify-content: flex-end; gap: 7px 6px; max-width: 106px; margin-left: auto; }
-.note-world-badge { display: grid; justify-items: center; align-content: start; gap: 3px; width: 50px; min-width: 0; }
+.note-world-badge { display: grid; justify-items: center; align-content: start; gap: 3px; width: 50px; min-width: 0; min-height: 40px; margin: 0; padding: 2px 0; border: 1px solid var(--world-line,var(--line)); border-radius: 6px; background: #fffefa70; color: inherit; font: inherit; text-align: center; }
+.note-world-badge:hover { border-color: var(--world-accent,var(--green)); background: var(--world-soft,var(--green-soft)); }
+.note-world-badge:hover .note-world-release { text-decoration: underline; text-underline-offset: 2px; }
+.note-world-badge:focus-visible { outline-color: var(--world-accent,var(--green)); outline-offset: 2px; }
 .note-world-icons { display: grid; place-items: center; align-content: center; gap: 2px; width: 42px; height: 42px; }
 .note-world-icons img { display: block; width: 40px; height: 40px; object-fit: contain; }
 .note-world-icons[data-world-count="3"], .note-world-icons[data-world-count="4"] { grid-template-columns: repeat(2,20px); grid-template-rows: repeat(2,20px); }
@@ -308,7 +319,7 @@ kbd { font-family: inherit; font-size: 10px; line-height: 1.6; white-space: nowr
 .release-jumps .secondary { padding: 5px 11px; min-height: 30px; font-size: 10px; }
 .release-jumps .release-unassigned-jump { background: #f7f3e8; border-color: #dedaca; }
 .release-unassigned-jump span { margin-left: 5px; color: var(--muted); }
-.release-track { display: flex; gap: 16px; align-items: stretch; position: relative; overflow-x: auto; padding: 0 1px 17px; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-color: #a5b59c #e8ece1; scrollbar-width: auto; }
+.release-track { display: flex; gap: 16px; align-items: stretch; position: relative; overflow-x: auto; padding: 0 1px 17px; scroll-margin-top: 16px; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-color: #a5b59c #e8ece1; scrollbar-width: auto; }
 .release-column { flex: 0 0 345px; min-width: 0; border: 1px solid #d3dccb; border-radius: 12px; overflow: hidden; background: var(--surface); scroll-snap-align: start; }
 .release-column.is-draft { border-style: dashed; border-color: #ac9abb; }
 .release-column.release-unassigned { border-color: #d8cfb8; }
@@ -413,15 +424,25 @@ kbd { font-family: inherit; font-size: 10px; line-height: 1.6; white-space: nowr
 .spiral-trail-code > summary { cursor: pointer; font-size: 10px; color: var(--green); }
 .spiral-trail .spiral-reference-note { margin: 14px 0 0; }
 
-/* World colors frame the reference; shard surfaces and syntax colors stay neutral. */
-[data-spiral-release="cpp98"] { --world-accent: #934c3c; --world-ink: #65382f; --world-muted: #796156; --world-soft: #f4e9e2; --world-line: #d5b6a5; --world-seam: linear-gradient(90deg,#6e3940,#b66a43); }
-[data-spiral-release="cpp03"] { --world-accent: #426d65; --world-ink: #2e524b; --world-muted: #586c64; --world-soft: #e9efea; --world-line: #b6cbc1; --world-seam: linear-gradient(90deg,#426d65,#9ab8bf); }
-[data-spiral-release="cpp11"] { --world-accent: #387c87; --world-ink: #2a5963; --world-muted: #536d6f; --world-soft: #e5eff0; --world-line: #abcbd0; --world-seam: linear-gradient(90deg,#286778,#b89a50); }
-[data-spiral-release="cpp14"] { --world-accent: #8c7040; --world-ink: #645332; --world-muted: #706651; --world-soft: #f2eddf; --world-line: #cfc3a1; --world-seam: linear-gradient(90deg,#b88142 0 33.33%,#66816b 33.33% 66.66%,#58948c 66.66% 100%); }
-[data-spiral-release="cpp17"] { --world-accent: #80638e; --world-ink: #5c456c; --world-muted: #706077; --world-soft: #eee8f1; --world-line: #c7b6d1; --world-seam: linear-gradient(90deg,#514269,#9e7b9d); }
-[data-spiral-release="cpp20"] { --world-accent: #586b8c; --world-ink: #3e4b67; --world-muted: #60697b; --world-soft: #e8ecf2; --world-line: #b6c1d3; --world-seam: linear-gradient(90deg,#3f506f,#a4aec1); }
-[data-spiral-release="cpp23"] { --world-accent: #5a799b; --world-ink: #3c5673; --world-muted: #5a6d7f; --world-soft: #e8eff3; --world-line: #b5c8d5; --world-seam: linear-gradient(90deg,#729eb9 0 33.33%,#b78d50 33.33% 66.66%,#777bb0 66.66% 100%); }
-[data-spiral-release="cpp26"] { --world-accent: #936c8a; --world-ink: #694b66; --world-muted: #736170; --world-soft: #f1e9ee; --world-line: #d0b6c9; --world-seam: linear-gradient(90deg,#c48699 0 25%,#66829b 25% 50%,#8c7cac 50% 75%,#b28a57 75% 100%); }
+/* Shared world palettes frame references and gently tint assigned shards. */
+[data-spiral-release="cpp98"] { --world-accent: var(--cpp98-accent); --world-ink: var(--cpp98-ink); --world-muted: var(--cpp98-muted); --world-soft: var(--cpp98-soft); --world-line: var(--cpp98-line); --world-seam: var(--cpp98-seam); }
+[data-spiral-release="cpp03"] { --world-accent: var(--cpp03-accent); --world-ink: var(--cpp03-ink); --world-muted: var(--cpp03-muted); --world-soft: var(--cpp03-soft); --world-line: var(--cpp03-line); --world-seam: var(--cpp03-seam); }
+[data-spiral-release="cpp11"] { --world-accent: var(--cpp11-accent); --world-ink: var(--cpp11-ink); --world-muted: var(--cpp11-muted); --world-soft: var(--cpp11-soft); --world-line: var(--cpp11-line); --world-seam: var(--cpp11-seam); }
+[data-spiral-release="cpp14"] { --world-accent: var(--cpp14-accent); --world-ink: var(--cpp14-ink); --world-muted: var(--cpp14-muted); --world-soft: var(--cpp14-soft); --world-line: var(--cpp14-line); --world-seam: var(--cpp14-seam); }
+[data-spiral-release="cpp17"] { --world-accent: var(--cpp17-accent); --world-ink: var(--cpp17-ink); --world-muted: var(--cpp17-muted); --world-soft: var(--cpp17-soft); --world-line: var(--cpp17-line); --world-seam: var(--cpp17-seam); }
+[data-spiral-release="cpp20"] { --world-accent: var(--cpp20-accent); --world-ink: var(--cpp20-ink); --world-muted: var(--cpp20-muted); --world-soft: var(--cpp20-soft); --world-line: var(--cpp20-line); --world-seam: var(--cpp20-seam); }
+[data-spiral-release="cpp23"] { --world-accent: var(--cpp23-accent); --world-ink: var(--cpp23-ink); --world-muted: var(--cpp23-muted); --world-soft: var(--cpp23-soft); --world-line: var(--cpp23-line); --world-seam: var(--cpp23-seam); }
+[data-spiral-release="cpp26"] { --world-accent: var(--cpp26-accent); --world-ink: var(--cpp26-ink); --world-muted: var(--cpp26-muted); --world-soft: var(--cpp26-soft); --world-line: var(--cpp26-line); --world-seam: var(--cpp26-seam); }
+.detail-panel[data-shard-worlds], .shard-card[data-shard-worlds], .release-note[data-shard-worlds] { --shard-edge: var(--world-accent,var(--green)); --shard-background: var(--shard-tint,linear-gradient(var(--world-soft,var(--surface)),var(--world-soft,var(--surface)))); position: relative; background-color: var(--surface); background-image: linear-gradient(#fffefab3,#fffefab3),var(--shard-background); }
+.shard-card[data-shard-worlds], .release-note[data-shard-worlds] { overflow: hidden; }
+.detail-panel[data-shard-worlds]::before, .shard-card[data-shard-worlds]::before, .release-note[data-shard-worlds]::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; background: var(--shard-seam,var(--world-seam,linear-gradient(var(--green),var(--green)))); pointer-events: none; }
+.detail-panel[data-shard-worlds] { border-color: color-mix(in srgb,var(--shard-edge) 27%,var(--line)); }
+.detail-panel[data-shard-worlds] .note-header { background-image: linear-gradient(#fffefa80,#fffefa80),var(--shard-background); border-bottom-color: var(--world-line,var(--line)); }
+.shard-card[data-shard-worlds] { border-color: var(--line-soft); }
+.shard-card[data-shard-worlds]:hover, .release-note[data-shard-worlds]:hover { border-color: color-mix(in srgb,var(--shard-edge) 45%,var(--line)); background-image: linear-gradient(#fffefa80,#fffefa80),var(--shard-background); }
+.shard-card[data-shard-worlds].active { border-color: var(--shard-edge); box-shadow: inset 0 0 0 1px var(--shard-edge); background-image: linear-gradient(#fffefa80,#fffefa80),var(--shard-background); }
+.shard-card[data-shard-worlds].active::before { height: 4px; }
+.shard-card[data-shard-worlds]:focus-visible, .release-note[data-shard-worlds]:focus-visible { outline-color: var(--shard-edge); }
 .spiral-release[data-spiral-release] { border-color: var(--world-line); }
 .spiral-release[data-spiral-release] .release-heading { position: relative; padding-top: 19px; border-bottom-color: var(--world-line); background: var(--world-soft); }
 .spiral-release[data-spiral-release] .release-heading::before { content: ""; position: absolute; inset: 0 0 auto; height: 4px; background: var(--world-seam); }

@@ -134,7 +134,7 @@ try {
   let ocrResponse = null, failBoardPut=false, boardPutGate=null, boardPutStarted=false;
   let failDelete = false, failDraftPut = false, failReleaseLoad = false, releaseResponse = null, failSpiralLoad = false, spiralResponse = null, reducedMotion = false, activeWrites = 0, maxActiveWrites = 0;
   let failAiInstructions = false, failClipboard = false, aiInstructionsRequests = 0;
-  let stateReadCount = 0, stateResponseGate = null;
+  let stateReadCount = 0, stateResponseGate = null, releaseReadCount = 0, releaseResponseGate = null;
   const instructionText = '# Add knowledge to Shard Atlas\n\nCheck for duplicates and verify every saved note.\n', clipboardWrites = [];
   const browserFetch = async (url, options = {}) => {
     const full = new URL(url, base), method = options.method || 'GET';
@@ -144,6 +144,7 @@ try {
       if(method==='PUT'&&full.pathname.startsWith('/api/boards/')&&boardPutGate){const gate=boardPutGate;boardPutGate=null;const response=await fetch(full,options);boardPutStarted=true;await gate;return response;}
       if (full.pathname.startsWith('/api/assets/') && full.pathname.endsWith('/text') && ocrResponse) return {ok:true,json:async()=>ocrResponse};
       if (full.pathname === '/api/state' && method === 'GET') { stateReadCount++; if (stateResponseGate) { const response = await fetch(full, options); await stateResponseGate; return response; } }
+      if (full.pathname === '/cpp-releases.json') { releaseReadCount++; if (releaseResponseGate) await releaseResponseGate; }
       if (full.pathname === '/cpp-releases.json' && failReleaseLoad) return { ok: false, json: async () => ({ error: 'Simulated missing reference' }) };
       if (full.pathname === '/cpp-releases.json' && releaseResponse) return { ok: true, json: async () => releaseResponse };
       if (full.pathname === '/spiral-timeline.json' && failSpiralLoad) return { ok: false, json: async () => ({ error: 'Simulated missing world guide' }) };
@@ -200,6 +201,30 @@ try {
       $('#workspace').innerHTML = t.renderTimeline();
       await test();
     });
+  }
+  const openingAttributes = (markup, tag, className) => [...markup.matchAll(new RegExp('<' + tag + '([^>]*)>', 'g'))]
+    .map(match => attributes(match[1])).filter(attrs => (attrs.class || '').split(/\s+/).includes(className));
+  async function withReleaseNavigation(test) {
+    const query = document.querySelector, workspace = $('#workspace'), trace = { scrolls: [], reveals: [], focus: [] };
+    const track = new Element('div', { id: 'release-track' }, document), columns = new Map();
+    track.scrollTo = options => trace.scrolls.push(options);
+    track.scrollIntoView = options => trace.reveals.push(options);
+    for (const [index, release] of t.state.releaseCatalog.releases.entries()) {
+      const column = new Element('section', { id: 'release-' + release.id }, document);
+      column.offsetLeft = index * 360;
+      column.focus = options => { document.activeElement = column; trace.focus.push({ id: column.id, ...options }); };
+      columns.set('#' + column.id, column);
+    }
+    document.querySelector = function(selector, inside) {
+      if (selector === '#release-track' || columns.has(selector)) {
+        // The lightweight fixture otherwise retains IDs from replaced markup.
+        if (!workspace.innerHTML.includes('id="' + selector.slice(1) + '"')) return null;
+        return selector === '#release-track' ? track : columns.get(selector);
+      }
+      return query.call(this, selector, inside);
+    };
+    try { await test(trace); }
+    finally { document.querySelector = query; reducedMotion = false; }
   }
 
   await until(() => t.state.data.shards.length && $('.shard-card'));
@@ -517,11 +542,14 @@ try {
     await withWorldTimeline(async () => {
       const shard=t.state.data.shards[0],before=JSON.stringify(t.state.data);
       let output=t.renderDetail({...shard,languageVersion:'C++98+'});
-      assert.match(output,/aria-label="C\+\+98: Dragonspyre"/);
+      assert.match(output,/aria-label="Open C\+\+98 timeline: Dragonspyre"/);
       assert.equal((output.match(/class="note-world-badge"/g)||[]).length,1);
       output=t.renderDetail({...shard,languageVersion:'C++20 / C++11 / C++20'});
       assert.equal((output.match(/class="note-world-badge"/g)||[]).length,2);
-      assert.ok(output.indexOf('aria-label="C++11: Celestia"')<output.indexOf('aria-label="C++20: Castle Darkmoor"'));
+      assert.ok(output.indexOf('aria-label="Open C++11 timeline: Celestia"')<output.indexOf('aria-label="Open C++20 timeline: Castle Darkmoor"'));
+      const buttons=openingAttributes(output,'button','note-world-badge');
+      assert.deepEqual(buttons.map(button=>button['data-id']),['cpp11','cpp20']);
+      for(const button of buttons){assert.equal(button.type,'button');assert.equal(button['data-action'],'open-release');assert.match(button['aria-label'],/^Open C\+\+\d+ timeline: /);assert.ok(!button.role);}
       t.state.timelineTheme='plain';
       output=t.renderDetail({...shard,languageVersion:'C++14 / C++26'});
       assert.match(output,/C\+\+14: Zafaria, Avalon, Azteca/);
@@ -540,12 +568,133 @@ try {
       try{
         t.state.view='library';t.state.selectedId='explicit';t.state.spiralCatalog=null;
         await t.loadSpiralCatalog();
-        assert.match(heading.innerHTML,/C\+\+11: Celestia/);assert.match(heading.innerHTML,/C\+\+26 \(draft\): Karamelle/);
+        assert.match(heading.innerHTML,/Open C\+\+11 timeline: Celestia/);assert.match(heading.innerHTML,/Open C\+\+26 \(draft\) timeline: Karamelle/);
         assert.equal($('#workspace').innerHTML,workspaceBefore);
         failSpiralLoad=true;await t.loadSpiralCatalog();
         assert.ok(!heading.innerHTML.includes('note-world-badges'));assert.match(heading.innerHTML,/My move note/);
         assert.equal($('#workspace').innerHTML,workspaceBefore);
       }finally{failSpiralLoad=false;document.querySelector=query;}
+    });
+  });
+  await check('Library cards and detail panels derive single, blended, and neutral themes without changing shards', async () => {
+    await withWorldTimeline(async () => {
+      const baseShard=t.state.data.shards[0];
+      t.state.data.shards=[
+        {...baseShard,id:'single-era',languageVersion:'C++98+'},
+        {...baseShard,id:'many-eras',languageVersion:'C++26 / C++11 / C++26'},
+        {...baseShard,id:'future-era',languageVersion:'C++30'},
+        {...baseShard,id:'excluded-eras',languageVersion:'pre-C++11, before C++17'}
+      ];
+      t.state.selectedId='many-eras';t.state.timelineTheme='plain';t.changeView('library');
+      const before=JSON.stringify(t.state.data),output=t.renderLibrary(),cards=openingAttributes(output,'button','shard-card');
+      const single=cards.find(card=>card['data-shard-id']==='single-era'),multi=cards.find(card=>card['data-shard-id']==='many-eras');
+      assert.equal(single['data-shard-worlds'],'cpp98');assert.equal(single['data-spiral-release'],'cpp98');
+      assert.match(single.style,/--shard-tint:linear-gradient\(/);assert.match(single.style,/--cpp98-soft/);assert.ok(!single.style.includes('cpp03'));
+      assert.equal(multi['data-shard-worlds'],'cpp11 cpp26');assert.ok(!multi['data-spiral-release']);
+      assert.match(multi.style,/linear-gradient/);assert.match(multi.style,/--cpp11-soft/);assert.match(multi.style,/--cpp26-soft/);
+      for(const id of ['future-era','excluded-eras']){const card=cards.find(card=>card['data-shard-id']===id);assert.ok(!card['data-shard-worlds']);assert.ok(!card.style);}
+      const panel=openingAttributes(output,'article','detail-panel')[0];
+      assert.equal(panel['data-shard-worlds'],'cpp11 cpp26');assert.match(panel.style,/--cpp11-soft/);assert.match(panel.style,/--cpp26-soft/);
+      for(const card of output.matchAll(/<button[^>]*class="shard-card[^>]*>([\s\S]*?)<\/button>/g))assert.ok(!/<button\b|data-action="open-release"/.test(card[1]));
+      t.state.spiralCatalog=null;
+      assert.equal(openingAttributes(t.renderLibrary(),'article','detail-panel')[0]['data-shard-worlds'],'cpp11 cpp26');
+      assert.equal(JSON.stringify(t.state.data),before);
+    });
+  });
+  await check('A multirelease shard takes each Timeline column theme while Plain notes stay neutral', async () => {
+    await withWorldTimeline(async () => {
+      const before=JSON.stringify(t.state.data),output=t.renderTimeline();
+      for(const id of ['cpp11','cpp26']){
+        const start=output.indexOf('id="release-'+id+'"'),next=output.indexOf('<section class="release-column',start);
+        const column=output.slice(start,next<0?undefined:next),note=openingAttributes(column,'button','release-note').find(note=>note['data-shard-id']==='explicit');
+        assert.ok(note);assert.equal(note['data-shard-worlds'],id);assert.equal(note['data-spiral-release'],id);
+        assert.match(note.style,new RegExp('--'+id+'-soft'));
+        assert.ok(!note.style.includes(id==='cpp11'?'cpp26':'cpp11'));
+      }
+      for(const note of openingAttributes(output,'button','release-note').filter(note=>note['data-shard-id']!=='explicit'))assert.ok(!note['data-shard-worlds']);
+      t.state.timelineTheme='plain';
+      for(const note of openingAttributes(t.renderTimeline(),'button','release-note')){assert.ok(!note['data-shard-worlds']);assert.ok(!note.style);}
+      assert.equal(JSON.stringify(t.state.data),before);
+    });
+  });
+  await check('Clicking a detail badge opens its release, preserves Library state, and respects reduced motion', async () => {
+    await withWorldTimeline(async () => {
+      await withReleaseNavigation(async trace=>{
+        const shard=t.state.data.shards[0],keys=['selectedId','query','tags','tagMode','kind','status','sort','topicQuery','releaseCategory','timelineContent','timelineTheme'];
+        Object.assign(t.state,{selectedId:shard.id,query:'move',tags:['ownership'],tagMode:'any',kind:shard.kind,status:shard.status,sort:'title',topicQuery:'own',releaseCategory:'library',timelineContent:'shards',timelineTheme:'plain'});
+        t.changeView('library');const before=JSON.stringify(keys.map(key=>t.state[key])),collection=JSON.stringify(t.state.data);
+        const badge=openingAttributes(t.renderDetail(shard),'button','note-world-badge').find(button=>button['data-id']==='cpp26');
+        assert.equal(badge['aria-label'],'Open C++26 (draft) timeline: Karamelle, Lemuria, Novus, Wallaru');
+        const control=new Element('button',badge,document);control.closest=selector=>selector==='button,a'?control:null;
+        reducedMotion=true;document.dispatchEvent(new FixtureEvent('click',{target:control}));
+        await until(()=>trace.focus.length===1);
+        assert.equal(t.state.view,'timeline');assert.equal(t.state.timelineMode,'releases');assert.equal(t.state.timelineReleaseId,'cpp26');
+        assert.equal(JSON.stringify(keys.map(key=>t.state[key])),before);assert.equal(JSON.stringify(t.state.data),collection);
+        assert.equal(trace.scrolls[0].left,7*360);assert.equal(trace.scrolls[0].behavior,'auto');
+        assert.equal(trace.reveals[0].block,'start');assert.equal(trace.reveals[0].behavior,'auto');
+        assert.deepEqual(trace.focus,[{id:'release-cpp26',preventScroll:true}]);
+        const requests=releaseReadCount;await t.runAction('open-release',{dataset:{id:'cpp99'}});
+        assert.equal(releaseReadCount,requests);assert.equal(trace.focus.length,1);assert.equal(t.state.timelineReleaseId,'cpp26');
+      });
+    });
+  });
+  await check('A badge awaits the shared catalog request before scrolling to its release', async () => {
+    await withWorldTimeline(async () => {
+      await withReleaseNavigation(async trace=>{
+        t.state.selectedId='explicit';t.changeView('library');t.state.releaseCatalog=null;
+        const requests=releaseReadCount;let release;
+        releaseResponseGate=new Promise(resolve=>{release=resolve;});
+        const initial=t.loadReleaseCatalog();await until(()=>releaseReadCount===requests+1);
+        const navigation=t.runAction('open-release',{dataset:{id:'cpp17'}});
+        try{
+          await until(()=>t.state.view==='timeline');
+          assert.equal(releaseReadCount,requests+1);assert.equal(trace.focus.length,0);
+          assert.match($('#workspace').innerHTML,/Opening the C\+\+ release reference/);
+        }finally{releaseResponseGate=null;release();await Promise.all([initial,navigation]);}
+        assert.equal(releaseReadCount,requests+1);assert.equal(t.state.selectedId,'explicit');
+        assert.equal(trace.focus.length,1);assert.equal(trace.focus[0].id,'release-cpp17');assert.equal(trace.scrolls[0].behavior,'smooth');
+        assert.match($('#workspace').innerHTML,/data-portal-release="cpp17"[^>]*aria-current="step"/);
+      });
+    });
+  });
+  await check('Pending badge navigation keeps the newest destination and cancels after leaving the view', async () => {
+    await withWorldTimeline(async () => {
+      await withReleaseNavigation(async trace=>{
+        t.state.selectedId='explicit';t.changeView('library');t.state.releaseCatalog=null;
+        const requests=releaseReadCount;let release;releaseResponseGate=new Promise(resolve=>{release=resolve;});
+        const first=t.runAction('open-release',{dataset:{id:'cpp11'}});
+        await until(()=>releaseReadCount===requests+1);
+        const newest=t.runAction('open-release',{dataset:{id:'cpp26'}});
+        try{await until(()=>t.state.timelineReleaseId==='cpp26');assert.equal(releaseReadCount,requests+1);}
+        finally{releaseResponseGate=null;release();await Promise.all([first,newest]);}
+        assert.deepEqual(trace.focus.map(item=>item.id),['release-cpp26']);
+        trace.focus.length=0;trace.scrolls.length=0;trace.reveals.length=0;
+        t.changeView('library');t.state.releaseCatalog=null;
+        releaseResponseGate=new Promise(resolve=>{release=resolve;});
+        const cancelled=t.runAction('open-release',{dataset:{id:'cpp14'}});
+        try{await until(()=>releaseReadCount===requests+2);t.changeView('library');t.changeView('timeline');}
+        finally{releaseResponseGate=null;release();await cancelled;}
+        assert.equal(t.state.view,'timeline');assert.equal(trace.focus.length,0);assert.equal(trace.scrolls.length,0);assert.equal(trace.reveals.length,0);
+        assert.equal(t.state.selectedId,'explicit');
+      });
+    });
+  });
+  await check('Failed badge catalog loading keeps a retry route to the requested release', async () => {
+    await withWorldTimeline(async () => {
+      await withReleaseNavigation(async trace=>{
+        t.state.selectedId='explicit';t.changeView('library');t.state.releaseCatalog=null;
+        const before=JSON.stringify(t.state.data),requests=releaseReadCount;
+        try{
+          failReleaseLoad=true;await t.runAction('open-release',{dataset:{id:'cpp20'}});
+          assert.equal(t.state.view,'timeline');assert.equal(t.state.timelineReleaseId,'cpp20');assert.equal(t.state.selectedId,'explicit');
+          assert.match($('#workspace').innerHTML,/reference could not open/);assert.match($('#workspace').innerHTML,/data-action="reload-releases"/);
+          assert.equal(trace.focus.length,0);assert.equal(trace.scrolls.length,0);
+          failReleaseLoad=false;await t.runAction('reload-releases',{dataset:{}});
+          assert.equal(releaseReadCount,requests+2);assert.equal(t.state.releaseCatalogError,null);
+          assert.deepEqual(trace.focus.map(item=>item.id),['release-cpp20']);assert.equal(t.state.timelineReleaseId,'cpp20');
+          assert.equal(JSON.stringify(t.state.data),before);
+        }finally{failReleaseLoad=false;}
+      });
     });
   });
   await check('Portal keyboard navigation and activation reach every release with reduced-motion support', async () => {
