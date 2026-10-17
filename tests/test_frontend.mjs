@@ -28,7 +28,7 @@ class Element {
     this.style = {}; this.clientWidth = 900; this.clientHeight = 600; this.selectionStart = 0; this.selectionEnd = 0; this.listeners = new Map(); this._html = ''; this._text = '';
     for (const [key, value] of Object.entries(attrs)) if (key.startsWith('data-')) this.dataset[key.slice(5).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = value;
     const classes = new Set((attrs.class || '').split(/\s+/).filter(Boolean));
-    this.classList = { toggle: (name, force) => { const add = force ?? !classes.has(name); if (add) classes.add(name); else classes.delete(name); return add; }, remove: name => classes.delete(name) };
+    this.classList = { contains: name => classes.has(name), toggle: (name, force) => { const add = force ?? !classes.has(name); if (add) classes.add(name); else classes.delete(name); return add; }, remove: name => classes.delete(name) };
   }
   set innerHTML(value) {
     this._html = String(value);
@@ -43,10 +43,10 @@ class Element {
   set textContent(value) { this._text = String(value); }
   get textContent() { return this._text || this._html.replace(/<[^>]*>/g, ' '); }
   addEventListener(name, callback) { const listeners = this.listeners.get(name) || []; listeners.push(callback); this.listeners.set(name, listeners); }
-  dispatchEvent(event) { event.target = this; for (const listener of this.listeners.get(event.type) || []) listener(event); return !event.defaultPrevented; }
+  dispatchEvent(event) { event.target ||= this; for (const listener of this.listeners.get(event.type) || []) listener(event); if (event.bubbles && !event.propagationStopped) this.document?.dispatchEvent(event); return !event.defaultPrevented; }
   showModal() { this.open = true; }
   close() { this.open = false; }
-  focus() {}
+  focus() { if (this.document) this.document.activeElement = this; }
   select() { this.selectionStart = 0; this.selectionEnd = this.value.length; }
   click() { this.dispatchEvent(new FixtureEvent('click')); }
   closest() { return null; }
@@ -62,8 +62,9 @@ class Form extends Element {
   requestSubmit() { this.dispatchEvent(new FixtureEvent('submit')); }
 }
 class FixtureEvent {
-  constructor(type) { this.type = type; this.defaultPrevented = false; }
+  constructor(type, options = {}) { this.type = type; this.defaultPrevented = false; Object.assign(this, options); }
   preventDefault() { this.defaultPrevented = true; }
+  stopPropagation() { this.propagationStopped = true; }
 }
 class FixtureFormData {
   constructor(form) { this.entries = Object.entries(form.elements).map(([name, element]) => [name, element.value]); }
@@ -115,6 +116,7 @@ class DocumentFixture {
     return [];
   }
   addEventListener(name, callback) { const listeners = this.listeners.get(name) || []; listeners.push(callback); this.listeners.set(name, listeners); }
+  dispatchEvent(event) { event.target ||= this; for (const listener of this.listeners.get(event.type) || []) listener(event); return !event.defaultPrevented; }
 }
 
 const server = spawn(process.env.SHARD_ATLAS_TEST_PYTHON || 'python3', ['-u', path.join(project, 'server.py'), '--db', path.join(temporary, 'atlas.sqlite3'), '--backup-dir', path.join(temporary, 'backups'), '--port', '0'], { cwd: project, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -156,13 +158,21 @@ try {
   const w = { document, addEventListener(name, callback) { const listeners = windowListeners.get(name) || []; listeners.push(callback); windowListeners.set(name, listeners); }, katex: require(path.join(project, 'static/vendor/katex/katex.min.js')), confirm: () => true };
   context = vm.createContext({ window: w, document, fetch: browserFetch, FormData: FixtureFormData, FileReader: FixtureFileReader, navigator: { clipboard: { writeText: async text => { if (failClipboard) throw new Error('Clipboard permission denied'); clipboardWrites.push(text); } } }, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key=>storage.delete(key) }, setTimeout: trackedSetTimeout, clearTimeout: timer => { timers.delete(timer); clearTimeout(timer); }, console, Blob, URL });
   const code = fs.readFileSync(path.join(project, 'static/app.js'), 'utf8');
-  vm.runInContext(code + '\nwindow.testAtlas={state,drafts,filteredShards,markdown,stabilizeWikiLinks,renderLibrary,renderGraphPage,renderTimeline,renderBoards,renderDetail,dateLabel,previewImport,saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,loadReleaseCatalog,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,uploadImage,showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
+  vm.runInContext(code + '\nwindow.testAtlas={state,drafts,filteredShards,markdown,stabilizeWikiLinks,renderNav,renderLibrary,renderGraphPage,renderTimeline,renderBoards,renderDetail,dateLabel,previewImport,saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,loadReleaseCatalog,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,uploadImage,showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
   const t = w.testAtlas, $ = selector => document.querySelector(selector), results = [];
   async function until(predicate) { for (let i = 0; i < 300; i++) { if (predicate()) return; await delay(10); } throw new Error('Timed out waiting for frontend state'); }
   async function get(url) { const response = await fetch(base + url), data = await response.json(); assert.ok(response.ok, JSON.stringify(data)); return data; }
   async function post(url, data, method = 'POST') { const response = await fetch(base + url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }), result = await response.json(); assert.ok(response.ok, JSON.stringify(result)); return result; }
   async function check(name, test) { await test(); results.push(name); }
   const submit = form => form.dispatchEvent(new FixtureEvent('submit'));
+  const searchTopics = query => { const input = $('#topic-search'); input.value = query; input.dispatchEvent(new FixtureEvent('input', { bubbles: true })); };
+  const pressTopicKey = (key, options = {}) => { const event = new FixtureEvent('keydown', { key, bubbles: true, ...options }); $('#topic-search').dispatchEvent(event); return event; };
+  const topicButtons = () => [...$('#topic-list').innerHTML.matchAll(/<button([^>]*)>([\s\S]*?)<\/button>/g)].map(match => ({ ...attributes(match[1]), count: Number(match[2].match(/<small>(\d+)<\/small>/)?.[1]) })).filter(button => button['data-tag']);
+  async function withTopicCollection(shards, test) {
+    const previous = { ...t.state };
+    try { t.state.data = { ...previous.data, shards, links: [] }; t.clearFilters(); t.changeView('library'); await test(); }
+    finally { Object.assign(t.state, previous); $('#search').value = t.state.query; t.renderNav(); }
+  }
 
   await until(() => t.state.data.shards.length && $('.shard-card'));
   await until(() => t.pending === 0);
@@ -232,6 +242,101 @@ try {
     const all = Array.from(t.filteredShards(), shard => shard.id); assert.ok(all.includes(first.id));
     t.state.tagMode = 'any'; const any = Array.from(t.filteredShards(), shard => shard.id); assert.ok(all.every(id => any.includes(id)));
     t.state.status = 'verify'; assert.ok(t.filteredShards().every(shard => shard.status === 'verify')); t.clearFilters();
+  });
+  await check('Topic search finds late custom keywords across the entire collection', async () => {
+    const baseShard = t.state.data.shards[0], rare = 'Zyzzyva custom constexpr keyword';
+    const shards = Array.from({ length: 480 }, (_, index) => ({ ...baseShard, id: 'topic-inventory-' + index, title: 'Topic fixture ' + index, content: 'An independent note.', tags: ['Custom topic ' + String(index).padStart(3, '0')] }));
+    shards.push({ ...baseShard, id: 'rare-keyword', title: 'Rare keyword source', tags: [rare] });
+    await withTopicCollection(shards, async () => {
+      assert.equal(topicButtons().length, 481);
+      const workspace = $('#workspace').innerHTML, input = $('#topic-search'); input.focus(); input.selectionStart = input.selectionEnd = 8;
+      searchTopics('ZYZZYVA custom');
+      assert.deepEqual(topicButtons().map(button => button['data-tag']), [rare]);
+      assert.equal(topicButtons()[0].count, 1); assert.match($('#topic-search-status').textContent, /1 of 481/);
+      assert.equal($('#workspace').innerHTML, workspace); assert.equal($('#topic-search'), input); assert.equal(document.activeElement, input);
+      assert.equal(t.state.query, ''); assert.equal(t.filteredShards().length, 481);
+      searchTopics(''); assert.equal(topicButtons().length, 481);
+    });
+  });
+  await check('Topic lookup preserves selected filters and the independent note search', async () => {
+    const baseShard = t.state.data.shards[0];
+    await withTopicCollection([
+      { ...baseShard, id: 'topic-selected', title: 'Needle example', content: 'Needle explanation.', kind: 'concept', status: 'verify', tags: ['Ownership', 'Lifetimes'] },
+      { ...baseShard, id: 'topic-other', title: 'Other example', tags: ['Consteval'] }
+    ], async () => {
+      t.state.tags = ['Ownership', 'Lifetimes']; t.state.tagMode = 'any'; t.state.kind = 'concept'; t.state.status = 'verify'; t.state.query = 'needle'; $('#search').value = 'needle'; t.renderNav();
+      const filtered = Array.from(t.filteredShards(), shard => shard.id), before = $('#workspace').innerHTML;
+      searchTopics('const');
+      assert.deepEqual(topicButtons().map(button => button['data-tag']), ['Consteval']);
+      assert.ok(!$('#selected-topic-filters').hidden);
+      for (const tag of t.state.tags) assert.ok($('#selected-topic-filters').innerHTML.includes('data-tag="' + tag + '"'));
+      assert.deepEqual(Array.from(t.filteredShards(), shard => shard.id), filtered); assert.equal($('#workspace').innerHTML, before);
+      assert.deepEqual(Array.from(t.state.tags), ['Ownership', 'Lifetimes']); assert.equal(t.state.tagMode, 'any'); assert.equal(t.state.kind, 'concept'); assert.equal(t.state.status, 'verify'); assert.equal(t.state.query, 'needle'); assert.equal($('#search').value, 'needle');
+      await t.runAction('clear-topic-search', { dataset: {} });
+      assert.equal($('#topic-search').value, ''); assert.equal(t.state.topicQuery, ''); assert.ok($('#clear-topic-search').hidden);
+      assert.deepEqual(Array.from(t.state.tags), ['Ownership', 'Lifetimes']); assert.equal(t.state.query, 'needle'); assert.equal($('#search').value, 'needle'); assert.equal(t.state.status, 'verify');
+      searchTopics('const'); await t.runAction('clear-filters', { dataset: {} });
+      assert.equal(t.state.topicQuery, ''); assert.equal($('#topic-search').value, ''); assert.equal(t.state.query, ''); assert.equal($('#search').value, ''); assert.equal(t.state.tags.length, 0); assert.equal(t.state.kind, 'all'); assert.equal(t.state.status, 'all');
+    });
+  });
+  await check('Missing topic queries are escaped and leave removable selections visible', async () => {
+    const baseShard = t.state.data.shards[0];
+    await withTopicCollection([{ ...baseShard, id: 'topic-safe', tags: ['Keep selected'] }], async () => {
+      t.state.tags = ['Keep selected']; searchTopics('<img src=x onerror="bad()"> & missing');
+      assert.equal(topicButtons().length, 0); assert.match($('#topic-list').textContent, /No topics match/);
+      assert.ok(!$('#topic-list').innerHTML.includes('<img')); assert.ok($('#topic-list').innerHTML.includes('&lt;img')); assert.ok($('#topic-list').innerHTML.includes('&amp; missing'));
+      assert.ok(!$('#selected-topic-filters').hidden); assert.match($('#selected-topic-filters').innerHTML, /data-tag="Keep selected"/);
+      const before = Array.from(t.state.tags); pressTopicKey('Enter'); assert.deepEqual(Array.from(t.state.tags), before);
+      searchTopics('  '); assert.deepEqual(topicButtons().map(button => button['data-tag']), ['Keep selected']);
+    });
+  });
+  await check('Topic Enter selects exact or unique matches without guessing an ambiguous result', async () => {
+    const baseShard = t.state.data.shards[0];
+    await withTopicCollection([
+      { ...baseShard, id: 'topic-keyboard-a', title: 'Needle note', tags: ['const', 'consteval'] },
+      { ...baseShard, id: 'topic-keyboard-b', tags: ['constexpr', 'Ownership'] }
+    ], async () => {
+      t.state.query = 'needle'; $('#search').value = 'needle';
+      searchTopics('cons'); pressTopicKey('Enter'); assert.equal(t.state.tags.length, 0);
+      searchTopics('CONST'); pressTopicKey('Enter'); assert.deepEqual(Array.from(t.state.tags), ['const']);
+      searchTopics('ship'); pressTopicKey('Enter'); assert.deepEqual(Array.from(t.state.tags), ['const', 'Ownership']);
+      assert.equal(t.state.query, 'needle'); assert.equal($('#search').value, 'needle');
+      searchTopics('eval'); pressTopicKey('Enter', { isComposing: true }); assert.deepEqual(Array.from(t.state.tags), ['const', 'Ownership']);
+      pressTopicKey('Enter'); assert.deepEqual(Array.from(t.state.tags), ['const', 'Ownership', 'consteval']);
+      pressTopicKey('Enter'); assert.deepEqual(Array.from(t.state.tags), ['const', 'Ownership']);
+      searchTopics(''); pressTopicKey('Enter'); assert.deepEqual(Array.from(t.state.tags), ['const', 'Ownership']);
+    });
+  });
+  await check('Escape clears only topic lookup and consumes the keyboard event', async () => {
+    const baseShard = t.state.data.shards[0];
+    await withTopicCollection([{ ...baseShard, id: 'topic-escape', tags: ['Ownership'] }], async () => {
+      t.state.tags = ['Ownership']; t.state.query = 'note query'; $('#search').value = 'note query';
+      document.body.classList.toggle('sidebar-open', true); $('#help-dialog').showModal();
+      searchTopics('own'); const workspace = $('#workspace').innerHTML, event = pressTopicKey('Escape');
+      assert.ok(event.defaultPrevented); assert.ok(event.propagationStopped); assert.equal(t.state.topicQuery, ''); assert.equal($('#topic-search').value, '');
+      assert.deepEqual(Array.from(t.state.tags), ['Ownership']); assert.equal(t.state.query, 'note query'); assert.equal($('#search').value, 'note query');
+      assert.ok($('#help-dialog').open); assert.equal(t.state.view, 'library'); assert.equal($('#workspace').innerHTML, workspace);
+      assert.ok(document.body.classList.contains('sidebar-open')); document.body.classList.remove('sidebar-open'); $('#help-dialog').close();
+    });
+  });
+  await check('Timeline topic lookup unites personal and release topics with case-insensitive counts', async () => {
+    const baseShard = t.state.data.shards[0];
+    await withTopicCollection([
+      { ...baseShard, id: 'topic-release-a', tags: ['Ownership', 'Personal keyword'] },
+      { ...baseShard, id: 'topic-release-b', tags: ['ownership'] }
+    ], async () => {
+      t.state.releaseCatalog = { schemaVersion: 1, sources: [], releases: [{ id: 'cpp23', label: 'C++23', year: 2023, status: 'published', summary: '', features: [
+        { id: 'ref-a', title: 'A feature', summary: '', category: 'language', sourceIds: [], tags: ['OWNERSHIP', 'Release keyword'] },
+        { id: 'ref-b', title: 'A library feature', summary: '', category: 'library', sourceIds: [], tags: ['ownership'] }
+      ] }] };
+      t.state.view = 'timeline'; t.state.timelineMode = 'releases'; t.state.tags = ['OWNERSHIP']; t.renderNav();
+      searchTopics('OwNeR'); const buttons = topicButtons(); assert.equal(buttons.length, 1); assert.equal(buttons[0]['data-tag'], 'Ownership'); assert.equal(buttons[0].count, 4); assert.equal(buttons[0]['aria-pressed'], 'true');
+      searchTopics('keyword'); assert.deepEqual(topicButtons().map(button => button['data-tag']).sort(), ['Personal keyword', 'Release keyword']);
+      assert.match($('#selected-topic-filters').innerHTML, /data-tag="OWNERSHIP"/); assert.deepEqual(Array.from(t.state.tags), ['OWNERSHIP']);
+      t.state.view = 'library'; t.state.tags = []; t.renderNav(); searchTopics('ownership');
+      assert.deepEqual(topicButtons().map(button => button['data-tag']).sort(), ['Ownership', 'ownership']); assert.ok(topicButtons().every(button => button.count === 1));
+      searchTopics('Release keyword'); assert.equal(topicButtons().length, 0);
+    });
   });
   await check('Release timeline uses explicit versions and keeps reference separate from notes', async () => {
     await until(() => t.state.releaseCatalog || t.state.releaseCatalogError);

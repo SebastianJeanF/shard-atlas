@@ -32,6 +32,10 @@ Forest green marks the selected idea and primary actions. Amber marks learning o
 
 The Library places the selected explanation beside its nearby ideas. Search covers note text, connection explanations, and connected-note titles. Combine search with kind, understanding, and topic filters. When selecting multiple topics, choose whether results must match **all** or **any** of them. Renaming a topic updates the notes that use it.
 
+Use **Search topics** in the sidebar to find a topic by name, then select it to filter the current view. This searches topic names separately from the main note search. Selected topics stay visible while you look for others. Enter selects an exact match or the only matching topic. Escape or the clear button clears the topic search without removing your selections.
+
+Topics are freeform and grow with your notes. Add any useful topic in a shard's comma-separated **Topics** field, including a keyword such as `consteval`. Its name appears in the sidebar after the note is saved. The topic list has no fixed vocabulary or global limit.
+
 Choose **Connect** to describe how two notes relate. The available relationships are *depends on*, *explains*, *contrasts with*, *is an example of*, *relates to*, and *is part of*. Add a reason when it makes the relationship clearer.
 
 Direction matters. An arrow runs from the note making the relationship to its target. For example, an example note can point to the concept it illustrates with *is an example of*. A diagram's proximity or arrow alone does not establish a prerequisite.

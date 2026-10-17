@@ -13,7 +13,7 @@ Write an explanation, keep the code and sources beside it, and connect it to wha
 - **Keep the details.** Notes support Markdown, highlighted C++ code, mathematics, images, source references, and links to other notes.
 - **Explain the relationship.** Connect ideas with labels such as *depends on*, *contrasts with*, and *is an example of*, with a reason for each connection.
 - **Arrange your thinking.** Place shared notes on a canvas, group them into sections, and move between the overview and an individual explanation.
-- **Keep your bearings.** Search and filter by topic, kind, or understanding. Explore the separate, sourced C++ release reference from C++98 through the C++26 working draft.
+- **Keep your bearings.** Search notes or find topics by typing, then filter by topic, kind, or understanding. Topics grow freely with your notes. Explore the separate, sourced C++ release reference from C++98 through the C++26 working draft.
 
 ![The Library view with a sample C++ explanation and its connected notes](docs/images/library.png)
 

@@ -4,7 +4,7 @@ const relations = {depends_on:'depends on', explains:'explains', contrasts_with:
 const kinds = {concept:'Concept',fact:'Fact',example:'Example',mistake:'Learning moment',event:'Dated note',idea:'Idea'};
 const coreRelations = ['depends_on','explains','contrasts_with','example_of','related_to','part_of'];
 const statuses = {learning:'Learning',solid:'Confident',verify:'Needs verification'};
-const state = {data:{shards:[],links:[],boards:[]},view:'library',selectedId:null,tags:[],tagMode:'all',kind:'all',status:'all',sort:'updated',query:'',graphScope:'all',graphColor:'topic',graphGroup:'none',timelineMode:'releases',boardId:null,boardSectionId:'',libraryLimit:120,releaseCategory:'all',releaseCatalog:null,releaseCatalogError:null};
+const state = {data:{shards:[],links:[],boards:[]},view:'library',selectedId:null,tags:[],tagMode:'all',kind:'all',status:'all',sort:'updated',query:'',topicQuery:'',graphScope:'all',graphColor:'topic',graphGroup:'none',timelineMode:'releases',boardId:null,boardSectionId:'',libraryLimit:120,releaseCategory:'all',releaseCatalog:null,releaseCatalogError:null};
 const palette = ['#527444','#467b80','#946b3d','#86618e','#ad6b52','#6077a0','#768041','#96707a'];
 const editorFields = ['title','content','kind','status','sourceUrl','languageVersion','eventDate','tags','evidenceStatus','eventType','publicationDate','verifiedDate','entityType','entities','inbox','sources','facts'];
 const draftKinds = ['editor','connection'];
@@ -58,7 +58,7 @@ const dateTimeLabel=date=>date?new Intl.DateTimeFormat(undefined,{month:'short',
 const excerpt=text=>String(text||'').replace(/```[\s\S]*?```/g,' [code example] ').replace(/!\[[^\]]*\]\([^)]*\)/g,' [image] ').replace(/^#{1,6}\s+|^>\s+/gm,'').replace(/[*`]/g,'').replace(/\s+/g,' ').trim();
 const allTags=()=>[...new Set(state.data.shards.flatMap(s=>s.tags))].sort((a,b)=>a.localeCompare(b));
 const hasFilters=()=>!!(state.query||state.tags.length||state.kind!=='all'||state.status!=='all');
-function clearFilters(){state.query='';state.tags=[];state.kind='all';state.status='all';state.releaseCategory='all';$('#search').value='';}
+function clearFilters(){state.query='';state.topicQuery='';state.tags=[];state.kind='all';state.status='all';state.releaseCategory='all';$('#search').value='';}
 
 function resolveWiki(target) {
   if(target.startsWith('id:'))return byId(target.slice(3));
@@ -150,15 +150,38 @@ function filteredShards() {
     const haystack=[s.title,s.content,s.tags.join(' '),s.sourceUrl,s.languageVersion,(s.entities||[]).join(' '),JSON.stringify(s.facts||[]),JSON.stringify(s.sources||[]),connectedText].join(' ').toLocaleLowerCase();return words.every(w=>haystack.includes(w));
   }).sort((a,b)=>state.sort==='title'?a.title.localeCompare(b.title):state.sort==='created'?b.createdAt.localeCompare(a.createdAt):b.updatedAt.localeCompare(a.updatedAt));
 }
-function renderNav(){
-  $('#library-count').textContent=state.data.shards.length;$('#view-label').textContent={library:'Library',graph:'Connections',timeline:'C++ timeline',boards:'Canvas'}[state.view];
-  document.querySelectorAll('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===state.view));
+function sidebarTopics(){
   const counts=new Map(),releaseMode=state.view==='timeline'&&state.timelineMode==='releases',labels=new Map();
   const countTopic=tag=>{const key=releaseMode?tag.toLocaleLowerCase():tag;if(!labels.has(key))labels.set(key,tag);counts.set(key,(counts.get(key)||0)+1);};
   for(const shard of state.data.shards)for(const tag of shard.tags)countTopic(tag);
   if(releaseMode)for(const release of state.releaseCatalog?.releases||[])for(const feature of release.features)for(const tag of feature.tags)countTopic(tag);
+  return [...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).map(([key,count])=>({tag:labels.get(key),count}));
+}
+function matchingSidebarTopics(topics=sidebarTopics()){
+  const query=state.topicQuery.trim().toLocaleLowerCase();return topics.filter(({tag})=>tag.toLocaleLowerCase().includes(query));
+}
+function renderTopics(){
+  const topics=sidebarTopics(),matches=matchingSidebarTopics(topics),query=state.topicQuery.trim(),releaseMode=state.view==='timeline'&&state.timelineMode==='releases';
+  const input=$('#topic-search');if(input.value!==state.topicQuery)input.value=state.topicQuery;
+  $('#clear-topic-search').hidden=!state.topicQuery;
+  $('#topic-search-status').textContent=query?`${matches.length} of ${topics.length} topics match`:`${topics.length} topic${topics.length===1?'':'s'}`;
+  const selected=$('#selected-topic-filters');selected.hidden=!state.tags.length;
+  selected.innerHTML=state.tags.length?'<span class="sidebar-selected-label">Selected topics</span><div>'+state.tags.map(tag=>`<button class="tag" data-tag="${esc(tag)}" aria-label="${esc('Remove topic filter '+tag)}" title="Remove this topic filter">${esc(tag)} <span aria-hidden="true">×</span></button>`).join('')+'</div>':'';
+  $('#topic-list').innerHTML=matches.map(({tag,count})=>{const active=releaseMode?releaseTagSelected(tag):state.tags.includes(tag);return `<button class="topic-item ${active?'active':''}" data-tag="${esc(tag)}" aria-pressed="${active}"${releaseMode?' title="Matching reference entries and personal notes"':''}><span class="topic-dot"></span><span>${esc(tag)}</span><small>${count}</small></button>`;}).join('')||(query?`<div class="topic-empty"><p>No topics match “${esc(query)}”.</p><p>Try another search. To add a new topic, type it in a shard’s Topics field and save.</p></div>`:'<p class="topic-empty">Topics appear as you add them to shards.</p>');
+}
+function clearTopicSearch(){state.topicQuery='';renderTopics();$('#topic-search').focus();}
+function selectSearchedTopic(){
+  const query=state.topicQuery.trim();if(!query)return;
+  const matches=matchingSidebarTopics(),exact=matches.filter(({tag})=>tag.toLocaleLowerCase()===query.toLocaleLowerCase());
+  const selected=exact.find(({tag})=>tag===query)||(exact.length===1?exact[0]:matches.length===1?matches[0]:null);
+  if(selected)toggleTag(selected.tag);else if(matches.length)toast('Choose a topic from the matching list.');else toast('No matching topic. Add a new topic in a shard’s Topics field.');
+}
+function renderNav(){
+  $('#library-count').textContent=state.data.shards.length;$('#view-label').textContent={library:'Library',graph:'Connections',timeline:'C++ timeline',boards:'Canvas'}[state.view];
+  document.querySelectorAll('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===state.view));
+  const releaseMode=state.view==='timeline'&&state.timelineMode==='releases';
   $('#search').placeholder=releaseMode?'Find a C++ feature or one of your notes…':'Find an idea, example, or connection…';$('#search').setAttribute('aria-label',releaseMode?'Search C++ features and notes':'Search shards');
-  $('#topic-list').innerHTML=[...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).map(([key,count])=>{const tag=labels.get(key),active=releaseMode?releaseTagSelected(tag):state.tags.includes(tag);return `<button class="topic-item ${active?'active':''}" data-tag="${esc(tag)}" aria-pressed="${active}"${releaseMode?' title="Matching reference entries and personal notes"':''}><span class="topic-dot"></span><span>${esc(tag)}</span><small>${count}</small></button>`;}).join('')||'<p class="muted">Topics appear as you add shards.</p>';
+  renderTopics();
   renderDraftShelf();
 }
 function pageHeading(eyebrow,title,description,action=''){return `<div class="page-heading"><div><span class="eyebrow">${eyebrow}</span><h1>${title}</h1><p>${description}</p></div><div class="heading-actions">${action}</div></div>`;}
@@ -393,7 +416,7 @@ async function runAction(action,button){
   else if(action==='use-ai')await openAiHelp();else if(action==='copy-ai-instructions')await copyAiInstructions();else if(action==='select-ai-instructions')await selectAiInstructions();
   else if(action==='refresh-ai-notes'){const refreshButton=$('#refresh-ai-notes');refreshButton.disabled=true;$('#ai-refresh-status').textContent='Checking your notes…';try{const result=await refreshAtlas(true);$('#ai-refresh-status').textContent=result.skipped?'Finish editing, then try again.':result.changed?'Your latest notes are now in the atlas.':'Your notes are up to date.';}catch(error){$('#ai-refresh-status').textContent=error.message;}finally{refreshButton.disabled=false;}}
   else if(action==='jump-release'){const track=$('#release-track'),column=$('#release-'+id);if(track&&column)track.scrollTo({left:column.offsetLeft,behavior:'smooth'});}
-  else if(action==='clear-filters'){clearFilters();render();}else if(action==='settings')$('#settings-dialog').showModal();else if(action==='help')$('#help-dialog').showModal();else if(action==='read-selected'){state.view='library';selectShard(state.selectedId);}
+  else if(action==='clear-topic-search')clearTopicSearch();else if(action==='clear-filters'){clearFilters();render();}else if(action==='settings')$('#settings-dialog').showModal();else if(action==='help')$('#help-dialog').showModal();else if(action==='read-selected'){state.view='library';selectShard(state.selectedId);}
   else if(action==='zoom-in'||action==='zoom-out'){graphTransform.scale=Math.max(.4,Math.min(3,graphTransform.scale*(action==='zoom-in'?1.2:1/1.2)));updateGraphTransform();}else if(action==='reset-graph'){graphTransform={x:0,y:0,scale:1};updateGraphTransform();}
   else if(action==='backup')await withBusy(async()=>{const result=await writeRequest('/api/backup','POST',{});toast('Backup saved: '+result.filename);});
   else if(action==='import'||action==='import-ai'){if(action==='import-ai')$('#ai-dialog').close();pendingFilePickerType='json';$('#import-file').click();}else if(action==='upload-image'){pendingFilePickerType='image';$('#image-file').click();}
@@ -513,6 +536,8 @@ document.addEventListener('keydown',event=>{
 });
 $('#mobile-menu').addEventListener('click',()=>document.body.classList.toggle('sidebar-open'));
 let searchTimer;$('#search').addEventListener('input',event=>{state.query=event.target.value;clearTimeout(searchTimer);searchTimer=setTimeout(render,100);});
+$('#topic-search').addEventListener('input',event=>{state.topicQuery=event.target.value;renderTopics();});
+$('#topic-search').addEventListener('keydown',event=>{if(event.isComposing)return;if(event.key==='Escape'){event.preventDefault();event.stopPropagation();clearTopicSearch();}else if(event.key==='Enter'){event.preventDefault();event.stopPropagation();if(!busy)selectSearchedTopic();}});
 document.addEventListener('change',event=>{
   if(event.target.dataset?.structured){syncStructuredEditor(event.target.dataset.structured);scheduleDraft('editor');}
   const filters={'board-select':'boardId','kind-filter':'kind','status-filter':'status','sort-filter':'sort','tag-mode':'tagMode','graph-color':'graphColor','graph-group':'graphGroup','release-category':'releaseCategory'};if(filters[event.target.id]){state[filters[event.target.id]]=event.target.value;render();}

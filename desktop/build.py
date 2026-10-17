@@ -23,7 +23,7 @@ def run(*arguments: str) -> None:
 def desktop_configuration(python: Path | None = None, qa_db: Path | None = None,
                           backup_dir: Path | None = None) -> dict:
     """Keep portable builds independent of the machine that compiled them."""
-    config = {"backendVersion": "2.4.1"}
+    config = {"backendVersion": "2.4.2"}
     if python is not None:
         config["pythonCandidates"] = [str(python.expanduser().resolve())]
     if qa_db is not None:
@@ -62,8 +62,8 @@ def build(output: Path, python: Path | None = None, qa_db: Path | None = None,
             "CFBundleDisplayName": "Shard Atlas QA" if qa_db is not None else "Shard Atlas",
             "CFBundleExecutable": "ShardAtlas",
             "CFBundlePackageType": "APPL",
-            "CFBundleShortVersionString": "2.1.1",
-            "CFBundleVersion": "8",
+            "CFBundleShortVersionString": "2.1.2",
+            "CFBundleVersion": "9",
             "LSMinimumSystemVersion": "12.0",
             "NSHighResolutionCapable": True,
             "NSPrincipalClass": "NSApplication",

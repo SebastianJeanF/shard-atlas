@@ -25,7 +25,7 @@ struct DesktopConfiguration {
         let metadataURL = Bundle.main.url(forResource: "desktop-config", withExtension: "json")
         let metadata = suppliedMetadata ?? metadataURL.flatMap { try? Data(contentsOf: $0) }
             .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
-        backendVersion = metadata["backendVersion"] as? String ?? "2.4.1"
+        backendVersion = metadata["backendVersion"] as? String ?? "2.4.2"
         let qaDatabase = argument("--qa-db") ?? metadata["qaDatabase"] as? String
         isQA = qaDatabase != nil
         if let qaDatabase {
@@ -306,7 +306,7 @@ final class DesktopDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, 
         guard !checkingQuit, window.attachedSheet == nil else { return }
         let alert = NSAlert()
         alert.messageText = "Shard Atlas"
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.1.1"
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.1.2"
         alert.informativeText = "Connected technical knowledge.\nVersion \(version)\n\nYour shards, connections, and attachments are stored locally on this Mac."
         alert.addButton(withTitle: "OK")
         alert.beginSheetModal(for: window) { _ in self.finishSheet(alert.window) {} }

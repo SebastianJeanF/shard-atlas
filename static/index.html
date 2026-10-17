@@ -22,6 +22,12 @@
         <button class="nav-item" data-view="timeline"><span>↳</span> C++ timeline</button>
       </nav>
       <div class="nav-label tag-heading">TOPICS <span><button class="icon-button" data-action="rename-tag" title="Rename a topic" aria-label="Rename a topic">✎</button><button class="icon-button" data-action="clear-filters" title="Clear filters" aria-label="Clear filters">↺</button></span></div>
+      <div class="topic-search">
+        <label for="topic-search">Search topics</label>
+        <div class="topic-search-field"><input id="topic-search" type="search" placeholder="e.g. consteval" autocomplete="off" spellcheck="false" aria-controls="topic-list" aria-describedby="topic-search-status"><button id="clear-topic-search" class="icon-button" type="button" data-action="clear-topic-search" aria-label="Clear topic search" title="Clear topic search" hidden>×</button></div>
+        <p id="topic-search-status" class="topic-search-status" role="status" aria-live="polite" aria-atomic="true"></p>
+      </div>
+      <div id="selected-topic-filters" class="sidebar-selected-topics" aria-label="Selected topic filters" hidden></div>
       <div class="topic-list" id="topic-list"></div>
       <div class="sidebar-bottom">
         <div class="local-status"><span class="status-dot"></span><span>Saved on this Mac<small id="save-status">Your knowledge, within reach.</small></span></div>
@@ -50,7 +56,7 @@
       <div class="editor-tools"><button type="button" class="text-button" data-action="upload-image">＋ Add image</button><button type="button" class="text-button" data-action="recognize-image" id="recognize-image" hidden>Read text from last image</button><button type="button" class="text-button" data-action="toggle-preview" id="preview-toggle">Show preview</button><span class="muted">You can also paste an image.</span><input type="file" id="image-file" accept="image/png,image/jpeg,image/gif,image/webp" hidden></div>
       <section class="image-recognition" id="image-recognition" hidden aria-label="Review text recognized from image"></section><div class="wiki-suggestions" id="wiki-suggestions" hidden></div>
       <div class="editor-preview markdown" id="editor-preview" hidden></div>
-      <label class="field">Topics <span class="field-hint">Separate with commas. No need to organize everything now.</span><input name="tags" placeholder="C++, ownership, memory"></label>
+      <label class="field">Topics <span class="field-hint">Type any topic or keyword, such as consteval. Separate with commas. New topics appear in the sidebar after saving.</span><input name="tags" placeholder="C++, consteval, memory"></label>
       <details class="editor-details"><summary>Source &amp; context</summary><div class="field-row"><label class="field">Source URL<input name="sourceUrl" type="url" placeholder="https://…"></label><label class="field">Version or scope<input name="languageVersion" placeholder="C++23, Lecture 4, …"></label></div><h3 class="editor-subheading">Supporting sources</h3><input type="hidden" name="sources" value="[]"><div id="source-editor"></div><button type="button" class="text-button" data-action="add-source">＋ Add source</button></details>
       <input type="hidden" name="eventDate"><input type="hidden" name="evidenceStatus" value="unverified"><input type="hidden" name="inbox" value="false"><input type="hidden" name="eventType"><input type="hidden" name="publicationDate"><input type="hidden" name="verifiedDate"><input type="hidden" name="entityType"><input type="hidden" name="entities"><input type="hidden" name="facts" value="[]">
       <div class="form-error" id="editor-error" role="alert" hidden></div>
