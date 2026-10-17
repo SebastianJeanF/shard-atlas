@@ -13,3 +13,9 @@ The original vendored files were verified against the official [`katex@0.19.0` p
 ## Technical references
 
 The C++ release catalog in `static/cpp-releases.json` contains concise authored descriptions and links to public standards papers and references. Source links identify supporting material. Linked websites and standards documents are not bundled with the app and retain their respective rights.
+
+## Spiral timeline companion
+
+The optional Wizard101 inspired timeline uses original SVG landscape illustrations distributed under this project's MIT license. The companion does not bundle official game artwork, logos, screenshots, or audio. World names identify the inspiration for the memory cues. Wizard101 and its fictional worlds belong to KingsIsle Entertainment. Shard Atlas is an independent project.
+
+Historical descriptions link to supporting announcements. These links do not imply endorsement. See the asset notes in `static/spiral/` for the illustration inventory.

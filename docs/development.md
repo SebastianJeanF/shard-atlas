@@ -59,12 +59,16 @@ The server and native builder both accept `--backup-dir PATH`. The native app de
 | `desktop/ImageText.swift` | Local macOS image text recognition |
 | `seed.json` | Generic starter notes, connections, and canvas |
 | `static/cpp-releases.json` | Separate sourced C++ release reference |
+| `static/spiral-timeline.json` | Optional world associations, historical sources, programming examples, and learning trail |
+| `static/spiral/` | Original offline landscape illustrations for the optional timeline theme |
 | `tools/shard_atlas_client.py` | HTTP helper for local knowledge contributions and portable handoffs |
 | `tools/shard_atlas_mcp.py` | Optional MCP stdio bridge for AI clients |
 | `tools/import_lucid.py` | Offline conversion of supplied Lucid regions and assets |
 | `tests/` | Storage, HTTP, rendering, integration, and desktop configuration checks |
 
 The application uses no pip or npm runtime packages. KaTeX and its fonts are vendored for offline mathematics. Node.js is needed only for the JavaScript test commands below. See [third-party notices](../THIRD_PARTY_NOTICES.md) for bundled licenses.
+
+The Spiral companion is presentation and reference content. Keep it separate from `cpp-releases.json` and the personal collection. Preserve the Plain fallback, filter behavior, draft status, and exact code text when extending it. World associations are mnemonics rather than C++ release history. Historical claims need source links. The landscape artwork is original SVG, with attribution details beside the assets.
 
 The native app discovers a compatible loopback service by app identity, backend version, and database path. If none exists, it starts one from the bundled runtime. Closing the app stops its own child service. It preserves an existing shared service. Stable note IDs preserve references across renames and views.
 

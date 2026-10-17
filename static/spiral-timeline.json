@@ -1,0 +1,492 @@
+{
+  "schemaVersion": 1,
+  "title": "A journey through the Spiral",
+  "description": "An optional Wizard101-inspired memory map for the C++ release timeline. The C++ year and source-backed facts remain primary. World associations are mnemonic choices, not shared chronology or official game equivalences.",
+  "releaseOrder": [
+    "cpp98",
+    "cpp03",
+    "cpp11",
+    "cpp14",
+    "cpp17",
+    "cpp20",
+    "cpp23",
+    "cpp26"
+  ],
+  "artAttribution": {
+    "metadata": "/spiral/art-attribution.json",
+    "credit": "Original geometric illustration by Shard Atlas contributors. MIT licensed. No official game artwork is reproduced.",
+    "license": "MIT",
+    "notice": "Unofficial educational fan theme. Wizard101 and world names belong to their respective owners."
+  },
+  "releases": {
+    "cpp98": {
+      "worldNames": [
+        "Dragonspyre"
+      ],
+      "caption": "Foundations in stone and fire",
+      "association": "Dragonspyre is the foundation chapter in this memory map: classes, lifetimes, templates and the standard library provide the structure later releases build on. This is a personal learning association. It does not mean those ideas were invented in 1998, or that Dragonspyre was the game’s first world.",
+      "history": "Dragonspyre was an expansion after the original launch worlds. Its position here follows the chosen learning map, not a shared release date between Wizard101 and C++.",
+      "sourceLinks": [
+        {
+          "title": "Wizard101 administrator on Dragonspyre history",
+          "url": "https://www.wizard101.com/forum/ravenwood-commons/when-did-they-come-out-16744"
+        },
+        {
+          "title": "C++ Core Guidelines: resource management",
+          "url": "https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#S-resource"
+        }
+      ],
+      "art": "/spiral/cpp98.svg",
+      "artAlt": "Ash-red mountains and dark towers above a glowing lava river, inspired by Dragonspyre.",
+      "artCredit": "Original geometric illustration by Shard Atlas contributors. MIT licensed. No official game artwork is reproduced.",
+      "artLicense": "MIT",
+      "artFocus": "50% 50%",
+      "examples": []
+    },
+    "cpp03": {
+      "worldNames": [
+        "Grizzleheim"
+      ],
+      "caption": "A quieter return to the foundations",
+      "association": "Grizzleheim marks a refinement stop after the first foundation chapter. C++03 is remembered here as a smaller revision, rather than a new language toolkit. The atmosphere is the mnemonic. It is not a claim that Grizzleheim was a small game update.",
+      "history": "KingsIsle introduced Grizzleheim alongside crafting and the Bazaar. The substantial game expansion and the smaller C++ revision have different histories.",
+      "sourceLinks": [
+        {
+          "title": "KingsIsle: Grizzleheim, crafting and the Bazaar",
+          "url": "https://www.kingsisle.com/wp/press/largest-wizard101-expansion-introduces-crafts-bazaar-more/"
+        },
+        {
+          "title": "Stroustrup: major and minor C++ releases",
+          "url": "https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2015/n4492.pdf"
+        }
+      ],
+      "art": "/spiral/cpp03.svg",
+      "artAlt": "A Nordic longhouse, fir trees and snowy mountains beneath an aurora, inspired by Grizzleheim.",
+      "artCredit": "Original geometric illustration by Shard Atlas contributors. MIT licensed. No official game artwork is reproduced.",
+      "artLicense": "MIT",
+      "artFocus": "50% 50%",
+      "examples": []
+    },
+    "cpp11": {
+      "worldNames": [
+        "Celestia"
+      ],
+      "caption": "A new toolkit opens the sky",
+      "association": "Celestia’s Astral schools make a memorable cue for C++11’s expanded toolkit: lambdas, move semantics, constexpr and modern ownership types. They are parallel feelings of new possibility, not matching spell systems. Existing C++ foundations continue to matter.",
+      "history": "Celestia expanded the game with Astral magic. Its Sun, Moon and Star schools are game history. The C++11 feature dates come from the language’s own history.",
+      "sourceLinks": [
+        {
+          "title": "KingsIsle: Astral schools and spell types",
+          "url": "https://kingsisleblog.com/2015/12/08/unlocking-the-magic-wizard101-spells-spell-types/"
+        },
+        {
+          "title": "Clang C++11 feature history",
+          "url": "https://clang.llvm.org/cxx_status.html"
+        }
+      ],
+      "art": "/spiral/cpp11.svg",
+      "artAlt": "A submerged temple and astronomical rings in teal underwater light, inspired by Celestia.",
+      "artCredit": "Original geometric illustration by Shard Atlas contributors. MIT licensed. No official game artwork is reproduced.",
+      "artLicense": "MIT",
+      "artFocus": "50% 50%",
+      "examples": []
+    },
+    "cpp14": {
+      "worldNames": [
+        "Zafaria",
+        "Avalon",
+        "Azteca"
+      ],
+      "caption": "The journey deepens, the toolkit becomes easier to use",
+      "association": "Three distinct destinations form a refinement chapter. C++14 develops the C++11 toolkit with generic lambdas, initialized captures, variable templates and more flexible constexpr functions. The grouping is a personal mnemonic, not a literal claim that each world corresponds to one language feature.",
+      "history": "An official Wizard101 administrator lists Zafaria, Avalon and Azteca after Celestia. Their game progression provides this chapter’s order. It is separate from the C++14 release year.",
+      "sourceLinks": [
+        {
+          "title": "Wizard101 administrator: worlds after Celestia",
+          "url": "https://www.wizard101.com/forum/ravenwood-commons/what-world-is-after-celestia-8ad6a4183caee398013cbd6e511f2de6"
+        },
+        {
+          "title": "WG21 changes between C++11 and C++14",
+          "url": "https://open-std.org/jtc1/sc22/wg21/docs/papers/2018/p1319r0.html"
+        }
+      ],
+      "art": "/spiral/cpp14.svg",
+      "artAlt": "Three panels: Zafaria-inspired savanna, Avalon-inspired castle and Azteca-inspired jungle pyramid.",
+      "artCredit": "Original geometric illustration by Shard Atlas contributors. MIT licensed. No official game artwork is reproduced.",
+      "artLicense": "MIT",
+      "artFocus": "50% 50%",
+      "examples": []
+    },
+    "cpp17": {
+      "worldNames": [
+        "Khrysalis"
+      ],
+      "caption": "A transformational two-part journey and an arc finale",
+      "association": "Khrysalis is the C++17 anchor for a transformational two-part journey and the second-arc finale. That sense of reaching a new level makes optional, variant, structured bindings and if constexpr memorable tools in this chapter. This is a personal mnemonic, not a claim that Shadow Magic is a C++ feature or that the game and language share a release date.",
+      "history": "Khrysalis introduced Shadow Magic, and its two-part journey concluded Morganthe’s second-arc story. The later original Castle Darkmoor expansion introduced Shadow-Enhanced spells. Shadow Magic and Shadow-Enhanced spells are distinct milestones.",
+      "sourceLinks": [
+        {
+          "title": "KingsIsle: Khrysalis and Shadow Magic",
+          "url": "https://www.prnewswire.com/news-releases/kingsisle-unleashes-all-new-magic-in-a-brand-new-world-in-wizard101-232050781.html"
+        },
+        {
+          "title": "KingsIsle: the original dungeon update after the Khrysalis finale",
+          "url": "https://www.kingsisle.com/wp/press/discover-new-dungeons-in-wizard101/"
+        },
+        {
+          "title": "Wizard101: Khrysalis and the two-part chapter",
+          "url": "https://www.wizard101.com/forum/khrysalis/welcome-to-khrysalis-8ad6a417422cbb7a01425b2e6bb75a7e"
+        },
+        {
+          "title": "WG21 changes between C++14 and C++17",
+          "url": "https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2017/p0636r0.html"
+        }
+      ],
+      "art": "/spiral/cpp17.svg",
+      "artAlt": "A violet shadow spire, suspended web patterns and mushrooms, inspired by Khrysalis.",
+      "artCredit": "Original geometric illustration by Shard Atlas contributors. MIT licensed. No official game artwork is reproduced.",
+      "artLicense": "MIT",
+      "artFocus": "50% 50%",
+      "examples": [
+        {
+          "id": "spiral-effect-result",
+          "title": "A spell reward may be absent, and an effect has a type",
+          "languageVersion": "C++17",
+          "category": "library",
+          "tags": [
+            "optional",
+            "variant",
+            "types",
+            "templates"
+          ],
+          "summary": "Represent no reward with optional, and one of several effect types with variant. These are toy types, not the game’s spell rules.",
+          "code": "#include <cassert>\n#include <iostream>\n#include <optional>\n#include <variant>\n\nstruct Damage { int amount; };\nstruct Heal { int amount; };\nstruct Shield { int amount; };\nusing Effect = std::variant<Damage, Heal, Shield>;\n\nstd::optional<Effect> reward(bool found) {\n    if (!found) return std::nullopt;\n    return Effect{Damage{300}};\n}\n\nint main() {\n    auto result = reward(true);\n    assert(result.has_value());\n    std::visit([](const auto& effect) {\n        std::cout << effect.amount << '\\n';\n    }, *result);\n    assert(!reward(false).has_value());\n}\n",
+          "explanation": "optional answers whether a value exists. When it exists, variant records which alternative it contains. std::visit handles the active alternative. This program prints 300.",
+          "limits": "A variant holds one active alternative, not several simultaneous effects. optional does not say why a value is absent. The number 300 is illustrative, not a Wizard101 spell statistic.",
+          "sourceLinks": [
+            {
+              "title": "WG21 changes between C++14 and C++17",
+              "url": "https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2017/p0636r0.html"
+            },
+            {
+              "title": "C++ draft optional overview",
+              "url": "https://eel.is/c++draft/optional.optional.general"
+            },
+            {
+              "title": "C++ draft variant synopsis",
+              "url": "https://eel.is/c++draft/variant.syn"
+            }
+          ]
+        }
+      ]
+    },
+    "cpp20": {
+      "worldNames": [
+        "Castle Darkmoor"
+      ],
+      "caption": "Capabilities, composition and deliberate coordination",
+      "association": "Classic Castle Darkmoor is the setting for C++20 examples that combine stronger interfaces and deliberate coordination. Concepts constrain a spell type, ranges select cards, and coroutines can model resumable encounter logic. These are learning examples. The game’s mechanics do not determine C++ semantics.",
+      "history": "This chapter means the original 2014 Castle Darkmoor dungeon expansion, whose new spells were Shadow-Enhanced. It does not mean the newer Darkmoor world, which begins the fifth story arc.",
+      "sourceLinks": [
+        {
+          "title": "KingsIsle: the original Castle Darkmoor expansion",
+          "url": "https://www.kingsisle.com/wp/press/discover-new-dungeons-in-wizard101/"
+        },
+        {
+          "title": "Official current Darkmoor world, a different expansion",
+          "url": "https://www.darkmoor.wizard101.com/"
+        },
+        {
+          "title": "C++20 draft, main changes",
+          "url": "https://isocpp.org/files/papers/N4860.pdf"
+        }
+      ],
+      "art": "/spiral/cpp20.svg",
+      "artAlt": "A moonlit Gothic castle, mist and an iron gate, inspired by classic Castle Darkmoor.",
+      "artCredit": "Original geometric illustration by Shard Atlas contributors. MIT licensed. No official game artwork is reproduced.",
+      "artLicense": "MIT",
+      "artFocus": "50% 50%",
+      "examples": [
+        {
+          "id": "spiral-damage-capability",
+          "title": "Check a spell type’s capabilities before running it",
+          "languageVersion": "C++20",
+          "category": "language",
+          "tags": [
+            "concepts",
+            "templates",
+            "constraints",
+            "types"
+          ],
+          "summary": "A concept requires damage() and cost() operations. Available pips are still checked at runtime.",
+          "code": "#include <cassert>\n#include <concepts>\n\ntemplate<class T>\nconcept DamageSpell = requires(const T& spell) {\n    { spell.damage() } -> std::same_as<int>;\n    { spell.cost() } -> std::same_as<int>;\n};\n\nstruct Ember {\n    int damage() const { return 200; }\n    int cost() const { return 2; }\n};\nstruct HealingSpell {\n    int heal() const { return 100; }\n};\n\ntemplate<DamageSpell T>\nint cast(const T& spell, int pips) {\n    if (pips < spell.cost()) return 0;\n    return spell.damage();\n}\n\nint main() {\n    static_assert(DamageSpell<Ember>);\n    static_assert(!DamageSpell<HealingSpell>);\n    assert(cast(Ember{}, 2) == 200);\n    assert(cast(Ember{}, 1) == 0);\n    // cast(HealingSpell{}, 2); // Rejected by the constraint\n}\n",
+          "explanation": "The requires-expression checks operations on the type. Ember meets the interface and HealingSpell does not. The runtime branch handles the current pip budget. The program’s assertions all pass.",
+          "limits": "The concept does not prove nonnegative costs, balanced spell behavior, or sufficient pips at runtime. The return value 0 is a deliberate simplification for this example.",
+          "sourceLinks": [
+            {
+              "title": "C++20 draft, main changes",
+              "url": "https://isocpp.org/files/papers/N4860.pdf"
+            },
+            {
+              "title": "C++ draft constraints",
+              "url": "https://eel.is/c++draft/temp.constr"
+            },
+            {
+              "title": "Requires expressions",
+              "url": "https://eel.is/c++draft/expr.prim.req"
+            }
+          ]
+        },
+        {
+          "id": "spiral-deck-pipeline",
+          "title": "View the damage cards you can currently afford",
+          "languageVersion": "C++20",
+          "category": "library",
+          "tags": [
+            "ranges",
+            "views",
+            "algorithms",
+            "lifetime",
+            "lambda"
+          ],
+          "summary": "Filter a small deck by purpose and pip budget, then project each surviving spell to its name.",
+          "code": "#include <array>\n#include <cassert>\n#include <iostream>\n#include <ranges>\n#include <string_view>\n\nstruct Spell {\n    std::string_view name;\n    int cost;\n    bool damaging;\n};\n\nint main() {\n    std::array<Spell, 3> deck{{\n        {\"Ember\", 2, true},\n        {\"Ward\", 1, false},\n        {\"Thunder\", 5, true}\n    }};\n    int pips = 3;\n    auto names = deck\n        | std::views::filter([pips](const Spell& spell) {\n              return spell.damaging && spell.cost <= pips;\n          })\n        | std::views::transform(&Spell::name);\n\n    int count = 0;\n    for (std::string_view name : names) {\n        std::cout << name << '\\n';\n        ++count;\n    }\n    assert(count == 1);\n}\n",
+          "explanation": "Only Ember passes both conditions, so the program prints Ember. filter and transform compose a view instead of constructing a second owned deck. The pip budget is captured by value for this view.",
+          "limits": "The view depends on deck remaining alive and valid. Its work is driven by iteration. Changing the original deck or retaining views beyond its lifetime needs care. These costs are fictional examples.",
+          "sourceLinks": [
+            {
+              "title": "C++20 draft, main changes",
+              "url": "https://isocpp.org/files/papers/N4860.pdf"
+            },
+            {
+              "title": "Filter view specification",
+              "url": "https://eel.is/c++draft/range.filter"
+            },
+            {
+              "title": "Transform view specification",
+              "url": "https://eel.is/c++draft/range.transform"
+            }
+          ]
+        }
+      ]
+    },
+    "cpp23": {
+      "worldNames": [
+        "Polaris",
+        "Mirage",
+        "Empyrea"
+      ],
+      "caption": "A broader horizon, with more practical tools",
+      "association": "The third-arc worlds provide a new-horizon chapter for C++23. Facilities such as expected, mdspan and generator extend useful ways to represent results, view data and produce sequences. This is continued development, not a replacement for C++20 or a claim that every facility belongs to one game world.",
+      "history": "KingsIsle describes Empyrea Part II as the conclusion of the third story arc. The Polaris, Mirage and Empyrea grouping is the game-era reference used here.",
+      "sourceLinks": [
+        {
+          "title": "KingsIsle: Empyrea Part II concludes the third arc",
+          "url": "https://www.kingsisle.com/wp/press/empyreapart2/"
+        },
+        {
+          "title": "KingsIsle: Mirage",
+          "url": "https://www.kingsisle.com/wp/press/mirage-brings-magic-carpets-and-castle-magic-to-wizard101/"
+        },
+        {
+          "title": "libc++ C++23 feature status",
+          "url": "https://libcxx.llvm.org/Status/Cxx23.html"
+        }
+      ],
+      "art": "/spiral/cpp23.svg",
+      "artAlt": "Three panels: icy Polaris-inspired domes, a Mirage-inspired desert palace and Empyrea-inspired floating islands.",
+      "artCredit": "Original geometric illustration by Shard Atlas contributors. MIT licensed. No official game artwork is reproduced.",
+      "artLicense": "MIT",
+      "artFocus": "50% 50%",
+      "examples": []
+    },
+    "cpp26": {
+      "worldNames": [
+        "Karamelle",
+        "Lemuria",
+        "Novus",
+        "Wallaru"
+      ],
+      "caption": "Explore structure, with the draft boundaries visible",
+      "association": "Four visually different worlds frame the C++26 chapter. Reflection offers a concrete technical idea: inspect declared program structure at compile time to derive useful code, such as a field-based formatter. That is not runtime omniscience or a general memory-safety guarantee. C++26 keeps its working-draft label in this atlas.",
+      "history": "Karamelle began the fourth story arc, and KingsIsle described Wallaru as its fourth and final world. The grouping is a memory aid. Game chronology and C++ publication status remain separate.",
+      "sourceLinks": [
+        {
+          "title": "KingsIsle: Karamelle begins a new arc",
+          "url": "https://www.kingsisle.com/wp/press/karamelle-now-live/"
+        },
+        {
+          "title": "KingsIsle: the fourth-arc Wallaru conclusion",
+          "url": "https://www.kingsisle.com/wp/press/wizard101-celebrates-the-conclusion-of-its-fourth-arc-storyline-with-the-new-outback-world-of-wallaru/"
+        },
+        {
+          "title": "WG21 reflection for C++26",
+          "url": "https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2025/p2996r13.html"
+        }
+      ],
+      "art": "/spiral/cpp26.svg",
+      "artAlt": "Four panels: Karamelle-inspired candy hills, Lemuria-inspired fractured islands, surreal Novus-inspired geometry and a Wallaru-inspired outback.",
+      "artCredit": "Original geometric illustration by Shard Atlas contributors. MIT licensed. No official game artwork is reproduced.",
+      "artLicense": "MIT",
+      "artFocus": "50% 50%",
+      "examples": []
+    }
+  },
+  "trail": {
+    "id": "spiral-constexpr-trail",
+    "title": "A constexpr trail across six releases",
+    "summary": "Follow one thread through the changing toolkit. The first five snippets are complete independent programs. The C++26 stop is a sourced reflection concept with a toolchain caveat. World names are memory cues, while the language rules are the actual milestones.",
+    "steps": [
+      {
+        "releaseId": "cpp11",
+        "title": "C++11: compute a small value in a constant-expression context",
+        "languageVersion": "C++11",
+        "tags": [
+          "constexpr",
+          "compile time"
+        ],
+        "summary": "A constexpr function can participate in constant evaluation. The constexpr initializer and static_assert require it here.",
+        "code": "constexpr int damage(int base, int bonus) {\n    return base + bonus;\n}\nconstexpr int hit = damage(200, 50);\nstatic_assert(hit == 250, \"damage total\");\nint main() {}\n",
+        "limits": "Calling damage with literal arguments in an ordinary runtime context would not by itself require compile-time evaluation.",
+        "sourceLinks": [
+          {
+            "title": "Clang C++11 feature history",
+            "url": "https://clang.llvm.org/cxx_status.html"
+          },
+          {
+            "title": "C++ draft constexpr declarations",
+            "url": "https://eel.is/c++draft/dcl.constexpr"
+          }
+        ]
+      },
+      {
+        "releaseId": "cpp14",
+        "title": "C++14: use a loop inside a constexpr function",
+        "languageVersion": "C++14",
+        "tags": [
+          "constexpr",
+          "compile time",
+          "loops"
+        ],
+        "summary": "Relaxed constexpr rules allow local variables and loops. The provided pointer and count describe a valid three-element array.",
+        "code": "constexpr int total_cost(const int* costs, int count) {\n    int total = 0;\n    for (int i = 0; i < count; ++i) total += costs[i];\n    return total;\n}\nconstexpr int costs[] = {1, 2, 3};\nstatic_assert(total_cost(costs, 3) == 6, \"deck cost\");\nint main() {}\n",
+        "limits": "The function still requires valid input bounds. constexpr is not automatic bounds checking, and an ordinary call may execute at runtime.",
+        "sourceLinks": [
+          {
+            "title": "WG21 changes between C++11 and C++14",
+            "url": "https://open-std.org/jtc1/sc22/wg21/docs/papers/2018/p1319r0.html"
+          },
+          {
+            "title": "C++ draft constexpr declarations",
+            "url": "https://eel.is/c++draft/dcl.constexpr"
+          }
+        ]
+      },
+      {
+        "releaseId": "cpp17",
+        "title": "C++17: select a template branch with if constexpr",
+        "languageVersion": "C++17",
+        "tags": [
+          "constexpr",
+          "compile time",
+          "templates",
+          "types"
+        ],
+        "summary": "Choose a branch using a compile-time condition. The discarded branch is not instantiated for that specialization.",
+        "code": "#include <type_traits>\n\nstruct Damage { int amount; };\nstruct Shield { int strength; };\n\ntemplate<class T>\nconstexpr int damage_value(const T& effect) {\n    if constexpr (std::is_same_v<T, Damage>) {\n        return effect.amount;\n    } else {\n        return 0;\n    }\n}\nstatic_assert(damage_value(Damage{200}) == 200);\nstatic_assert(damage_value(Shield{50}) == 0);\nint main() {}\n",
+        "limits": "if constexpr is compile-time branch selection, not a runtime switch. Discarded code still has parsing and non-dependent validity rules.",
+        "sourceLinks": [
+          {
+            "title": "WG21 changes between C++14 and C++17",
+            "url": "https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2017/p0636r0.html"
+          },
+          {
+            "title": "constexpr if statement",
+            "url": "https://eel.is/c++draft/stmt.if"
+          }
+        ]
+      },
+      {
+        "releaseId": "cpp20",
+        "title": "C++20: require a constant result with consteval",
+        "languageVersion": "C++20",
+        "tags": [
+          "constexpr",
+          "consteval",
+          "compile time"
+        ],
+        "summary": "An immediate invocation must be a constant expression. A bad cost fails during constant evaluation.",
+        "code": "consteval int checked_cost(int cost) {\n    if (cost < 0) throw \"negative cost\";\n    return cost;\n}\nconstexpr int cost = checked_cost(2);\nstatic_assert(cost == 2);\n// int bad = checked_cost(-1); // Not a constant expression\nint main() {}\n",
+        "limits": "This checks calls to this function, not every value in the program. consteval is separate from runtime assertions, and is not a promise of universal zero runtime overhead.",
+        "sourceLinks": [
+          {
+            "title": "C++20 draft, main changes",
+            "url": "https://isocpp.org/files/papers/N4860.pdf"
+          },
+          {
+            "title": "Immediate functions",
+            "url": "https://eel.is/c++draft/expr.const.imm"
+          },
+          {
+            "title": "C++ draft constexpr declarations",
+            "url": "https://eel.is/c++draft/dcl.constexpr"
+          }
+        ]
+      },
+      {
+        "releaseId": "cpp23",
+        "title": "C++23: choose an evaluation path with if consteval",
+        "languageVersion": "C++23",
+        "tags": [
+          "constexpr",
+          "consteval",
+          "compile time"
+        ],
+        "summary": "Choose code for constant evaluation or runtime. The constant-evaluation branch can call an immediate function using the parameter, and both paths compute the same value.",
+        "code": "#include <cassert>\n\nconsteval int compile_time_double(int value) {\n    return value * 2;\n}\n\nconstexpr int doubled_damage(int value) {\n    if consteval {\n        return compile_time_double(value);\n    } else {\n        return value + value;\n    }\n}\n\nstatic_assert(doubled_damage(100) == 200);\nint main() {\n    int base = 100;\n    assert(doubled_damage(base) == 200);\n}\n",
+        "limits": "if consteval asks about the evaluation context. if constexpr chooses a branch from a constant condition instead. This example deliberately returns the same mathematical result on both paths. Neither form removes ordinary preconditions such as avoiding signed overflow.",
+        "sourceLinks": [
+          {
+            "title": "WG21 if consteval proposal",
+            "url": "https://open-std.org/JTC1/SC22/WG21/docs/papers/2021/p1938r3.html"
+          },
+          {
+            "title": "C++ draft if statements",
+            "url": "https://eel.is/c++draft/stmt.if"
+          },
+          {
+            "title": "Clang C++23 feature history",
+            "url": "https://clang.llvm.org/cxx_status.html"
+          }
+        ]
+      },
+      {
+        "releaseId": "cpp26",
+        "title": "C++26 draft: inspect program structure during constant evaluation",
+        "languageVersion": "C++26 (working draft)",
+        "tags": [
+          "constexpr",
+          "compile time",
+          "reflection",
+          "metaprogramming"
+        ],
+        "summary": "A reflection-based formatter could inspect the declared fields of a spell-record type and derive field-handling code. The reflection queries happen during constant evaluation. The formatter they help generate can still run later on ordinary runtime values.",
+        "limits": "Conceptual stop, with no unverified runnable snippet. C++26 is labeled as a working draft in this atlas. Reflection implementation support varies, and selecting a C++26 language mode alone does not prove that a toolchain supports the required facilities. Compile-time reflection is not unrestricted runtime introspection or a general safety guarantee.",
+        "sourceLinks": [
+          {
+            "title": "WG21 reflection for C++26 and formatter examples",
+            "url": "https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2025/p2996r13.html"
+          },
+          {
+            "title": "Clang C++26 implementation status",
+            "url": "https://clang.llvm.org/cxx_status.html"
+          },
+          {
+            "title": "C++ draft reflection facilities",
+            "url": "https://eel.is/c++draft/meta"
+          }
+        ]
+      }
+    ]
+  }
+}

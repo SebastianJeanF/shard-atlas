@@ -352,6 +352,60 @@ kbd { font-family: inherit; font-size: 10px; line-height: 1.6; white-space: nowr
 .release-load-state { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 35px; }
 .release-load-state h2 { font-family: Georgia, "Times New Roman", serif; font-size: 23px; font-weight: 400; }
 .release-load-state p { font-size: 12px; color: var(--muted); }
+.timeline-appearance { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin: -2px 0 16px; }
+.timeline-appearance .segmented-control button[aria-pressed="true"] { color: var(--green-dark); background: var(--surface); border-color: #a8baa0; box-shadow: 0 1px 3px #2743280e; }
+.timeline-appearance-note { color: var(--muted); font-size: 10px; line-height: 1.6; }
+.spiral-portals { display: grid; grid-template-columns: repeat(8,minmax(0,1fr)); gap: 8px; padding: 4px 1px 10px; }
+.spiral-portal { display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 0; padding: 11px 7px 9px; border: 1px solid #d3daca; border-radius: 11px; background: #f8f7ef; text-align: center; }
+.spiral-portal:hover { border-color: #8a9f7a; background: #eff3e7; }
+.spiral-portal[aria-current="step"] { border-color: #607e58; box-shadow: inset 0 -3px #607e58; background: #eaf0e1; }
+.spiral-portal-art { display: block; flex-shrink: 0; width: 43px; height: 43px; border-radius: 50%; border: 2px solid #b6aa7d; outline: 1px solid #d5ccb1; outline-offset: 3px; overflow: hidden; background: #e8e7d6; }
+.spiral-portal-art img { width: 100%; height: 100%; object-fit: cover; }
+.spiral-portal-label { display: grid; gap: 3px; min-width: 0; }
+.spiral-portal-label strong { color: var(--green-dark); font-size: 11px; font-weight: 650; }
+.spiral-portal-label > span { color: #707463; font-size: 8px; line-height: 1.5; overflow-wrap: anywhere; }
+.spiral-portals .release-unassigned-jump { grid-column: 1 / -1; justify-self: start; }
+.spiral-release { border-color: #c7d1b9; }
+.spiral-release .release-heading { padding-block: 15px 12px; }
+.spiral-world { border-bottom: 1px solid #dedfce; background: #f7f5e9; }
+.spiral-banner { margin: 0; }
+.spiral-banner > img { display: block; width: 100%; height: auto; aspect-ratio: 20/7; object-fit: cover; }
+.spiral-banner figcaption { display: grid; gap: 4px; padding: 11px 16px 8px; }
+.spiral-banner figcaption strong { color: #4f5d43; font: 500 14px/1.4 Georgia,"Times New Roman",serif; }
+.spiral-banner figcaption > span { color: #797965; font-size: 9px; line-height: 1.6; }
+.spiral-world-info { margin: 0; font-size: 10px; line-height: 1.75; }
+.spiral-world-info > summary { cursor: pointer; color: #5c714e; padding: 6px 16px 11px; font-size: 10px; }
+.spiral-world-info > div { padding: 0 16px 14px; max-height: 290px; overflow-y: auto; }
+.spiral-world-info p { margin: 0 0 10px; }
+.spiral-world-info h3 { font-size: 10px; margin: 13px 0 7px; }
+.spiral-limit { color: var(--muted); border-left: 2px solid #c7c9b3; padding-left: 9px; }
+.spiral-art-credit { color: var(--faint); font-size: 8px; margin-top: 10px !important; }
+.spiral-examples { margin: 0 0 15px; border: 1px solid #d6d6c3; background: #f7f6e9; border-radius: 8px; overflow: hidden; }
+.spiral-examples > summary { padding: 11px 12px; cursor: pointer; font-size: 11px; color: #626445; font-weight: 550; }
+.spiral-examples > summary span { margin-left: 4px; color: var(--muted); font-weight: 400; }
+.spiral-reference-note { font-size: 9px; color: var(--muted); line-height: 1.65; margin: 0 12px 12px; }
+.spiral-example { padding: 0 12px 15px; overflow-wrap: anywhere; font-size: 11px; line-height: 1.75; }
+.spiral-example + .spiral-example { border-top: 1px solid #dfdfcf; padding-top: 15px; }
+.spiral-example h4 { font-size: 12px; line-height: 1.5; margin: 4px 0 5px; }
+.spiral-standard { display: block; font-size: 9px; color: #7b795a; margin-bottom: 7px; }
+.spiral-example .code-block code { font-size: 10px; padding: 12px; }
+.spiral-example .syntax-key { font-size: 8px; gap: 5px; margin: 10px 0; }
+.spiral-trail { border: 1px solid #d4dbca; border-radius: 9px; margin: 0 0 17px; background: #f0f3e8; }
+.spiral-trail > summary { padding: 12px 16px; cursor: pointer; color: var(--green-dark); font-size: 12px; }
+.spiral-trail > summary > span { margin-right: 9px; font-size: 9px; color: var(--muted); }
+.spiral-trail-body { padding: 0 16px 17px; font-size: 11px; line-height: 1.75; }
+.spiral-trail-body > p { max-width: 760px; }
+.spiral-trail-body > ol { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,250px),1fr)); gap: 14px; padding: 0; list-style: none; }
+.spiral-trail li { border: 1px solid #d8dece; border-radius: 8px; background: var(--surface); padding: 14px; min-width: 0; }
+.spiral-trail h3 { font-size: 12px; margin: 8px 0; }
+.spiral-trail-jump { border: 0; background: transparent; padding: 0; color: var(--green); font-size: 10px; font-weight: 600; }
+.spiral-trail-code > summary { cursor: pointer; font-size: 10px; color: var(--green); }
+.spiral-trail .spiral-reference-note { margin: 14px 0 0; }
+@media (max-width: 1100px) {
+  .spiral-portals { display: flex; flex-wrap: nowrap; overflow-x: auto; align-items: stretch; padding: 5px 3px 13px; scroll-snap-type: x proximity; }
+  .spiral-portal { flex: 0 0 110px; scroll-snap-align: start; }
+  .spiral-portals .release-unassigned-jump { flex: 0 0 115px; align-self: center; white-space: normal; }
+}
 @media (max-width: 600px) {
   .release-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 12px; }
   .release-filters label { min-width: 0; }
@@ -367,6 +421,12 @@ kbd { font-family: inherit; font-size: 10px; line-height: 1.6; white-space: nowr
   .release-unversioned { padding: 15px; }
   .release-unversioned-notes { grid-template-columns: minmax(0,1fr); }
   .release-load-state { padding: 24px 18px; }
+  .timeline-appearance { gap: 7px; margin-bottom: 13px; }
+  .timeline-appearance-note { flex-basis: 100%; font-size: 9px; }
+  .spiral-portal { flex-basis: 105px; padding: 10px 7px; }
+  .spiral-trail > summary > span { display: block; margin: 0 0 3px; }
+  .spiral-trail-body { padding-inline: 12px; }
+  .spiral-trail-body > ol { grid-template-columns: minmax(0,1fr); }
 }
 
 dialog { border: 1px solid #d6dccd; background: var(--surface); color: var(--ink); border-radius: 14px; box-shadow: 0 20px 90px #1f332b29; padding: 27px 30px; max-height: min(90dvh, 960px); width: min(720px, calc(100vw - 32px)); overflow-y: auto; scrollbar-width: thin; }

@@ -58,6 +58,14 @@ The reference works offline. External source links need an internet connection w
 
 To place a personal note beside a release, assign a recognized version such as `C++17` under **Source & context → Version or scope**. Shards without a recognized version appear in the **No release assigned** column, with a jump button above the timeline. Release placement uses your assigned scope and is never guessed from the note's title or topics. Reference entries are separate from personal notes and do not change your understanding status.
 
+### Explore releases through familiar worlds
+
+Choose **Spiral** for illustrated world banners and portal navigation, or **Plain** for the original presentation. The choice stays on this device. Both styles use the same notes, filters, release reference, and C++ version labels.
+
+The world associations provide memory cues: Dragonspyre for C++98, Grizzleheim for C++03, Celestia for C++11, Zafaria through Azteca for C++14, Khrysalis for C++17, the original Castle Darkmoor for C++20, the third story arc for C++23, and the fourth for the C++26 working draft. **Why this world?** explains each association beside its historical sources. Game release dates and C++ standard years retain their separate meanings.
+
+Selected releases include expandable C++ examples about spell effects, capabilities, and deck filtering. A compile-time computation trail connects milestones across releases. These examples belong to the bundled companion and do not add notes to your collection or change your understanding status. The original landscape illustrations work offline, along with the companion text and examples. External source links require an internet connection.
+
 ## Capture from another chat
 
 Open **Use with AI** to copy the contribution guide or import a prepared file. An AI client with the optional local integration can search existing notes, reuse topics, add a batch of notes and connections, and verify the result. Saying “Add this to Shard Atlas” works only after that client has been configured. See [integration setup](development.md#optional-ai-integration).

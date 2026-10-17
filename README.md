@@ -14,6 +14,7 @@ Write an explanation, keep the code and sources beside it, and connect it to wha
 - **Explain the relationship.** Connect ideas with labels such as *depends on*, *contrasts with*, and *is an example of*, with a reason for each connection.
 - **Arrange your thinking.** Place shared notes on a canvas, group them into sections, and move between the overview and an individual explanation.
 - **Keep your bearings.** Search notes or find topics by typing, then filter by topic, kind, or understanding. Topics grow freely with your notes. Explore the separate, sourced C++ release reference from C++98 through the C++26 working draft.
+- **Give each release a familiar place.** An optional Wizard101 inspired timeline pairs C++ releases with illustrated worlds, source-linked context, and small programming examples. Switch to Plain for the original timeline presentation.
 
 ![The Library view with a sample C++ explanation and its connected notes](docs/images/library.png)
 

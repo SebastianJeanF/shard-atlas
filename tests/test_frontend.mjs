@@ -132,7 +132,7 @@ try {
   });
   const document = new DocumentFixture(html), storage = new Map();
   let ocrResponse = null, failBoardPut=false, boardPutGate=null, boardPutStarted=false;
-  let failDelete = false, failDraftPut = false, failReleaseLoad = false, releaseResponse = null, activeWrites = 0, maxActiveWrites = 0;
+  let failDelete = false, failDraftPut = false, failReleaseLoad = false, releaseResponse = null, failSpiralLoad = false, spiralResponse = null, reducedMotion = false, activeWrites = 0, maxActiveWrites = 0;
   let failAiInstructions = false, failClipboard = false, aiInstructionsRequests = 0;
   let stateReadCount = 0, stateResponseGate = null;
   const instructionText = '# Add knowledge to Shard Atlas\n\nCheck for duplicates and verify every saved note.\n', clipboardWrites = [];
@@ -146,6 +146,8 @@ try {
       if (full.pathname === '/api/state' && method === 'GET') { stateReadCount++; if (stateResponseGate) { const response = await fetch(full, options); await stateResponseGate; return response; } }
       if (full.pathname === '/cpp-releases.json' && failReleaseLoad) return { ok: false, json: async () => ({ error: 'Simulated missing reference' }) };
       if (full.pathname === '/cpp-releases.json' && releaseResponse) return { ok: true, json: async () => releaseResponse };
+      if (full.pathname === '/spiral-timeline.json' && failSpiralLoad) return { ok: false, json: async () => ({ error: 'Simulated missing world guide' }) };
+      if (full.pathname === '/spiral-timeline.json' && spiralResponse) return { ok: true, json: async () => spiralResponse };
       if (full.pathname === '/ai-instructions.md') { aiInstructionsRequests++; return { ok: !failAiInstructions, text: async () => instructionText }; }
       if (failDelete && method === 'DELETE' && full.pathname.startsWith('/api/drafts/')) return { ok: false, json: async () => ({ error: 'Simulated draft delete failure' }) };
       if (failDraftPut && method === 'PUT' && full.pathname.startsWith('/api/drafts/')) return { ok: false, json: async () => ({ error: 'Simulated draft save failure' }) };
@@ -155,10 +157,10 @@ try {
   const trackedSetTimeout = (callback, milliseconds) => { const timer = setTimeout(() => { timers.delete(timer); callback(); }, milliseconds); timers.add(timer); return timer; };
   const require = createRequire(import.meta.url);
   const windowListeners = new Map();
-  const w = { document, addEventListener(name, callback) { const listeners = windowListeners.get(name) || []; listeners.push(callback); windowListeners.set(name, listeners); }, katex: require(path.join(project, 'static/vendor/katex/katex.min.js')), confirm: () => true };
+  const w = { document, matchMedia: () => ({ matches: reducedMotion }), addEventListener(name, callback) { const listeners = windowListeners.get(name) || []; listeners.push(callback); windowListeners.set(name, listeners); }, katex: require(path.join(project, 'static/vendor/katex/katex.min.js')), confirm: () => true };
   context = vm.createContext({ window: w, document, fetch: browserFetch, FormData: FixtureFormData, FileReader: FixtureFileReader, navigator: { clipboard: { writeText: async text => { if (failClipboard) throw new Error('Clipboard permission denied'); clipboardWrites.push(text); } } }, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key=>storage.delete(key) }, setTimeout: trackedSetTimeout, clearTimeout: timer => { timers.delete(timer); clearTimeout(timer); }, console, Blob, URL });
   const code = fs.readFileSync(path.join(project, 'static/app.js'), 'utf8');
-  vm.runInContext(code + '\nwindow.testAtlas={state,drafts,filteredShards,markdown,stabilizeWikiLinks,renderNav,renderLibrary,renderGraphPage,renderTimeline,renderBoards,renderDetail,dateLabel,previewImport,saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,loadReleaseCatalog,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,uploadImage,showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
+  vm.runInContext(code + '\nwindow.testAtlas={state,drafts,filteredShards,markdown,stabilizeWikiLinks,renderNav,renderLibrary,renderGraphPage,renderTimeline,renderBoards,renderDetail,dateLabel,previewImport,saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,loadReleaseCatalog,loadSpiralCatalog,setTimelineTheme,savedTimelineTheme,filteredSpiralExamples,handlePortalKey,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,uploadImage,showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
   const t = w.testAtlas, $ = selector => document.querySelector(selector), results = [];
   async function until(predicate) { for (let i = 0; i < 300; i++) { if (predicate()) return; await delay(10); } throw new Error('Timed out waiting for frontend state'); }
   async function get(url) { const response = await fetch(base + url), data = await response.json(); assert.ok(response.ok, JSON.stringify(data)); return data; }
@@ -190,6 +192,15 @@ try {
     } finally { Object.assign(t.state, previous); $('#search').value = t.state.query; t.renderNav(); }
   }
   const timelineShardIds = output => [...output.matchAll(/class="release-note"[^>]*data-shard-id="([^"]+)"/g)].map(match => match[1]);
+  async function withWorldTimeline(test) {
+    await withTimelineCollection(async () => {
+      t.state.releaseCatalog = JSON.parse(fs.readFileSync(path.join(project, 'static/cpp-releases.json'), 'utf8'));
+      t.state.spiralCatalog = JSON.parse(fs.readFileSync(path.join(project, 'static/spiral-timeline.json'), 'utf8'));
+      t.state.timelineTheme = 'spiral'; t.state.timelineReleaseId = 'cpp98';
+      $('#workspace').innerHTML = t.renderTimeline();
+      await test();
+    });
+  }
 
   await until(() => t.state.data.shards.length && $('.shard-card'));
   await until(() => t.pending === 0);
@@ -444,6 +455,84 @@ try {
     await t.loadReleaseCatalog(); assert.match(t.renderTimeline(), /reference could not open/); assert.match(t.renderTimeline(), /reload-releases/); assert.ok(t.renderLibrary().includes('Build your technical understanding'));
     failReleaseLoad = false; releaseResponse = { schemaVersion: 1, coverage: 'Test reference.', sources: [], releases: [] }; await t.loadReleaseCatalog(); assert.equal(t.state.releaseCatalogError, null); assert.ok(t.state.releaseCatalog);
     releaseResponse = null; t.state.releaseCatalog = previousCatalog;
+  });
+  await check('All eight world portals keep C++ years, draft status, and personal notes primary', async () => {
+    await withWorldTimeline(async () => {
+      const original = JSON.stringify(t.state.data), output = t.renderTimeline();
+      const portals = [...output.matchAll(/data-portal-release="([^"]+)"/g)].map(match => match[1]);
+      assert.deepEqual(portals, ['cpp98','cpp03','cpp11','cpp14','cpp17','cpp20','cpp23','cpp26']);
+      for (const id of portals) {
+        assert.match(output, new RegExp(`aria-controls="release-${id}"`));
+        const column = output.slice(output.indexOf(`id="release-${id}"`));
+        assert.ok(column.indexOf('class="release-heading"') < column.indexOf('class="spiral-banner"'));
+      }
+      assert.equal((output.match(/<details class="spiral-world-info">/g) || []).length, 8);
+      assert.match(output, /Wizard101 history/); assert.match(output, /Working draft/);
+      assert.match(output, /aria-label="Jump to C\+\+26, working draft:/);
+      assert.equal(timelineShardIds(output).filter(id => id === 'explicit').length, 2);
+      assert.match(output, /data-id="unassigned">No release assigned/);
+      assert.equal(JSON.stringify(t.state.data), original);
+    });
+  });
+  await check('Timeline appearance persists while filters, selected notes, and the collection stay intact', async () => {
+    const oldPreference = storage.get('shard-atlas-timeline-theme');
+    try {
+      await withWorldTimeline(async () => {
+        const saved = await get('/api/state'); t.state.tags = ['ownership']; t.state.query = 'move'; t.state.releaseCategory = 'library'; t.state.selectedId = 'explicit';
+        const themedIds = timelineShardIds(t.renderTimeline());
+        await t.runAction('timeline-theme', { dataset: { theme: 'plain' } });
+        assert.equal(t.savedTimelineTheme(), 'plain'); assert.equal(storage.get('shard-atlas-timeline-theme'), 'plain');
+        let output = t.renderTimeline(); assert.ok(!/class="spiral-banner"|class="spiral-portal"|class="spiral-examples"/.test(output));
+        assert.deepEqual(timelineShardIds(output), themedIds); assert.equal(t.state.selectedId, 'explicit');
+        assert.deepEqual(Array.from(t.state.tags), ['ownership']); assert.equal(t.state.query, 'move'); assert.equal(t.state.releaseCategory, 'library');
+        await t.runAction('timeline-theme', { dataset: { theme: 'spiral' } });
+        assert.equal(t.savedTimelineTheme(), 'spiral'); assert.equal((t.renderTimeline().match(/data-portal-release=/g) || []).length, 8);
+        assert.deepEqual(timelineShardIds(t.renderTimeline()), themedIds); assert.deepEqual(await get('/api/state'), saved);
+      });
+    } finally { if (oldPreference === undefined) storage.delete('shard-atlas-timeline-theme'); else storage.set('shard-atlas-timeline-theme', oldPreference); }
+  });
+  await check('Portal keyboard navigation and activation reach every release with reduced-motion support', async () => {
+    await withWorldTimeline(async () => {
+      const ids = t.state.releaseCatalog.releases.map(release => release.id);
+      const portalFor = id => { const button = new Element('button', { 'data-portal-release': id, 'data-action': 'jump-release', 'data-id': id }, document); button.closest = selector => selector === '[data-portal-release]' || selector === 'button,a' ? button : null; return button; };
+      for (let index = 0; index < ids.length; index++) {
+        const event = new FixtureEvent('keydown', { key: 'ArrowRight', target: portalFor(ids[index]) }); document.dispatchEvent(event);
+        assert.equal(event.defaultPrevented, true); assert.equal(document.activeElement.id, 'portal-' + ids[(index + 1) % ids.length]);
+      }
+      for (const [key, id] of [['Home','cpp98'],['End','cpp26']]) { document.dispatchEvent(new FixtureEvent('keydown', { key, target: portalFor('cpp14') })); assert.equal(document.activeElement.id, 'portal-' + id); }
+      let scroll; $('#release-track').scrollTo = options => { scroll = options; }; $('#release-cpp26').offsetLeft = 2200;
+      reducedMotion = true; document.dispatchEvent(new FixtureEvent('click', { target: portalFor('cpp26') }));
+      await until(() => t.state.timelineReleaseId === 'cpp26');
+      assert.equal(scroll.left, 2200); assert.equal(scroll.behavior, 'auto'); assert.equal(document.activeElement.id, 'release-cpp26');
+      assert.match(t.renderTimeline(), /data-portal-release="cpp26"[^>]*aria-current="step"/);
+      reducedMotion = false;
+    });
+  });
+  await check('World examples and constexpr trail preserve exact C++ text and follow content filters', async () => {
+    await withWorldTimeline(async () => {
+      const output = t.renderTimeline(), examples = Object.values(t.state.spiralCatalog.releases).flatMap(world => world.examples || []), steps = t.state.spiralCatalog.trail.steps;
+      const codeText = [...output.matchAll(/<pre><code>([\s\S]*?)<\/code><\/pre>/g)].map(match => decode(match[1].replace(/<[^>]+>/g, '')));
+      for (const example of [...examples, ...steps]) if (example.code) assert.ok(codeText.includes(example.code), 'Example text changed: ' + example.title);
+      assert.match(output, /class="spiral-trail"/); assert.match(output, /class="syn-keyword"/); assert.match(output, /data-action="copy-code"/);
+      t.state.query = 'nothing matches this fixture'; assert.ok(!/class="spiral-examples"/.test(t.renderTimeline()));
+      t.clearFilters(); t.state.tags = ['OPTIONAL']; t.state.releaseCategory = 'library';
+      const result = t.filteredSpiralExamples(t.state.releaseCatalog.releases.find(release => release.id === 'cpp17'));
+      assert.ok(result.length); assert.ok(result.every(example => example.tags.some(tag => tag.toLowerCase() === 'optional')));
+      t.state.timelineContent = 'shards'; const personal = t.renderTimeline();
+      assert.ok(!/class="spiral-examples"|class="spiral-trail"|class="release-feature"/.test(personal));
+      assert.equal((personal.match(/data-portal-release=/g) || []).length, 8);
+    });
+  });
+  await check('Missing or malformed world assets fall back to the plain timeline and can retry', async () => {
+    await withWorldTimeline(async () => {
+      const before = JSON.stringify(t.state.data); failSpiralLoad = true; await t.loadSpiralCatalog();
+      let output = t.renderTimeline(); assert.match(output, /World guide unavailable/); assert.match(output, /data-action="reload-spiral"/);
+      assert.ok(!/class="spiral-banner"|class="spiral-portal"/.test(output)); assert.ok(timelineShardIds(output).length);
+      failSpiralLoad = false; spiralResponse = { schemaVersion: 1, releases: {} }; await t.loadSpiralCatalog(); assert.ok(t.state.spiralCatalogError);
+      spiralResponse = null; await t.runAction('reload-spiral', { dataset: {} });
+      assert.equal(t.state.spiralCatalogError, null); assert.equal((t.renderTimeline().match(/data-portal-release=/g) || []).length, 8);
+      assert.equal(JSON.stringify(t.state.data), before);
+    });
   });
   await check('Relationship editing and rationale/endpoint search', async () => {
     const link = t.state.data.links[0]; assert.ok(link); t.openLink(null, link.id);
