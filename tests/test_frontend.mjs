@@ -173,6 +173,23 @@ try {
     try { t.state.data = { ...previous.data, shards, links: [] }; t.clearFilters(); t.changeView('library'); await test(); }
     finally { Object.assign(t.state, previous); $('#search').value = t.state.query; t.renderNav(); }
   }
+  async function withTimelineCollection(test) {
+    const previous = { ...t.state }, baseShard = previous.data.shards[0];
+    try {
+      t.state.data = { ...previous.data, links: [], shards: [
+        { ...baseShard, id: 'explicit', title: 'My move note', content: 'Resources move in this example.', languageVersion: 'C++11 / C++26', tags: ['ownership'] },
+        { ...baseShard, id: 'unknown', title: 'Unassigned source note', content: 'An unversioned explanation.', languageVersion: 'C++ notes', tags: ['types'] },
+        { ...baseShard, id: 'excluded-version', title: 'Older implementation note', content: 'A bounded earlier implementation.', languageVersion: 'pre-C++11, before C++17', tags: ['ownership'] }
+      ] };
+      t.state.releaseCatalog = { schemaVersion: 1, coverage: 'Fixture reference coverage.', sources: [{ id: 'standard', title: 'WG21 fixture', url: 'https://www.open-std.org/jtc1/sc22/wg21/' }], releases: [
+        { id: 'cpp11', label: 'C++11', year: 2011, status: 'published', summary: 'Modern foundations.', sourceIds: ['standard'], features: [{ id: 'move', title: 'Move semantics', summary: 'Transfer resources.', category: 'language', tags: ['ownership', 'types'], sourceIds: ['standard'] }, { id: 'threads', title: 'Threads', summary: 'Concurrent execution.', category: 'library', tags: ['concurrency'], sourceIds: ['standard'] }] },
+        { id: 'cpp26', label: 'C++26', year: 2026, status: 'draft', summary: 'Work in progress.', sourceIds: ['standard'], features: [] }
+      ] };
+      t.state.releaseCatalogError = null; t.state.timelineContent = 'both'; t.clearFilters(); t.changeView('timeline');
+      await test();
+    } finally { Object.assign(t.state, previous); $('#search').value = t.state.query; t.renderNav(); }
+  }
+  const timelineShardIds = output => [...output.matchAll(/class="release-note"[^>]*data-shard-id="([^"]+)"/g)].map(match => match[1]);
 
   await until(() => t.state.data.shards.length && $('.shard-card'));
   await until(() => t.pending === 0);
@@ -338,26 +355,88 @@ try {
       searchTopics('Release keyword'); assert.equal(topicButtons().length, 0);
     });
   });
-  await check('Release timeline uses explicit versions and keeps reference separate from notes', async () => {
+  await check('Release timeline shows assigned shards without expanding a hidden section', async () => {
     await until(() => t.state.releaseCatalog || t.state.releaseCatalogError);
-    const previousCatalog = t.state.releaseCatalog, previousShards = t.state.data.shards;
-    t.state.releaseCatalog = { schemaVersion: 1, coverage: 'Fixture reference coverage.', sources: [{ id: 'standard', title: 'WG21 fixture', url: 'https://www.open-std.org/jtc1/sc22/wg21/' }], releases: [
-      { id: 'cpp11', label: 'C++11', year: 2011, status: 'published', summary: 'Modern foundations.', sourceIds: ['standard'], features: [{ id: 'move', title: 'Move semantics', summary: 'Transfer resources.', category: 'language', tags: ['ownership', 'types'], sourceIds: ['standard'] }, { id: 'threads', title: 'Threads', summary: 'Concurrent execution.', category: 'library', tags: ['concurrency'], sourceIds: ['standard'] }] },
-      { id: 'cpp26', label: 'C++26', year: 2026, status: 'draft', summary: 'Work in progress.', sourceIds: ['standard'], features: [] }
-    ] };
-    t.state.data.shards = [ { ...previousShards[0], id: 'explicit', title: 'My move note', languageVersion: 'C++11 / C++26', tags: ['ownership'] }, { ...previousShards[0], id: 'unknown', title: 'Unassigned source note', languageVersion: 'C++ notes', tags: ['types'] } ];
-    assert.deepEqual(Array.from(t.shardReleaseIds(t.state.data.shards[0])), ['cpp11', 'cpp26']);
-    assert.deepEqual(Array.from(t.shardReleaseIds({ languageVersion: 'Lecture 11, C++2011, C++230, pre-C++11, before C++17' })), []);
-    assert.deepEqual(Array.from(t.shardReleaseIds({ languageVersion: 'C++11 or later' })), ['cpp11']);
-    t.state.timelineMode='releases'; const output = t.renderTimeline();
-    assert.match(output, /id="release-track"/); assert.match(output, /data-action="jump-release"/); assert.match(output, /Working draft/); assert.match(output, /Notes without a release/); assert.match(output, /Your notes <span>1/); assert.match(output, /Release reference/); assert.match(output, /href="https:\/\/www.open-std.org/);
-    assert.equal(t.state.data.shards.length, 2); assert.ok(!/Practice recall|Try recalling/i.test(output)); assert.match(output, /<details class="release-own-notes"><summary>Your notes/);
-    $('#workspace').innerHTML = output; let jumpedTo = null; $('#release-track').offsetLeft = 260; $('#release-cpp11').offsetLeft = 723; $('#release-track').scrollTo = options => { jumpedTo = options.left; }; await t.runAction('jump-release', { dataset: { id: 'cpp11' } }); assert.equal(jumpedTo, 723);
-    t.state.tags = ['Ownership', 'TYPES']; t.state.tagMode = 'all'; assert.equal(t.filteredReleaseFeatures(t.state.releaseCatalog.releases[0]).length, 1); assert.equal(t.filteredReleaseShards().length, 0);
-    t.state.tagMode = 'any'; assert.equal(t.filteredReleaseShards().length, 2);
-    t.clearFilters(); t.state.releaseCategory = 'library'; assert.equal(t.filteredReleaseFeatures(t.state.releaseCatalog.releases[0])[0].id, 'threads');
-    t.clearFilters(); t.state.query = 'transfer resources'; assert.equal(t.filteredReleaseFeatures(t.state.releaseCatalog.releases[0])[0].id, 'move');
-    t.clearFilters(); t.state.releaseCatalog = previousCatalog; t.state.data.shards = previousShards;
+    await withTimelineCollection(async () => {
+      assert.deepEqual(Array.from(t.shardReleaseIds(t.state.data.shards[0])), ['cpp11', 'cpp26']);
+      assert.deepEqual(Array.from(t.shardReleaseIds({ languageVersion: 'Lecture 11, C++2011, C++230, pre-C++11, before C++17' })), []);
+      assert.deepEqual(Array.from(t.shardReleaseIds({ languageVersion: 'C++11 or later' })), ['cpp11']);
+      const original = JSON.stringify(t.state.data.shards), output = t.renderTimeline();
+      const cpp11 = output.slice(output.indexOf('id="release-cpp11"'), output.indexOf('id="release-cpp26"'));
+      assert.match(cpp11, /<section class="release-own-notes"[^>]*>[\s\S]*<h3>Your shards/);
+      assert.match(cpp11, /data-shard-id="explicit"/); assert.ok(!/data-shard-id="(?:unknown|excluded-version)"/.test(cpp11));
+      assert.ok(!/<details class="release-own-notes"/.test(output));
+      assert.equal(timelineShardIds(output).filter(id => id === 'explicit').length, 2);
+      assert.match(output, /Working draft/); assert.match(output, /Release reference/); assert.match(output, /href="https:\/\/www.open-std.org/);
+      assert.equal(JSON.stringify(t.state.data.shards), original); assert.ok(!/Practice recall|Try recalling/i.test(output));
+    });
+  });
+  await check('Unassigned shards have a counted timeline column and working jump target', async () => {
+    await withTimelineCollection(async () => {
+      const output = t.renderTimeline(), unassigned = output.slice(output.indexOf('id="release-unassigned"'));
+      assert.match(output, /data-action="jump-release" data-id="unassigned">No release assigned <span>2<\/span>/);
+      assert.match(unassigned, /No release assigned/); assert.match(unassigned, /<h3>Your shards <span>2<\/span><\/h3>/);
+      assert.match(unassigned, /data-shard-id="unknown"/); assert.match(unassigned, /data-shard-id="excluded-version"/);
+      assert.ok(!/data-shard-id="explicit"/.test(unassigned));
+      assert.ok(output.indexOf('id="release-unassigned"') > output.indexOf('id="release-track"'));
+      assert.ok(!/class="release-unversioned"/.test(output));
+      $('#workspace').innerHTML = output; let jumpedTo = null;
+      $('#release-track').offsetLeft = 260; $('#release-unassigned').offsetLeft = 1400;
+      $('#release-track').scrollTo = options => { jumpedTo = options.left; };
+      await t.runAction('jump-release', { dataset: { id: 'unassigned' } }); assert.equal(jumpedTo, 1400);
+    });
+  });
+  await check('Timeline content modes change through the control and preserve filters', async () => {
+    await withTimelineCollection(async () => {
+      assert.equal(t.state.timelineContent, 'both');
+      const output = t.renderTimeline(); assert.match(output, /id="timeline-content" aria-label="Timeline content"/);
+      assert.match(output, />My shards &amp; reference<\/option>/); assert.match(output, />My shards<\/option>/); assert.match(output, />Release reference<\/option>/);
+      t.state.tags = ['Ownership']; t.state.query = 'move'; t.state.releaseCategory = 'language';
+      $('#workspace').innerHTML = t.renderTimeline();
+      const select = $('#timeline-content'); select.value = 'shards'; select.dispatchEvent(new FixtureEvent('change', { bubbles: true }));
+      assert.equal(t.state.timelineContent, 'shards'); assert.deepEqual(Array.from(t.state.tags), ['Ownership']); assert.equal(t.state.query, 'move'); assert.equal(t.state.releaseCategory, 'language');
+      assert.deepEqual(timelineShardIds($('#workspace').innerHTML), ['explicit', 'explicit']); assert.ok(!/class="release-feature"/.test($('#workspace').innerHTML));
+      select.value = 'reference'; select.dispatchEvent(new FixtureEvent('change', { bubbles: true }));
+      assert.equal(t.state.timelineContent, 'reference'); assert.equal(timelineShardIds($('#workspace').innerHTML).length, 0); assert.match($('#workspace').innerHTML, /class="release-feature"/);
+      assert.ok(!/id="release-unassigned"/.test($('#workspace').innerHTML));
+      select.value = 'both'; select.dispatchEvent(new FixtureEvent('change', { bubbles: true }));
+      assert.equal(t.state.timelineContent, 'both'); assert.equal(timelineShardIds($('#workspace').innerHTML).length, 2); assert.match($('#workspace').innerHTML, /class="release-feature"/);
+    });
+  });
+  await check('Timeline shard filtering stays independent of reference feature categories', async () => {
+    await withTimelineCollection(async () => {
+      t.state.releaseCategory = 'library'; let output = t.renderTimeline();
+      assert.equal(t.filteredReleaseFeatures(t.state.releaseCatalog.releases[0])[0].id, 'threads');
+      assert.equal(timelineShardIds(output).length, 4); assert.ok(!/class="release-feature-title">Move semantics/.test(output));
+      t.state.tags = ['Ownership', 'TYPES']; t.state.tagMode = 'all';
+      assert.equal(t.filteredReleaseShards().length, 0); assert.equal(timelineShardIds(t.renderTimeline()).length, 0);
+      t.state.tagMode = 'any'; assert.equal(t.filteredReleaseShards().length, 3); assert.equal(timelineShardIds(t.renderTimeline()).length, 4);
+      t.clearFilters(); t.state.query = 'unassigned source'; output = t.renderTimeline();
+      assert.deepEqual(timelineShardIds(output), ['unknown']); assert.match(output, /id="release-unassigned"/);
+      t.state.query = 'nothing matches this fixture'; output = t.renderTimeline(); assert.equal(timelineShardIds(output).length, 0);
+      assert.ok(!/id="release-unassigned"/.test(output)); assert.match(output, /No matching shards for this release/);
+      t.clearFilters(); t.state.query = 'transfer resources'; assert.equal(t.filteredReleaseFeatures(t.state.releaseCatalog.releases[0])[0].id, 'move');
+    });
+  });
+  await check('Clicking a visible timeline shard opens the corresponding library detail', async () => {
+    await withTimelineCollection(async () => {
+      const match = t.renderTimeline().match(/<button class="release-note"([^>]*)>/); assert.ok(match);
+      const button = new Element('button', { class: 'release-note', ...attributes(match[1]) }, document);
+      button.closest = selector => selector === 'button,a' ? button : null;
+      document.dispatchEvent(new FixtureEvent('click', { target: button }));
+      assert.equal(t.state.view, 'library'); assert.equal(t.state.selectedId, button.dataset.shardId);
+      assert.match($('#workspace').innerHTML, /<h2 class="note-title">My move note<\/h2>/); assert.match($('#workspace').innerHTML, /aria-label="Selected shard"/);
+    });
+  });
+  await check('Timeline personal shards remain searchable when the release reference is unavailable', async () => {
+    await withTimelineCollection(async () => {
+      t.state.releaseCatalog = null; t.state.releaseCatalogError = 'Simulated missing reference';
+      let output = t.renderTimeline(); assert.match(output, /reference could not open/); assert.match(output, /reload-releases/);
+      assert.deepEqual(timelineShardIds(output), ['explicit', 'unknown', 'excluded-version']);
+      t.state.query = 'unassigned source'; assert.deepEqual(timelineShardIds(t.renderTimeline()), ['unknown']);
+      t.state.query = 'nothing matches this fixture'; output = t.renderTimeline(); assert.equal(timelineShardIds(output).length, 0); assert.match(output, /No shards match/);
+      t.state.timelineContent = 'reference'; t.state.query = ''; assert.equal(timelineShardIds(t.renderTimeline()).length, 0);
+    });
   });
   await check('C++ release loading failure never blocks the atlas', async () => {
     const previousCatalog = t.state.releaseCatalog;

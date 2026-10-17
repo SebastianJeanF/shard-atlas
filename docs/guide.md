@@ -52,11 +52,11 @@ Moving a card changes the canvas arrangement. Editing its explanation changes th
 
 ## Explore the C++ release reference
 
-**C++ releases** contains a bundled, sourced reference from C++98 through the **C++26 working draft**. Jump to a release, search for a feature, choose language or library changes, and combine topics with all or any matching. Open an entry for its explanation and sources.
+**C++ timeline** shows your shards alongside a bundled, sourced reference from C++98 through the **C++26 working draft**. Your shard cards appear openly at the top of each release. Use **Show** to choose **My shards & reference**, **My shards**, or **Release reference**. Jump to a release, search, and combine topics with all or any matching. Open a shard to read or edit it in Library, or open a reference entry for its explanation and sources.
 
 The reference works offline. External source links need an internet connection when opened. Entries describe feature groups and adopted changes rather than every overload or defect report. The reference's coverage disclosure explains that boundary.
 
-To place a personal note beside a release, assign a recognized version such as `C++17` under **Source & context → Version or scope**. Notes without a recognized version remain available below the reference. Reference entries are separate from personal notes and do not change your understanding status.
+To place a personal note beside a release, assign a recognized version such as `C++17` under **Source & context → Version or scope**. Shards without a recognized version appear in the **No release assigned** column, with a jump button above the timeline. Release placement uses your assigned scope and is never guessed from the note's title or topics. Reference entries are separate from personal notes and do not change your understanding status.
 
 ## Capture from another chat
 
