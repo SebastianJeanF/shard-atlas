@@ -172,6 +172,17 @@ kbd { font-family: inherit; font-size: 10px; line-height: 1.6; white-space: nowr
 .note-world-icons[data-world-count="3"] img, .note-world-icons[data-world-count="4"] img { width: 20px; height: 20px; }
 .note-world-icons[data-world-count="3"] > img:last-child { grid-column: 1 / -1; justify-self: center; }
 .note-world-release { color: var(--world-ink,var(--muted)); font-size: 9px; font-weight: 500; line-height: 1.35; text-align: center; overflow-wrap: anywhere; }
+.shard-release-chips { display: flex; flex-wrap: wrap; align-items: center; align-self: flex-start; gap: 4px 5px; min-width: 0; max-width: 100%; margin: 0; }
+.shard-release-chip { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; min-height: 28px; max-width: 100%; padding: 2px 7px 2px 3px; border: 1px solid var(--world-line,var(--line)); border-radius: 6px; background: var(--world-soft,#f0f3e9); color: var(--world-ink,var(--green-dark)); font-size: 9px; font-weight: 600; line-height: 1.3; }
+.shard-release-icons { display: grid; flex: 0 0 22px; place-items: center; align-content: center; width: 22px; height: 22px; }
+.shard-release-icons img { display: block; width: 20px; height: 20px; object-fit: contain; }
+.shard-release-icons[data-world-count="3"], .shard-release-icons[data-world-count="4"] { grid-template-columns: repeat(2,10px); grid-template-rows: repeat(2,10px); gap: 1px; }
+.shard-release-icons[data-world-count="3"] img, .shard-release-icons[data-world-count="4"] img { width: 10px; height: 10px; }
+.shard-release-icons[data-world-count="3"] > img:last-child { grid-column: 1 / -1; justify-self: center; }
+.shard-release-label { min-width: 0; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.shard-card > .shard-release-chips { margin-bottom: 8px; }
+.connection-open > .shard-release-chips, .atlas-neighbor-list .shard-release-chips { margin-top: 6px; }
+.atlas-focus-card > .shard-release-chips { margin-bottom: 11px; }
 .note-actions { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
 .note-actions .secondary, .note-actions .text-button { font-size: 10px; min-height: 30px; padding: 6px 9px; }
 .note-actions .icon-button { margin-left: auto; font-size: 15px; }
@@ -1055,6 +1066,7 @@ body[data-saving] dialog form { opacity: .75; }
 .atlas-relationship-node rect { fill: #fffefa; stroke: #b6c3aa; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
 .atlas-relationship-node text { fill: var(--ink); font-size: 12px; pointer-events: none; }
 .atlas-relationship-node .atlas-node-meta { font-size: 9px; fill: var(--muted); }
+.atlas-relationship-node .atlas-node-releases { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; fill: #4f6456; }
 .atlas-relationship-node.expanded rect { fill: #f0f4e9; stroke: #8ea47d; stroke-width: 1.7; }
 .atlas-relationship-node.selected rect, .atlas-relationship-node.active rect, .atlas-relationship-node[aria-pressed="true"] rect { fill: #e5eddd; stroke: var(--green); stroke-width: 2.5; }
 .atlas-relationship-node:hover rect { stroke: var(--green); stroke-width: 2; }

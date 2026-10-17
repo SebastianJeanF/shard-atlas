@@ -231,6 +231,8 @@ try {
   }
   const openingAttributes = (markup, tag, className) => [...markup.matchAll(new RegExp('<' + tag + '([^>]*)>', 'g'))]
     .map(match => attributes(match[1])).filter(attrs => (attrs.class || '').split(/\s+/).includes(className));
+  const shardReleaseGroups = markup => [...markup.matchAll(/<div class="shard-release-chips"([^>]*)>([\s\S]*?)<\/div>/g)]
+    .map(match => ({ ...attributes(match[1]), markup: match[2], chips: openingAttributes(match[2], 'span', 'shard-release-chip') }));
   async function withReleaseNavigation(test) {
     const query = document.querySelector, workspace = $('#workspace'), trace = { scrolls: [], reveals: [], focus: [] };
     const track = new Element('div', { id: 'release-track' }, document), columns = new Map();
@@ -788,6 +790,84 @@ try {
       t.state.timelineTheme='plain';
       for(const note of openingAttributes(t.renderTimeline(),'button','release-note')){assert.ok(!note['data-shard-worlds']);assert.ok(!note.style);}
       assert.equal(JSON.stringify(t.state.data),before);
+    });
+  });
+  await check('Library cards identify every assigned release with a readable year and its miniature worlds', async () => {
+    await withWorldTimeline(async () => {
+      const baseShard=t.state.data.shards[0];
+      t.state.data.shards=[
+        {...baseShard,id:'release-foundation',languageVersion:'C++98+'},
+        {...baseShard,id:'release-many',languageVersion:'C++26 / C++14 / C++03 / C++11 / C++14'},
+        {...baseShard,id:'release-unassigned',languageVersion:'C++ notes'},
+        {...baseShard,id:'release-excluded',languageVersion:'pre-C++11, before C++17'}
+      ];
+      t.state.selectedId='release-many';t.state.timelineTheme='plain';t.changeView('library');
+      const before=JSON.stringify(t.state.data),writes=apiWrites,output=t.renderLibrary();
+      const cards=[...output.matchAll(/<button([^>]*class="shard-card[^>]*)>([\s\S]*?)<\/button>/g)]
+        .map(match=>({...attributes(match[1]),markup:match[2]}));
+      const single=shardReleaseGroups(cards.find(card=>card['data-shard-id']==='release-foundation').markup)[0];
+      assert.equal(single.role,'list');assert.equal(single['aria-label'],'C++ releases');
+      assert.deepEqual(single.chips.map(chip=>chip['data-spiral-release']),['cpp98']);
+      assert.equal(single.chips[0]['aria-label'],'C++98: Dragonspyre');
+      assert.match(single.markup,/>C\+\+98<\/span>/);assert.equal((single.markup.match(/<img /g)||[]).length,1);
+      const many=shardReleaseGroups(cards.find(card=>card['data-shard-id']==='release-many').markup)[0];
+      assert.deepEqual(many.chips.map(chip=>chip['data-spiral-release']),['cpp03','cpp11','cpp14','cpp26']);
+      assert.equal(many.chips.find(chip=>chip['data-spiral-release']==='cpp14')['aria-label'],'C++14: Zafaria, Avalon, Azteca');
+      assert.equal(many.chips.find(chip=>chip['data-spiral-release']==='cpp26')['aria-label'],'C++26 (draft): Karamelle, Lemuria, Novus, Wallaru');
+      assert.equal((many.markup.match(/<img /g)||[]).length,9);
+      assert.match(many.markup,/>C\+\+26 \(draft\)<\/span>/);
+      for(const card of cards){assert.ok(!/<button\b|data-action="open-release"/.test(card.markup));if(['release-unassigned','release-excluded'].includes(card['data-shard-id']))assert.equal(shardReleaseGroups(card.markup).length,0);}
+      assert.ok(!t.renderTimeline().includes('shard-release-chips'));
+      t.state.spiralCatalog=null;t.state.releaseCatalog=null;
+      const withoutCatalog=shardReleaseGroups(t.renderLibrary()).find(group=>group['data-shard-release-id']==='release-many');
+      assert.deepEqual(withoutCatalog.chips.map(chip=>chip['aria-label']),['C++03','C++11','C++14','C++26 (draft)']);
+      assert.ok(!withoutCatalog.markup.includes('<img '));assert.match(withoutCatalog.markup,/>C\+\+14<\/span>/);
+      assert.equal(JSON.stringify(t.state.data),before);assert.equal(apiWrites,writes);
+    });
+  });
+  await check('A late or failed world catalog updates compact release indicators without replacing the workspace', async () => {
+    await withWorldTimeline(async () => {
+      const queryAll=document.querySelectorAll,workspaceBefore=$('#workspace').innerHTML;
+      const containers=['explicit','unknown'].map(id=>new Element('div',{'data-shard-release-id':id},document));
+      document.querySelectorAll=function(selector){return selector==='[data-shard-release-id]'?containers:queryAll.call(this,selector);};
+      try{
+        t.state.view='atlas';t.state.spiralCatalog=null;
+        const before=JSON.stringify(t.state.data),writes=apiWrites;
+        await t.loadSpiralCatalog();
+        assert.match(containers[0].innerHTML,/C\+\+11: Celestia/);assert.match(containers[0].innerHTML,/C\+\+26 \(draft\): Karamelle/);assert.match(containers[0].innerHTML,/<img /);
+        assert.equal(containers[1].innerHTML,'');assert.equal($('#workspace').innerHTML,workspaceBefore);
+        failSpiralLoad=true;await t.loadSpiralCatalog();
+        assert.deepEqual(openingAttributes(containers[0].innerHTML,'span','shard-release-chip').map(chip=>chip['aria-label']),['C++11','C++26 (draft)']);
+        assert.ok(!containers[0].innerHTML.includes('<img '));assert.equal($('#workspace').innerHTML,workspaceBefore);
+        assert.equal(JSON.stringify(t.state.data),before);assert.equal(apiWrites,writes);
+      }finally{failSpiralLoad=false;document.querySelectorAll=queryAll;}
+    });
+  });
+  await check('Topic map cards, focused shards, neighbors, and relationship nodes identify their release years', async () => {
+    await withWorldTimeline(async () => {
+      await withAtlasCollection(async () => {
+        Object.assign(t.state.data.shards[0],{languageVersion:'C++98+'});
+        Object.assign(t.state.data.shards[1],{languageVersion:'C++26 / C++11 / C++26'});
+        for(const shard of t.state.data.shards.slice(2))shard.languageVersion='C++ notes';
+        const before=JSON.stringify(t.state.data),writes=apiWrites;
+        t.changeView('atlas');
+        const overview=t.renderAtlas(),cards=[...overview.matchAll(/<article([^>]*class="atlas-shard-card[^>]*)>([\s\S]*?)<\/article>/g)];
+        assert.equal(cards.length,5);
+        const groups=cards.flatMap(card=>shardReleaseGroups(card[2]));
+        assert.deepEqual(groups.map(group=>group['data-shard-release-id']).sort(),['atlas-a','atlas-b']);
+        assert.deepEqual(groups.find(group=>group['data-shard-release-id']==='atlas-b').chips.map(chip=>chip['data-spiral-release']),['cpp11','cpp26']);
+        await t.runAction('atlas-select',{dataset:{id:'atlas-a'}});
+        const focused=t.renderAtlas(),inspector=focused.match(/<section class="atlas-focus-card"[^>]*>([\s\S]*?)<\/section>/)?.[1];
+        assert.ok(inspector);assert.equal(shardReleaseGroups(inspector)[0]['data-shard-release-id'],'atlas-a');assert.match(inspector,/C\+\+98: Dragonspyre/);
+        const neighbors=focused.match(/<ul class="atlas-neighbor-list">([\s\S]*?)<\/ul>/)?.[1];
+        assert.ok(neighbors);assert.equal(shardReleaseGroups(neighbors)[0]['data-shard-release-id'],'atlas-b');assert.match(neighbors,/C\+\+26 \(draft\): Karamelle/);
+        const nodes=[...focused.matchAll(/<g([^>]*class="atlas-relationship-node[^>]*)>([\s\S]*?)<\/g>/g)]
+          .map(match=>({...attributes(match[1]),markup:match[2]}));
+        const multi=nodes.find(node=>node['data-id']==='atlas-b');assert.ok(multi);
+        assert.match(multi['aria-label'],/C\+\+11/);assert.match(multi['aria-label'],/C\+\+26 \(draft\)/);
+        assert.match(multi.markup,/class="atlas-node-releases"/);assert.match(multi.markup,/C\+\+11/);assert.match(multi.markup,/C\+\+26 \(draft\)/);
+        assert.equal(JSON.stringify(t.state.data),before);assert.equal(apiWrites,writes);
+      });
     });
   });
   await check('Clicking a detail badge opens its release, preserves Library state, and respects reduced motion', async () => {
