@@ -272,7 +272,7 @@ function shardReleaseIds(shard) {
 }
 function filteredReleaseFeatures(release) {
   const words=state.query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
-  return release.features.filter(feature=>(state.releaseCategory==='all'||feature.category===state.releaseCategory)&&matchesTimelineTopics(feature.tags)&&words.every(word=>[release.label,feature.title,feature.summary,feature.tags.join(' '),feature.category].join(' ').toLocaleLowerCase().includes(word)));
+  return release.features.filter(feature=>(state.releaseCategory==='all'||feature.category===state.releaseCategory)&&matchesTimelineTopics(feature.tags)&&words.every(word=>[release.label,feature.title,feature.summary,feature.tags.join(' '),feature.category,...(Array.isArray(feature.cppreferenceLinks)?feature.cppreferenceLinks:[]).map(link=>link?.title||'')].join(' ').toLocaleLowerCase().includes(word)));
 }
 function filteredReleaseShards() {
   const words=state.query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
@@ -350,7 +350,8 @@ function releaseSourceLinks(ids) {
   return [...new Set(ids||[])].map(id=>sources.get(id)).filter(source=>source&&/^https?:\/\//i.test(source.url)).map(source=>`<a href="${esc(source.url)}" target="_blank" rel="noopener noreferrer">${esc(source.title)} ↗</a>`).join('');
 }
 function renderReleaseFeature(feature) {
-  return `<details class="release-feature"><summary><span class="release-feature-category">${esc(releaseCategories[feature.category]||feature.category)}</span><span class="release-feature-title">${esc(feature.title)}</span><span class="release-expand" aria-hidden="true">＋</span></summary><div class="release-feature-body"><p>${esc(feature.summary)}</p><div class="release-tags">${feature.tags.map(tag=>`<button class="tag ${releaseTagSelected(tag)?'active':''}" data-tag="${esc(tag)}" aria-pressed="${releaseTagSelected(tag)}">${esc(tag)}</button>`).join('')}</div><div class="release-sources">${releaseSourceLinks(feature.sourceIds)}</div></div></details>`;
+  const reading=(Array.isArray(feature.cppreferenceLinks)?feature.cppreferenceLinks:[]).filter(link=>link&&typeof link.title==='string'&&/^https:\/\/en\.cppreference\.com\/(?:w\/)?(?:cpp|c)\//.test(link.url||'')).map(link=>sourceAnchor(link.url,link.title)).join('');
+  return `<details class="release-feature"><summary><span class="release-feature-category">${esc(releaseCategories[feature.category]||feature.category)}</span><span class="release-feature-title">${esc(feature.title)}</span><span class="release-expand" aria-hidden="true">＋</span></summary><div class="release-feature-body"><p>${esc(feature.summary)}</p><div class="release-tags">${feature.tags.map(tag=>`<button class="tag ${releaseTagSelected(tag)?'active':''}" data-tag="${esc(tag)}" aria-pressed="${releaseTagSelected(tag)}">${esc(tag)}</button>`).join('')}</div><div class="release-sources">${reading}${releaseSourceLinks(feature.sourceIds)}</div></div></details>`;
 }
 function renderReleaseNote(shard,releaseId) {
   const theme=state.timelineTheme==='spiral'?shardThemeAttributes(shard,spiralReleaseIds.includes(releaseId)?[releaseId]:shardWorldReleaseIds(shard)):'';

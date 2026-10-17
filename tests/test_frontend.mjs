@@ -161,7 +161,7 @@ try {
   const w = { document, matchMedia: () => ({ matches: reducedMotion }), addEventListener(name, callback) { const listeners = windowListeners.get(name) || []; listeners.push(callback); windowListeners.set(name, listeners); }, katex: require(path.join(project, 'static/vendor/katex/katex.min.js')), confirm: () => true };
   context = vm.createContext({ window: w, document, fetch: browserFetch, FormData: FixtureFormData, FileReader: FixtureFileReader, navigator: { clipboard: { writeText: async text => { if (failClipboard) throw new Error('Clipboard permission denied'); clipboardWrites.push(text); } } }, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key=>storage.delete(key) }, setTimeout: trackedSetTimeout, clearTimeout: timer => { timers.delete(timer); clearTimeout(timer); }, console, Blob, URL });
   const code = fs.readFileSync(path.join(project, 'static/app.js'), 'utf8');
-  vm.runInContext(code + '\nwindow.testAtlas={state,drafts,filteredShards,markdown,stabilizeWikiLinks,renderNav,renderLibrary,renderGraphPage,renderTimeline,renderBoards,renderDetail,dateLabel,previewImport,saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,loadReleaseCatalog,loadSpiralCatalog,setTimelineTheme,savedTimelineTheme,filteredSpiralExamples,handlePortalKey,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,uploadImage,showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
+  vm.runInContext(code + '\nwindow.testAtlas={state,drafts,filteredShards,markdown,stabilizeWikiLinks,renderNav,renderLibrary,renderGraphPage,renderTimeline,renderBoards,renderDetail,dateLabel,previewImport,saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,renderReleaseFeature,loadReleaseCatalog,loadSpiralCatalog,setTimelineTheme,savedTimelineTheme,filteredSpiralExamples,handlePortalKey,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,uploadImage,showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
   const t = w.testAtlas, $ = selector => document.querySelector(selector), results = [];
   async function until(predicate) { for (let i = 0; i < 300; i++) { if (predicate()) return; await delay(10); } throw new Error('Timed out waiting for frontend state'); }
   async function get(url) { const response = await fetch(base + url), data = await response.json(); assert.ok(response.ok, JSON.stringify(data)); return data; }
@@ -480,6 +480,47 @@ try {
     await t.loadReleaseCatalog(); assert.match(t.renderTimeline(), /reference could not open/); assert.match(t.renderTimeline(), /reload-releases/); assert.ok(t.renderLibrary().includes('Build your technical understanding'));
     failReleaseLoad = false; releaseResponse = { schemaVersion: 1, coverage: 'Test reference.', sources: [], releases: [] }; await t.loadReleaseCatalog(); assert.equal(t.state.releaseCatalogError, null); assert.ok(t.state.releaseCatalog);
     releaseResponse = null; t.state.releaseCatalog = previousCatalog;
+  });
+  await check('Every built-in release feature has a cppreference reading page', async () => {
+    await withWorldTimeline(async () => {
+      const features=t.state.releaseCatalog.releases.flatMap(release=>release.features);
+      assert.ok(features.length>900);
+      for(const feature of features){
+        assert.ok(Array.isArray(feature.cppreferenceLinks)&&feature.cppreferenceLinks.length,feature.id);
+        const urls=new Set();
+        for(const link of feature.cppreferenceLinks){
+          const url=new URL(link.url);
+          assert.equal(url.protocol,'https:',feature.id);assert.equal(url.hostname,'en.cppreference.com',feature.id);
+          assert.match(url.pathname,/^\/(?:w\/)?(?:cpp|c)\//,feature.id);assert.ok(link.title.startsWith('cppreference: '),feature.id);
+          assert.ok(!urls.has(link.url),feature.id);urls.add(link.url);
+        }
+      }
+    });
+  });
+  await check('Timeline search finds API names in cppreference reading titles', async () => {
+    await withWorldTimeline(async () => {
+      const release=t.state.releaseCatalog.releases.find(release=>release.id==='cpp26');
+      for(const query of ['generate_random','exception_ptr_cast']){
+        t.state.query=query;
+        const features=t.filteredReleaseFeatures(release);
+        assert.ok(features.length,query);
+        assert.ok(features.some(feature=>feature.cppreferenceLinks.some(link=>link.title.includes(query))),query);
+      }
+      t.state.releaseCategory='language';assert.equal(t.filteredReleaseFeatures(release).length,0);
+    });
+  });
+  await check('Feature cards present cppreference beside their original standards sources', async () => {
+    await withWorldTimeline(async () => {
+      const feature=t.state.releaseCatalog.releases[0].features[0],before=JSON.stringify(feature);
+      const source=t.state.releaseCatalog.sources.find(source=>source.id===feature.sourceIds[0]);
+      const output=t.renderReleaseFeature(feature);
+      assert.ok(output.includes('href="'+feature.cppreferenceLinks[0].url+'"'));
+      assert.ok(output.includes('href="'+source.url+'"'));assert.ok(output.includes(source.title));
+      assert.ok(output.includes('target="_blank"'));assert.equal(JSON.stringify(feature),before);
+      const {cppreferenceLinks,...legacy}=feature,legacyOutput=t.renderReleaseFeature(legacy);
+      assert.ok(legacyOutput.includes('href="'+source.url+'"'));
+      assert.ok(!legacyOutput.includes('en.cppreference.com'));
+    });
   });
   await check('All eight world portals keep C++ years, draft status, and personal notes primary', async () => {
     await withWorldTimeline(async () => {
