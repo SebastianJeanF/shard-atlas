@@ -1,6 +1,6 @@
 # Using Shard Atlas
 
-Shard Atlas stores explanations and the relationships between them. A *shard* is a note about one technical idea. The Library, Topic map, and connection map are different views of the same notes.
+Shard Atlas stores explanations and the relationships between them. A *shard* is a note about one technical idea. The Library, Topic map, and C++ timeline offer different ways to explore your notes.
 
 [Back to the project](../README.md) · [Build and development](development.md) · [AI contribution guide](../static/ai-instructions.md)
 
@@ -40,7 +40,7 @@ Choose **Connect** to describe how two notes relate. The available relationships
 
 Direction matters. An arrow runs from the note making the relationship to its target. For example, an example note can point to the concept it illustrates with *is an example of*. A diagram's proximity or arrow alone does not establish a prerequisite.
 
-The connection map shows the filtered collection or a selected neighborhood. Color and group by topic or kind, use the legend to read the colors, and select a node to open its explanation.
+The Library includes a compact preview of nearby ideas. Use Topic map to explore saved relationships one step at a time.
 
 ## Explore the Topic map
 

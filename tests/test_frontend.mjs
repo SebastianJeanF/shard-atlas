@@ -162,7 +162,7 @@ try {
   const w = { document, matchMedia: () => ({ matches: reducedMotion }), addEventListener(name, callback) { const listeners = windowListeners.get(name) || []; listeners.push(callback); windowListeners.set(name, listeners); }, katex: require(path.join(project, 'static/vendor/katex/katex.min.js')), confirm: () => true };
   context = vm.createContext({ window: w, document, fetch: browserFetch, FormData: FixtureFormData, FileReader: FixtureFileReader, navigator: { clipboard: { writeText: async text => { if (failClipboard) throw new Error('Clipboard permission denied'); clipboardWrites.push(text); } } }, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key=>storage.delete(key) }, setTimeout: trackedSetTimeout, clearTimeout: timer => { timers.delete(timer); clearTimeout(timer); }, console, Blob, URL });
   const code = fs.readFileSync(path.join(project, 'static/app.js'), 'utf8');
-  vm.runInContext(code + '\nwindow.testAtlas={state,drafts,filteredShards,markdown,stabilizeWikiLinks,renderNav,renderLibrary,renderGraphPage,renderTimeline,renderBoards,atlasModel,atlasRelationshipModel,renderAtlas,renderDetail,dateLabel,previewImport,saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,renderReleaseFeature,loadReleaseCatalog,loadSpiralCatalog,setTimelineTheme,savedTimelineTheme,filteredSpiralExamples,handlePortalKey,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,uploadImage,showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
+  vm.runInContext(code + '\nwindow.testAtlas={state,drafts,filteredShards,markdown,stabilizeWikiLinks,renderNav,renderLibrary,renderTimeline,renderBoards,atlasModel,atlasRelationshipModel,renderAtlas,renderDetail,dateLabel,previewImport,saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,renderReleaseFeature,loadReleaseCatalog,loadSpiralCatalog,setTimelineTheme,savedTimelineTheme,filteredSpiralExamples,handlePortalKey,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,uploadImage,showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
   const t = w.testAtlas, $ = selector => document.querySelector(selector), results = [];
   async function until(predicate) { for (let i = 0; i < 300; i++) { if (predicate()) return; await delay(10); } throw new Error('Timed out waiting for frontend state'); }
   async function get(url) { const response = await fetch(base + url), data = await response.json(); assert.ok(response.ok, JSON.stringify(data)); return data; }
@@ -260,10 +260,11 @@ try {
     assert.ok(!/recall|least reviewed|practice|questions to revisit/i.test(html + t.renderLibrary()));
     assert.equal($('[name=prompt]'), null); assert.ok(!/review/.test(t.renderLibrary()));
   });
-  await check('Technical navigation replaces manual Canvas with the automatic Topic map', async () => {
-    const nav=html.match(/<nav>([\s\S]*?)<\/nav>/)[1];assert.deepEqual([...nav.matchAll(/data-view="([^"]+)"/g)].map(match=>match[1]),['library','graph','atlas','timeline']);assert.match(nav,/> Topic map</);assert.ok(!/data-view="boards"|> Canvas</.test(nav));assert.match(nav,/C\+\+ timeline/);
+  await check('Technical navigation offers Library, Topic map, and C++ timeline without retired views', async () => {
+    const nav=html.match(/<nav>([\s\S]*?)<\/nav>/)[1];assert.deepEqual([...nav.matchAll(/data-view="([^"]+)"/g)].map(match=>match[1]),['library','atlas','timeline']);assert.match(nav,/> Topic map</);assert.ok(!/data-view="(?:boards|graph)"|> (?:Canvas|Connections)</.test(nav));assert.match(nav,/C\+\+ timeline/);
     for(const retired of ['entities','inbox','compare','ask']){t.changeView(retired);assert.equal(t.state.view,'library');}
     t.changeView('boards');assert.equal(t.state.view,'atlas');assert.equal($('#view-label').textContent,'Topic map');assert.ok(!/data-action="(?:new-board|edit-board|add-board-item|add-section)"/.test($('#workspace').innerHTML));t.changeView('library');
+    for(const view of ['library','atlas','timeline']){t.changeView(view);assert.ok(!/Ideas belong together\.|class="graph-controls"|id="graph-(?:color|group)"|data-view="graph"/.test($('#workspace').innerHTML),view);}t.changeView('library');
     assert.equal(t.state.timelineMode,'releases');assert.ok(!/AI &amp; your events|Dated notes|timeline-modes/.test(t.renderTimeline()));assert.ok(!/\/api\/(?:ask|entities|capture\/preview)/.test(code));
   });
   await check('Topic neighborhoods retain every membership and count case variants once', async () => {
@@ -927,9 +928,21 @@ try {
   await check('Relationship explanations preserve direction from both connected notes', async () => {
     const links=t.state.data.links,from=t.state.data.shards[0],to=t.state.data.shards[1];for(const [type,forward,inverse] of [['part_of','is part of','contains'],['depends_on','depends on','is a dependency of'],['supports','supports','is supported by'],['supersedes','supersedes','is superseded by']]){t.state.data.links=[{id:'direction-check',fromId:from.id,toId:to.id,type,note:''}];assert.ok(t.renderDetail(from).includes('This idea '+forward+'</span>'),type);assert.ok(t.renderDetail(to).includes('This idea '+inverse+'</span>'),type);}t.state.data.links=links;
   });
-  await check('Graph topic/kind coloring, grouping and legend', async () => {
-    t.state.graphColor = 'kind'; t.state.graphGroup = 'kind'; const output = t.renderGraphPage();
-    assert.match(output, /graph-category-legend/); assert.match(output, /graph-group-label/); assert.match(output, /Concept/); assert.match(output, /style="fill:#[a-f0-9]+/); t.state.graphGroup = 'none';
+  await check('Library connection previews remain interactive and lead to focused Topic map exploration', async () => {
+    await withAtlasCollection(async () => {
+      await until(()=>t.pending===0);const before=JSON.stringify(t.state.data),writes=apiWrites;
+      t.state.selectedId='atlas-a';t.changeView('library');
+      let output=t.renderLibrary();assert.match(output,/aria-label="Connections around Alpha classes"/);assert.match(output,/data-graph-id="atlas-b"/);
+      const node=new Element('g',{'data-graph-id':'atlas-b'},document);node.closest=selector=>selector==='[data-graph-id]'?node:null;
+      document.dispatchEvent(new FixtureEvent('click',{target:node}));assert.equal(t.state.view,'library');assert.equal(t.state.selectedId,'atlas-b');assert.match($('#workspace').innerHTML,/aria-label="Connections around Beta memory"/);
+      const alpha=new Element('g',{'data-graph-id':'atlas-a'},document);alpha.closest=selector=>selector==='[data-graph-id]'?alpha:null;
+      const keyboard=new FixtureEvent('keydown',{target:alpha,key:'Enter'});document.dispatchEvent(keyboard);assert.ok(keyboard.defaultPrevented);assert.equal(t.state.selectedId,'atlas-a');
+      output=t.renderLibrary();const button=[...output.matchAll(/<button([^>]*)>([\s\S]*?)<\/button>/g)].map(match=>({...attributes(match[1]),label:decode(match[2].replace(/<[^>]*>/g,''))})).find(attrs=>attrs['data-action']==='open-topic-map');
+      assert.ok(button);assert.equal(button['data-id'],'atlas-a');assert.match(button.label,/Explore in Topic map/);
+      await t.runAction('open-topic-map',{dataset:{id:button['data-id']}});assert.equal(t.state.view,'atlas');assert.equal(t.state.atlasMode,'connections');assert.equal(t.state.atlasSelectedId,'atlas-a');assert.equal($('#view-label').textContent,'Topic map');
+      assert.deepEqual(Array.from(t.atlasRelationshipModel().nodes,shard=>shard.id).sort(),['atlas-a','atlas-b']);assert.match($('#workspace').innerHTML,/A needs B first\./);
+      assert.equal(apiWrites,writes);assert.equal(JSON.stringify(t.state.data),before);t.changeView('library');
+    });
   });
   await check('Offline math, safe HTML, local images, and stable wikilinks', async () => {
     const target = t.state.data.shards[0]; assert.match(t.markdown('$x^2$\n\n$$\\frac{a}{b}$$'), /class="katex"/);
@@ -1023,8 +1036,17 @@ try {
     const count=(await get('/api/state')).shards.length;await t.previewImport({schemaVersion:1,shards:[{id:'frontend-preview-note',title:'Preview fixture',content:'Original import text',tags:[]}],links:[],boards:[]},'QA import');assert.ok($('#import-preview-dialog').open);assert.equal((await get('/api/state')).shards.length,count);await t.runAction('confirm-import',{dataset:{}});assert.ok(!$('#import-preview-dialog').open);assert.ok(t.state.data.shards.some(s=>s.id==='frontend-preview-note'));const receipt=(await get('/api/imports')).imports[0];assert.ok(receipt.id);
     await post('/api/shards/frontend-preview-note',{title:'Edited after import'},'PUT');await t.runAction('undo-import',{dataset:{id:receipt.id}});$('#confirm-action').click();await until(()=>!$('#confirm-dialog').open&&!t.busy);assert.equal((await get('/api/state')).shards.find(s=>s.id==='frontend-preview-note').title,'Edited after import');$('#recovery-dialog').close();
   });
-  await check('Large connection maps disclose the bounded graph instead of forcing every imported node', async () => {
-    const previous=t.state.data.shards,base=previous[0];t.state.data.shards=Array.from({length:250},(_,i)=>({...base,id:'large-'+i,title:'Large note '+i,tags:[]}));t.state.graphScope='all';const output=t.renderGraphPage();assert.equal((output.match(/data-graph-id=/g)||[]).length,100);assert.match(output,/Showing the first 100 matches/);t.state.data.shards=previous;
+  await check('Legacy connection-map routes open the focused Topic map without restoring the removed section', async () => {
+    await withAtlasCollection(async () => {
+      await until(()=>t.pending===0);const before=JSON.stringify(t.state.data),writes=apiWrites;
+      t.state.selectedId='atlas-a';t.state.atlasExpandedIds=['atlas-c'];t.changeView('graph');
+      assert.equal(t.state.view,'atlas');assert.equal(t.state.atlasMode,'connections');assert.equal(t.state.atlasSelectedId,'atlas-a');assert.equal(t.state.atlasExpandedIds.length,0);
+      assert.ok(!/Ideas belong together\.|class="graph-controls"|id="graph-(?:color|group)"/.test($('#workspace').innerHTML));
+      t.changeView('library');t.state.selectedId='atlas-b';t.state.atlasMode='topics';w.shardAtlasDesktop.command('graph');
+      assert.equal(t.state.view,'atlas');assert.equal(t.state.atlasMode,'connections');assert.equal(t.state.atlasSelectedId,'atlas-b');assert.equal($('#view-label').textContent,'Topic map');
+      assert.deepEqual(Array.from(t.atlasRelationshipModel().nodes,shard=>shard.id).sort(),['atlas-a','atlas-b','atlas-c']);
+      assert.equal(apiWrites,writes);assert.equal(JSON.stringify(t.state.data),before);t.changeView('library');
+    });
   });
 
   await check('Exact imported JSON remains available in a collapsed disclosure', async () => {

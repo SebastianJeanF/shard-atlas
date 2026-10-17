@@ -76,7 +76,7 @@ The working database is `~/Library/Application Support/Shard Atlas/shards.sqlite
 
 Collection writes belong to the storage service. Use its validated routes or contribution tools rather than editing a live SQLite file. Before a schema change or import affecting real data, make a consistent SQLite backup. Preserve compatibility for stable IDs, typed connection direction, revisions, Trash, images, drafts, and older archives.
 
-Topic map is generated from saved topics and relationships. Keep layout deterministic, preserve all topic memberships, and distinguish shared-topic overlap from typed conceptual relationships. Its expansion controls change the view rather than the collection. Manual Canvas navigation is retired, while legacy board data and archive routes remain available for recovery.
+Topic map is generated from saved topics and relationships. Keep layout deterministic, preserve all topic memberships, and distinguish shared-topic overlap from typed conceptual relationships. Its expansion controls change the view rather than the collection. The standalone Connections page and manual Canvas navigation are retired. Keep the Library's compact relationship preview and Topic map's focused relationship explorer. Legacy board data and archive routes remain available for recovery.
 
 ### Local service boundary
 

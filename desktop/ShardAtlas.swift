@@ -269,8 +269,8 @@ final class DesktopDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, 
         edit.addItem(.separator()); edit.addItem(menuItem("Find Shards", command: "search", key: "k"))
         addMenu(edit, to: main)
         let view = NSMenu(title: "View")
-        for (title, command, key) in [("Library", "library", "1"), ("Connections", "graph", "2"),
-                                      ("Topic Map", "atlas", "3"), ("C++ Releases", "timeline", "4")] {
+        for (title, command, key) in [("Library", "library", "1"), ("Topic Map", "atlas", "3"),
+                                      ("C++ Releases", "timeline", "4")] {
             view.addItem(menuItem(title, command: command, key: key))
         }
         addMenu(view, to: main)

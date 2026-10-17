@@ -2,7 +2,7 @@
 
 **A local workspace for technical ideas and the connections between them.**
 
-Write an explanation, keep the code and sources beside it, and connect it to what you already know. Shard Atlas brings notes, an automatic topic map, and a connection map into a macOS app that works offline.
+Write an explanation, keep the code and sources beside it, and connect it to what you already know. Shard Atlas brings notes, an automatic topic map, and a C++ release timeline into a macOS app that works offline.
 
 [User guide](docs/guide.md) · [Development](docs/development.md) · [Contributing](CONTRIBUTING.md)
 
