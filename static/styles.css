@@ -401,6 +401,83 @@ kbd { font-family: inherit; font-size: 10px; line-height: 1.6; white-space: nowr
 .spiral-trail-jump { border: 0; background: transparent; padding: 0; color: var(--green); font-size: 10px; font-weight: 600; }
 .spiral-trail-code > summary { cursor: pointer; font-size: 10px; color: var(--green); }
 .spiral-trail .spiral-reference-note { margin: 14px 0 0; }
+
+/* World colors frame the reference; shard surfaces and syntax colors stay neutral. */
+[data-spiral-release="cpp98"] { --world-accent: #934c3c; --world-ink: #65382f; --world-muted: #796156; --world-soft: #f4e9e2; --world-line: #d5b6a5; --world-seam: linear-gradient(90deg,#6e3940,#b66a43); }
+[data-spiral-release="cpp03"] { --world-accent: #426d65; --world-ink: #2e524b; --world-muted: #586c64; --world-soft: #e9efea; --world-line: #b6cbc1; --world-seam: linear-gradient(90deg,#426d65,#9ab8bf); }
+[data-spiral-release="cpp11"] { --world-accent: #387c87; --world-ink: #2a5963; --world-muted: #536d6f; --world-soft: #e5eff0; --world-line: #abcbd0; --world-seam: linear-gradient(90deg,#286778,#b89a50); }
+[data-spiral-release="cpp14"] { --world-accent: #8c7040; --world-ink: #645332; --world-muted: #706651; --world-soft: #f2eddf; --world-line: #cfc3a1; --world-seam: linear-gradient(90deg,#b88142 0 33.33%,#66816b 33.33% 66.66%,#58948c 66.66% 100%); }
+[data-spiral-release="cpp17"] { --world-accent: #80638e; --world-ink: #5c456c; --world-muted: #706077; --world-soft: #eee8f1; --world-line: #c7b6d1; --world-seam: linear-gradient(90deg,#514269,#9e7b9d); }
+[data-spiral-release="cpp20"] { --world-accent: #586b8c; --world-ink: #3e4b67; --world-muted: #60697b; --world-soft: #e8ecf2; --world-line: #b6c1d3; --world-seam: linear-gradient(90deg,#3f506f,#a4aec1); }
+[data-spiral-release="cpp23"] { --world-accent: #5a799b; --world-ink: #3c5673; --world-muted: #5a6d7f; --world-soft: #e8eff3; --world-line: #b5c8d5; --world-seam: linear-gradient(90deg,#729eb9 0 33.33%,#b78d50 33.33% 66.66%,#777bb0 66.66% 100%); }
+[data-spiral-release="cpp26"] { --world-accent: #936c8a; --world-ink: #694b66; --world-muted: #736170; --world-soft: #f1e9ee; --world-line: #d0b6c9; --world-seam: linear-gradient(90deg,#c48699 0 25%,#66829b 25% 50%,#8c7cac 50% 75%,#b28a57 75% 100%); }
+.spiral-release[data-spiral-release] { border-color: var(--world-line); }
+.spiral-release[data-spiral-release] .release-heading { position: relative; padding-top: 19px; border-bottom-color: var(--world-line); background: var(--world-soft); }
+.spiral-release[data-spiral-release] .release-heading::before { content: ""; position: absolute; inset: 0 0 auto; height: 4px; background: var(--world-seam); }
+.spiral-release[data-spiral-release="cpp98"] { --world-motif: url("/spiral/emblems/dragonspyre.svg"); }
+.spiral-release[data-spiral-release="cpp03"] { --world-motif: url("/spiral/emblems/grizzleheim.svg"); }
+.spiral-release[data-spiral-release="cpp11"] { --world-motif: url("/spiral/emblems/celestia.svg"); }
+.spiral-release[data-spiral-release="cpp17"] { --world-motif: url("/spiral/emblems/khrysalis.svg"); }
+.spiral-release[data-spiral-release="cpp20"] { --world-motif: url("/spiral/emblems/four-dungeons.svg"); }
+.spiral-release[data-spiral-release] .release-heading::after { content: ""; position: absolute; top: 6px; right: 16px; width: 26px; height: 26px; background: var(--world-motif,none) center / contain no-repeat; opacity: .075; pointer-events: none; }
+.spiral-release[data-spiral-release] .release-heading h2 { color: var(--world-ink); }
+.spiral-release[data-spiral-release] .release-heading > div > span,
+.spiral-release[data-spiral-release] .release-heading p { color: var(--world-muted); }
+.spiral-release[data-spiral-release] .release-heading small { color: var(--world-ink); border-color: var(--world-line); background: #fffefa85; }
+.spiral-release[data-spiral-release] .spiral-world { border-bottom-color: var(--world-line); background: #faf8f0; }
+.spiral-release[data-spiral-release] .spiral-banner figcaption strong { color: var(--world-ink); }
+.spiral-release[data-spiral-release] .spiral-banner figcaption > span { color: var(--world-muted); }
+.spiral-release[data-spiral-release] .spiral-world-info > summary { color: var(--world-ink); }
+.spiral-release[data-spiral-release] .spiral-world-info > summary::marker { color: var(--world-accent); }
+.spiral-release[data-spiral-release]:focus-visible { outline-color: var(--world-accent); outline-offset: 3px; }
+.spiral-portal[data-spiral-release] { position: relative; border-color: var(--world-line); background: #fbfaf5; }
+.spiral-portal[data-spiral-release]::before { content: ""; position: absolute; inset: 0 10px auto; height: 2px; border-radius: 0 0 2px 2px; background: var(--world-seam); }
+.spiral-portal[data-spiral-release] .spiral-portal-label strong { color: var(--world-ink); }
+.spiral-portal[data-spiral-release] .spiral-portal-label > span { color: var(--world-muted); }
+.spiral-portal[data-spiral-release]:hover { background: var(--world-soft); border-color: var(--world-accent); }
+.spiral-portal[data-spiral-release][aria-current="step"] { border-color: var(--world-accent); background: var(--world-soft); box-shadow: inset 0 -3px var(--world-accent),0 0 0 1px var(--world-accent); }
+.spiral-portal[data-spiral-release][aria-current="step"] .spiral-portal-label strong { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.spiral-portal[data-spiral-release]:focus-visible { outline-color: var(--world-accent); }
+.spiral-portal-emblems { display: flex; flex-shrink: 0; align-items: center; justify-content: center; gap: 4px; width: 100%; max-width: 88px; height: 48px; }
+.spiral-portal-emblem { display: block; flex-shrink: 0; width: 44px; height: 44px; object-fit: contain; }
+.spiral-portal-emblems[data-world-count="3"] .spiral-portal-emblem { width: 26px; height: 30px; }
+.spiral-portal-emblems[data-world-count="4"] { display: grid; grid-template-columns: repeat(2,22px); grid-template-rows: repeat(2,22px); gap: 4px; }
+.spiral-portal-emblems[data-world-count="4"] .spiral-portal-emblem { width: 22px; height: 22px; }
+.spiral-world-emblems { display: grid; grid-template-columns: minmax(0,1fr); align-content: center; gap: 4px; min-height: 72px; padding: 6px 12px; }
+.spiral-banner figcaption > .spiral-world-emblems { min-height: 64px; padding: 0; }
+.spiral-world-emblem { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 3px 6px; color: #50584c; font-size: 11px; line-height: 1.35; }
+.spiral-world-emblem img { display: block; flex-shrink: 0; width: 32px; height: 32px; object-fit: contain; }
+.spiral-world-emblem > span { min-width: 0; overflow-wrap: anywhere; }
+.spiral-world-emblems[data-world-count="1"] .spiral-world-emblem > span { color: var(--world-ink,#4f5d43); font: 500 14px/1.4 Georgia,"Times New Roman",serif; }
+.spiral-world-emblems[data-world-count="3"] { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.spiral-world-emblems[data-world-count="3"] .spiral-world-emblem { flex-direction: column; justify-content: center; gap: 3px; padding: 4px 2px; text-align: center; font-size: 10px; }
+.spiral-world-emblems[data-world-count="3"] .spiral-world-emblem img { width: 28px; height: 28px; }
+.spiral-world-emblems[data-world-count="4"] { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.spiral-world-emblems[data-world-count="4"] .spiral-world-emblem { gap: 6px; padding: 2px 5px; font-size: 10px; }
+.spiral-world-emblems[data-world-count="4"] .spiral-world-emblem img { width: 22px; height: 22px; }
+.spiral-world-emblems[data-world-count="3"] .spiral-world-emblem,
+.spiral-world-emblems[data-world-count="4"] .spiral-world-emblem { border-radius: 5px; border-bottom: 2px solid var(--emblem-accent,var(--world-line,#c7d1b9)); background: var(--emblem-soft,#f0efe8); }
+.spiral-world-emblem[data-world="dragonspyre"] { --emblem-accent: #9c5a47; --emblem-soft: #f3e8df; }
+.spiral-world-emblem[data-world="grizzleheim"] { --emblem-accent: #5f8177; --emblem-soft: #e8eeea; }
+.spiral-world-emblem[data-world="celestia"] { --emblem-accent: #528c97; --emblem-soft: #e6eff0; }
+.spiral-world-emblem[data-world="zafaria"] { --emblem-accent: #ad8246; --emblem-soft: #f1eadc; }
+.spiral-world-emblem[data-world="avalon"] { --emblem-accent: #6c856c; --emblem-soft: #e9eee3; }
+.spiral-world-emblem[data-world="azteca"] { --emblem-accent: #5f9487; --emblem-soft: #e5eee7; }
+.spiral-world-emblem[data-world="khrysalis"] { --emblem-accent: #8d7099; --emblem-soft: #eee7f0; }
+.spiral-world-emblem[data-world="castle-darkmoor"], .spiral-world-emblem[data-world="darkmoor"], .spiral-world-emblem[data-world="four-dungeons"] { --emblem-accent: #66778f; --emblem-soft: #e8ecf1; }
+.spiral-world-emblem[data-world="polaris"] { --emblem-accent: #7aa0b6; --emblem-soft: #e6eef3; }
+.spiral-world-emblem[data-world="mirage"] { --emblem-accent: #b58a50; --emblem-soft: #f3ecdf; }
+.spiral-world-emblem[data-world="empyrea"] { --emblem-accent: #8582ad; --emblem-soft: #edebf4; }
+.spiral-world-emblem[data-world="karamelle"] { --emblem-accent: #ba859c; --emblem-soft: #f3e8ed; }
+.spiral-world-emblem[data-world="lemuria"] { --emblem-accent: #6e899a; --emblem-soft: #e8eef1; }
+.spiral-world-emblem[data-world="novus"] { --emblem-accent: #9687b1; --emblem-soft: #eeeaf3; }
+.spiral-world-emblem[data-world="wallaru"] { --emblem-accent: #ae8b59; --emblem-soft: #f2ecdf; }
+.spiral-trail-jump { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; text-align: left; }
+.spiral-trail-jump[data-spiral-release] { color: var(--world-ink); }
+.spiral-trail-jump:hover > span:last-child { text-decoration: underline; text-underline-offset: 3px; }
+.spiral-trail-jump[data-spiral-release]:focus-visible { outline-color: var(--world-accent); }
+.spiral-trail-emblems { display: inline-flex; flex-shrink: 0; align-items: center; gap: 2px; }
+.spiral-trail-emblem { display: block; flex-shrink: 0; width: 18px; height: 20px; object-fit: contain; }
 @media (max-width: 1100px) {
   .spiral-portals { display: flex; flex-wrap: nowrap; overflow-x: auto; align-items: stretch; padding: 5px 3px 13px; scroll-snap-type: x proximity; }
   .spiral-portal { flex: 0 0 110px; scroll-snap-align: start; }

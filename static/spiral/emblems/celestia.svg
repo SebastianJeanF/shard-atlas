@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-labelledby="celestia-title celestia-desc">
+<title id="celestia-title">Celestia inspired original medallion</title>
+<desc id="celestia-desc">Astral rings surround a star above a calm underwater wave. Original geometric artwork for Shard Atlas, with no official game imagery reproduced.</desc>
+<defs><clipPath id="celestia-disc"><circle cx="80" cy="80" r="66"/></clipPath></defs>
+<circle cx="80" cy="80" r="75" fill="#25313b"/>
+<circle cx="80" cy="80" r="71" fill="#1a4154" stroke="#c8b58c" stroke-width="5"/>
+<circle cx="80" cy="80" r="64" fill="none" stroke="#a7d9d5" stroke-width="2" opacity=".45"/>
+<g clip-path="url(#celestia-disc)">
+<g fill="none" stroke="#7ec2ca" stroke-width="5">
+<ellipse cx="80" cy="74" rx="48" ry="22" transform="rotate(-38 80 74)"/>
+<ellipse cx="80" cy="74" rx="48" ry="22" transform="rotate(38 80 74)"/>
+</g>
+<path d="m80 41 8 23 24 10-24 8-8 24-9-24-23-8 23-10Z" fill="#f1dfad"/>
+<circle cx="80" cy="74" r="9" fill="#fff0c8"/>
+<path d="M31 123q25-13 49 0t49 0" fill="none" stroke="#acdeda" stroke-width="7" stroke-linecap="round"/>
+</g>
+<path d="m80 5 5 5-5 5-5-5Z" fill="#efe0ba"/>
+</svg>

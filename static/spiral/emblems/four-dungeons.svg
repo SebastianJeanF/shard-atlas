@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-labelledby="four-dungeons-title four-dungeons-desc">
+<title id="four-dungeons-title">Four Dungeons inspired original medallion</title>
+<desc id="four-dungeons-desc">An original gothic gate has four separate illuminated panes. Original geometric artwork for Shard Atlas, with no official game imagery reproduced.</desc>
+<defs><clipPath id="four-dungeons-disc"><circle cx="80" cy="80" r="66"/></clipPath></defs>
+<circle cx="80" cy="80" r="75" fill="#25313b"/>
+<circle cx="80" cy="80" r="71" fill="#303448" stroke="#c8b58c" stroke-width="5"/>
+<circle cx="80" cy="80" r="64" fill="none" stroke="#c6bacf" stroke-width="2" opacity=".45"/>
+<g clip-path="url(#four-dungeons-disc)">
+<path d="M39 130V78q0-28 41-50 41 22 41 50v52Z" fill="#9d91a2" stroke="#e4cf9d" stroke-width="5"/>
+<path d="M51 130V80q0-18 29-37 29 19 29 37v50Z" fill="#252d41"/>
+<path d="M61 89V73l11-9 1 25Zm26 0V64l12 9v16Z" fill="#ead5a1"/>
+<rect x="61" y="100" width="12" height="20" rx="2" fill="#c7a5cc"/>
+<rect x="87" y="100" width="12" height="20" rx="2" fill="#c7a5cc"/>
+<path d="M33 131h94" stroke="#e4cf9d" stroke-width="6" stroke-linecap="round"/>
+</g>
+<path d="m80 5 5 5-5 5-5-5Z" fill="#efe0ba"/>
+</svg>

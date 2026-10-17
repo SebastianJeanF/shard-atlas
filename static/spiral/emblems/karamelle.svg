@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-labelledby="karamelle-title karamelle-desc">
+<title id="karamelle-title">Karamelle inspired original medallion</title>
+<desc id="karamelle-desc">A six-petal candy rosette surrounds a striped round center. Original geometric artwork for Shard Atlas, with no official game imagery reproduced.</desc>
+<defs><clipPath id="karamelle-disc"><circle cx="80" cy="80" r="66"/></clipPath></defs>
+<circle cx="80" cy="80" r="75" fill="#25313b"/>
+<circle cx="80" cy="80" r="71" fill="#5c3c52" stroke="#c8b58c" stroke-width="5"/>
+<circle cx="80" cy="80" r="64" fill="none" stroke="#e9bdb2" stroke-width="2" opacity=".45"/>
+<g clip-path="url(#karamelle-disc)">
+<g fill="#d7a4bd" stroke="#f1d9b5" stroke-width="3">
+<ellipse cx="80" cy="47" rx="17" ry="22"/>
+<ellipse cx="80" cy="47" rx="17" ry="22" transform="rotate(60 80 80)"/>
+<ellipse cx="80" cy="47" rx="17" ry="22" transform="rotate(120 80 80)"/>
+<ellipse cx="80" cy="47" rx="17" ry="22" transform="rotate(180 80 80)"/>
+<ellipse cx="80" cy="47" rx="17" ry="22" transform="rotate(240 80 80)"/>
+<ellipse cx="80" cy="47" rx="17" ry="22" transform="rotate(300 80 80)"/>
+</g>
+<circle cx="80" cy="80" r="29" fill="#f7dfbf"/>
+<path d="M80 54q22 4 23 23L80 80ZM55 68q13-16 25-14v26Zm8 36q-14-14-8-36l25 12Zm40-27q4 19-17 31l-6-28Z" fill="#bb6f86"/>
+<circle cx="80" cy="80" r="7" fill="#f5ddba"/>
+</g>
+<path d="m80 5 5 5-5 5-5-5Z" fill="#efe0ba"/>
+</svg>

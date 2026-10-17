@@ -16,6 +16,10 @@ The C++ release catalog in `static/cpp-releases.json` contains concise authored 
 
 ## Spiral timeline companion
 
-The optional Wizard101 inspired timeline uses original SVG landscape illustrations distributed under this project's MIT license. The companion does not bundle official game artwork, logos, screenshots, or audio. World names identify the inspiration for the memory cues. Wizard101 and its fictional worlds belong to KingsIsle Entertainment. Shard Atlas is an independent project.
+The optional Wizard101 inspired timeline ships original SVG landscape illustrations and fallback emblems under this project's MIT license. The public source does not bundle official game artwork, logos, screenshots, or audio. World names identify the inspiration for the memory cues. Wizard101 and its fictional worlds belong to KingsIsle Entertainment. Shard Atlas is an independent project.
 
 Historical descriptions link to supporting announcements. These links do not imply endorsement. See the asset notes in `static/spiral/` for the illustration inventory.
+
+A local installation can use a separately acquired game-icon pack in `static/spiral/local-emblems/`. This entire directory, including its `manifest.json`, is excluded from Git. Locally installed game artwork retains its original rights and is not covered by this project's MIT license. The local server substitutes only existing image files identified by that manifest. Missing or invalid entries retain the original SVG fallback. Local desktop builds include an installed pack, while builds from the public source use the original emblems.
+
+The optional manifest uses `schemaVersion: 1` and an `icons` array. Each icon identifies a catalog emblem by `id`, gives a local raster image `file`, and can include a `sourcePageUrl` for attribution. Keep source and rights information with any locally acquired pack. A download location alone does not establish redistribution permission.

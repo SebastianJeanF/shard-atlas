@@ -14,7 +14,7 @@
   ],
   "artAttribution": {
     "metadata": "/spiral/art-attribution.json",
-    "credit": "Original geometric illustration by Shard Atlas contributors. MIT licensed. No official game artwork is reproduced.",
+    "credit": "Original geometric landscape illustrations and fallback emblems by Shard Atlas contributors. MIT licensed.",
     "license": "MIT",
     "notice": "Unofficial educational fan theme. Wizard101 and world names belong to their respective owners."
   },
@@ -41,7 +41,17 @@
       "artCredit": "Original geometric illustration by Shard Atlas contributors. MIT licensed. No official game artwork is reproduced.",
       "artLicense": "MIT",
       "artFocus": "50% 50%",
-      "examples": []
+      "examples": [],
+      "emblems": [
+        {
+          "id": "dragonspyre",
+          "name": "Dragonspyre",
+          "src": "/spiral/emblems/dragonspyre.svg",
+          "credit": "Original world-inspired emblem by Shard Atlas contributors. MIT licensed. This is not official game artwork.",
+          "license": "MIT",
+          "officialArtwork": false
+        }
+      ]
     },
     "cpp03": {
       "worldNames": [
@@ -65,7 +75,17 @@
       "artCredit": "Original geometric illustration by Shard Atlas contributors. MIT licensed. No official game artwork is reproduced.",
       "artLicense": "MIT",
       "artFocus": "50% 50%",
-      "examples": []
+      "examples": [],
+      "emblems": [
+        {
+          "id": "grizzleheim",
+          "name": "Grizzleheim",
+          "src": "/spiral/emblems/grizzleheim.svg",
+          "credit": "Original world-inspired emblem by Shard Atlas contributors. MIT licensed. This is not official game artwork.",
+          "license": "MIT",
+          "officialArtwork": false
+        }
+      ]
     },
     "cpp11": {
       "worldNames": [
@@ -89,7 +109,17 @@
       "artCredit": "Original geometric illustration by Shard Atlas contributors. MIT licensed. No official game artwork is reproduced.",
       "artLicense": "MIT",
       "artFocus": "50% 50%",
-      "examples": []
+      "examples": [],
+      "emblems": [
+        {
+          "id": "celestia",
+          "name": "Celestia",
+          "src": "/spiral/emblems/celestia.svg",
+          "credit": "Original world-inspired emblem by Shard Atlas contributors. MIT licensed. This is not official game artwork.",
+          "license": "MIT",
+          "officialArtwork": false
+        }
+      ]
     },
     "cpp14": {
       "worldNames": [
@@ -115,7 +145,33 @@
       "artCredit": "Original geometric illustration by Shard Atlas contributors. MIT licensed. No official game artwork is reproduced.",
       "artLicense": "MIT",
       "artFocus": "50% 50%",
-      "examples": []
+      "examples": [],
+      "emblems": [
+        {
+          "id": "zafaria",
+          "name": "Zafaria",
+          "src": "/spiral/emblems/zafaria.svg",
+          "credit": "Original world-inspired emblem by Shard Atlas contributors. MIT licensed. This is not official game artwork.",
+          "license": "MIT",
+          "officialArtwork": false
+        },
+        {
+          "id": "avalon",
+          "name": "Avalon",
+          "src": "/spiral/emblems/avalon.svg",
+          "credit": "Original world-inspired emblem by Shard Atlas contributors. MIT licensed. This is not official game artwork.",
+          "license": "MIT",
+          "officialArtwork": false
+        },
+        {
+          "id": "azteca",
+          "name": "Azteca",
+          "src": "/spiral/emblems/azteca.svg",
+          "credit": "Original world-inspired emblem by Shard Atlas contributors. MIT licensed. This is not official game artwork.",
+          "license": "MIT",
+          "officialArtwork": false
+        }
+      ]
     },
     "cpp17": {
       "worldNames": [
@@ -177,6 +233,16 @@
               "url": "https://eel.is/c++draft/variant.syn"
             }
           ]
+        }
+      ],
+      "emblems": [
+        {
+          "id": "khrysalis",
+          "name": "Khrysalis",
+          "src": "/spiral/emblems/khrysalis.svg",
+          "credit": "Original world-inspired emblem by Shard Atlas contributors. MIT licensed. This is not official game artwork.",
+          "license": "MIT",
+          "officialArtwork": false
         }
       ]
     },
@@ -268,6 +334,16 @@
             }
           ]
         }
+      ],
+      "emblems": [
+        {
+          "id": "four-dungeons",
+          "name": "Castle Darkmoor",
+          "src": "/spiral/emblems/four-dungeons.svg",
+          "credit": "Original world-inspired emblem by Shard Atlas contributors. MIT licensed. This is not official game artwork.",
+          "license": "MIT",
+          "officialArtwork": false
+        }
       ]
     },
     "cpp23": {
@@ -298,7 +374,33 @@
       "artCredit": "Original geometric illustration by Shard Atlas contributors. MIT licensed. No official game artwork is reproduced.",
       "artLicense": "MIT",
       "artFocus": "50% 50%",
-      "examples": []
+      "examples": [],
+      "emblems": [
+        {
+          "id": "polaris",
+          "name": "Polaris",
+          "src": "/spiral/emblems/polaris.svg",
+          "credit": "Original world-inspired emblem by Shard Atlas contributors. MIT licensed. This is not official game artwork.",
+          "license": "MIT",
+          "officialArtwork": false
+        },
+        {
+          "id": "mirage",
+          "name": "Mirage",
+          "src": "/spiral/emblems/mirage.svg",
+          "credit": "Original world-inspired emblem by Shard Atlas contributors. MIT licensed. This is not official game artwork.",
+          "license": "MIT",
+          "officialArtwork": false
+        },
+        {
+          "id": "empyrea",
+          "name": "Empyrea",
+          "src": "/spiral/emblems/empyrea.svg",
+          "credit": "Original world-inspired emblem by Shard Atlas contributors. MIT licensed. This is not official game artwork.",
+          "license": "MIT",
+          "officialArtwork": false
+        }
+      ]
     },
     "cpp26": {
       "worldNames": [
@@ -329,7 +431,41 @@
       "artCredit": "Original geometric illustration by Shard Atlas contributors. MIT licensed. No official game artwork is reproduced.",
       "artLicense": "MIT",
       "artFocus": "50% 50%",
-      "examples": []
+      "examples": [],
+      "emblems": [
+        {
+          "id": "karamelle",
+          "name": "Karamelle",
+          "src": "/spiral/emblems/karamelle.svg",
+          "credit": "Original world-inspired emblem by Shard Atlas contributors. MIT licensed. This is not official game artwork.",
+          "license": "MIT",
+          "officialArtwork": false
+        },
+        {
+          "id": "lemuria",
+          "name": "Lemuria",
+          "src": "/spiral/emblems/lemuria.svg",
+          "credit": "Original world-inspired emblem by Shard Atlas contributors. MIT licensed. This is not official game artwork.",
+          "license": "MIT",
+          "officialArtwork": false
+        },
+        {
+          "id": "novus",
+          "name": "Novus",
+          "src": "/spiral/emblems/novus.svg",
+          "credit": "Original world-inspired emblem by Shard Atlas contributors. MIT licensed. This is not official game artwork.",
+          "license": "MIT",
+          "officialArtwork": false
+        },
+        {
+          "id": "wallaru",
+          "name": "Wallaru",
+          "src": "/spiral/emblems/wallaru.svg",
+          "credit": "Original world-inspired emblem by Shard Atlas contributors. MIT licensed. This is not official game artwork.",
+          "license": "MIT",
+          "officialArtwork": false
+        }
+      ]
     }
   },
   "trail": {

@@ -625,6 +625,44 @@ class HttpTests(unittest.TestCase):
             self.assertEqual(json.loads(archive.read("shard-atlas.json")), exported)
         self.assertEqual(self.request("DELETE", f"/api/shards/{shard_id}")[2]["shards"], [])
 
+    def test_local_emblem_pack_overlays_without_mutating_public_catalog_or_knowledge(self):
+        catalog = {"schemaVersion": 1, "releases": {"cpp20": {"emblems": [
+            {"id": "four-dungeons", "name": "Castle Darkmoor", "src": "/spiral/emblems/four-dungeons.svg", "license": "MIT", "officialArtwork": False}]}}}
+        catalog_path = self.static / "spiral-timeline.json"
+        catalog_path.write_text(json.dumps(catalog))
+        self.assertEqual(self.request("GET", "/spiral-timeline.json")[2], catalog)
+        pack = self.static / "spiral" / "local-emblems"
+        pack.mkdir(parents=True)
+        (pack / "four-dungeons.png").write_bytes(base64.b64decode(PNG))
+        (pack / "manifest.json").write_text(json.dumps({"schemaVersion": 1, "icons": [
+            {"id": "four-dungeons", "file": "four-dungeons.png", "sourcePageUrl": "https://example.com/world"}]}))
+        before = self.store.state()
+        status, _, served = self.request("GET", "/spiral-timeline.json")
+        self.assertEqual(status, 200)
+        emblem = served["releases"]["cpp20"]["emblems"][0]
+        self.assertEqual(emblem["src"], "/spiral/local-emblems/four-dungeons.png")
+        self.assertTrue(emblem["officialArtwork"])
+        self.assertNotEqual(emblem["license"], "MIT")
+        self.assertEqual(emblem["sourceUrl"], "https://example.com/world")
+        self.assertEqual(json.loads(catalog_path.read_text()), catalog)
+        self.assertEqual(self.store.state(), before)
+        self.assertEqual(self.request("GET", emblem["src"])[0], 200)
+
+    def test_invalid_or_missing_local_emblems_keep_original_fallback(self):
+        catalog = {"schemaVersion": 1, "releases": {"cpp98": {"emblems": [
+            {"id": "dragonspyre", "name": "Dragonspyre", "src": "/spiral/emblems/dragonspyre.svg"}]}}}
+        (self.static / "spiral-timeline.json").write_text(json.dumps(catalog))
+        pack = self.static / "spiral" / "local-emblems"
+        pack.mkdir(parents=True)
+        manifest = pack / "manifest.json"
+        manifest.write_text("{invalid json")
+        self.assertEqual(self.request("GET", "/spiral-timeline.json")[2], catalog)
+        for filename in ("missing.png", "../../private.txt", "https://example.com/world.png", "outside.png"):
+            if filename == "outside.png":
+                (pack / filename).symlink_to(self.root / "private.txt")
+            manifest.write_text(json.dumps({"schemaVersion": 1, "icons": [{"id": "dragonspyre", "file": filename}]}))
+            self.assertEqual(self.request("GET", "/spiral-timeline.json")[2], catalog)
+
     def test_http_contribution_receipts_are_additive_and_retry_safe(self):
         batch = {"requestId": "http-chat", "shards": [{"id": "http-ai-note", "title": "HTTP contribution", "tags": ["C++", "c++"]}]}
         status, _, receipt = self.request("POST", "/api/contributions", batch)

@@ -30,7 +30,7 @@ from urllib.parse import unquote, urlsplit
 
 SCHEMA_VERSION = 1
 DATABASE_VERSION = 3
-BACKEND_VERSION = "2.4.3"  # Keep the additive API compatible with already-running contribution clients.
+BACKEND_VERSION = "2.4.4"  # Keep the additive API compatible with already-running contribution clients.
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DB = Path.home() / "Library/Application Support/Shard Atlas/shards.sqlite3"
 KINDS = {"concept", "fact", "example", "mistake", "event", "idea"}
@@ -1602,6 +1602,44 @@ class Store:
         return buffer.getvalue()
 
 
+def spiral_catalog(static_dir):
+    """Overlay an optional, Git-ignored local icon pack without changing public data."""
+    static_dir = Path(static_dir).resolve()
+    catalog = json.loads((static_dir / "spiral-timeline.json").read_text(encoding="utf-8"))
+    pack_dir = (static_dir / "spiral" / "local-emblems").resolve()
+    manifest_path = (pack_dir / "manifest.json").resolve()
+    try:
+        if (not pack_dir.is_relative_to(static_dir) or not manifest_path.is_relative_to(pack_dir)
+                or manifest_path.stat().st_size > 128 * 1024):
+            return catalog
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(manifest, dict) or manifest.get("schemaVersion") != 1 or not isinstance(manifest.get("icons"), list):
+            return catalog
+    except (OSError, ValueError, RecursionError):
+        return catalog
+    icons = {icon.get("id"): icon for icon in manifest["icons"]
+             if isinstance(icon, dict) and isinstance(icon.get("id"), str)}
+    for world in catalog.get("releases", {}).values():
+        for emblem in world.get("emblems", []):
+            icon = icons.get(emblem.get("id"), {})
+            filename = icon.get("file", "")
+            if not isinstance(filename, str) or not re.fullmatch(r"[a-z0-9-]+\.(?:png|gif|webp|jpe?g)", filename):
+                continue
+            image_path = (pack_dir / filename).resolve()
+            try:
+                if not image_path.is_relative_to(pack_dir) or not image_path.is_file() or not 0 < image_path.stat().st_size <= MAX_ASSET_BYTES:
+                    continue
+            except OSError:
+                continue
+            emblem.update({"src": f"/spiral/local-emblems/{filename}", "officialArtwork": True,
+                           "credit": "Wizard101 game artwork © KingsIsle Entertainment. Installed locally and excluded from the public source.",
+                           "license": "Copyrighted game artwork. No open redistribution license established."})
+            source = icon.get("sourcePageUrl") or icon.get("sourceUrl")
+            if isinstance(source, str) and source.startswith("https://"):
+                emblem["sourceUrl"] = source
+    return catalog
+
+
 class LocalServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
@@ -1713,6 +1751,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, data, mime)
                 if path.startswith("/api/"):
                     raise AppError("Endpoint not found.", 404)
+                if path == "/spiral-timeline.json" and (self.server.static_dir / "spiral-timeline.json").is_file():
+                    return self._send(200, spiral_catalog(self.server.static_dir))
                 relative = "index.html" if path == "/" else path.lstrip("/")
                 target = (self.server.static_dir / relative).resolve()
                 if not target.is_relative_to(self.server.static_dir) or not target.is_file():

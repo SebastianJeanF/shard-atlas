@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-labelledby="novus-title novus-desc">
+<title id="novus-title">Novus inspired original medallion</title>
+<desc id="novus-desc">Offset circles diamonds and a sculptural triangle form surreal geometry. Original geometric artwork for Shard Atlas, with no official game imagery reproduced.</desc>
+<defs><clipPath id="novus-disc"><circle cx="80" cy="80" r="66"/></clipPath></defs>
+<circle cx="80" cy="80" r="75" fill="#25313b"/>
+<circle cx="80" cy="80" r="71" fill="#45394f" stroke="#c8b58c" stroke-width="5"/>
+<circle cx="80" cy="80" r="64" fill="none" stroke="#d9bbb7" stroke-width="2" opacity=".45"/>
+<g clip-path="url(#novus-disc)">
+<circle cx="106" cy="52" r="23" fill="#d7a296"/>
+<path d="m33 63 26-26 26 26-26 26Z" fill="#7da9ac"/>
+<path d="m81 47 49 78H35Z" fill="#e3c8a1"/>
+<path d="m81 68 23 40H58Z" fill="#45394f"/>
+<path d="M35 125h95l-13 11H48Z" fill="#b09199"/>
+<circle cx="47" cy="111" r="10" fill="#9fc0bc"/>
+</g>
+<path d="m80 5 5 5-5 5-5-5Z" fill="#efe0ba"/>
+</svg>

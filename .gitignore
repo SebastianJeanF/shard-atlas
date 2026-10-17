@@ -10,3 +10,4 @@ work/
 /Shard Atlas.app/
 *.dSYM/
 /desktop/.build/
+/static/spiral/local-emblems/

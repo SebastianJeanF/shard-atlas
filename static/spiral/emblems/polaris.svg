@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-labelledby="polaris-title polaris-desc">
+<title id="polaris-title">Polaris inspired original medallion</title>
+<desc id="polaris-desc">A five-point ice crown rises above a frosted band. Original geometric artwork for Shard Atlas, with no official game imagery reproduced.</desc>
+<defs><clipPath id="polaris-disc"><circle cx="80" cy="80" r="66"/></clipPath></defs>
+<circle cx="80" cy="80" r="75" fill="#25313b"/>
+<circle cx="80" cy="80" r="71" fill="#203f55" stroke="#c8b58c" stroke-width="5"/>
+<circle cx="80" cy="80" r="64" fill="none" stroke="#bcdae2" stroke-width="2" opacity=".45"/>
+<g clip-path="url(#polaris-disc)">
+<path d="m34 62 22 20 6-39 18 26 19-26 6 39 22-20-11 48H45Z" fill="#b8d9e2"/>
+<path d="m62 43 3 47 15-21 16 21 3-47-19 26Z" fill="#e7eef0"/>
+<path d="M45 111h70v13H45Z" fill="#75a8be"/>
+<path d="m80 89 8 12-8 11-8-11Z" fill="#5c889f"/>
+<path d="M49 125h62" stroke="#e7d7ae" stroke-width="5" stroke-linecap="round"/>
+</g>
+<path d="m80 5 5 5-5 5-5-5Z" fill="#efe0ba"/>
+</svg>

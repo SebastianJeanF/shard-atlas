@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-labelledby="lemuria-title lemuria-desc">
+<title id="lemuria-title">Lemuria inspired original medallion</title>
+<desc id="lemuria-desc">Broken stone pillars and floating fragments suggest a lost structure. Original geometric artwork for Shard Atlas, with no official game imagery reproduced.</desc>
+<defs><clipPath id="lemuria-disc"><circle cx="80" cy="80" r="66"/></clipPath></defs>
+<circle cx="80" cy="80" r="75" fill="#25313b"/>
+<circle cx="80" cy="80" r="71" fill="#25494a" stroke="#c8b58c" stroke-width="5"/>
+<circle cx="80" cy="80" r="64" fill="none" stroke="#b9c4a1" stroke-width="2" opacity=".45"/>
+<g clip-path="url(#lemuria-disc)">
+<path d="m31 125 23-12 60 1 17 14-43 12Z" fill="#6e9991"/>
+<path d="m45 112 3-45 17-5-2 49Zm52-1-2-43 18 5 3 42Z" fill="#c4c9ad"/>
+<path d="m41 59 4-16 29 1-6 16Zm44 1 5-16 25 2 5 17Z" fill="#e0ce9b"/>
+<path d="m71 34 10-12 12 12-12 12Z" fill="#bb9e74"/>
+<path d="m73 93 7-13 12 10-10 15Z" fill="#97b9a6"/>
+<path d="M46 119h69" stroke="#ead8b2" stroke-width="5" stroke-linecap="round"/>
+</g>
+<path d="m80 5 5 5-5 5-5-5Z" fill="#efe0ba"/>
+</svg>

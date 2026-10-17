@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-labelledby="khrysalis-title khrysalis-desc">
+<title id="khrysalis-title">Khrysalis inspired original medallion</title>
+<desc id="khrysalis-desc">Violet web strands frame a dark eclipse with a pale rim. Original geometric artwork for Shard Atlas, with no official game imagery reproduced.</desc>
+<defs><clipPath id="khrysalis-disc"><circle cx="80" cy="80" r="66"/></clipPath></defs>
+<circle cx="80" cy="80" r="75" fill="#25313b"/>
+<circle cx="80" cy="80" r="71" fill="#372b4e" stroke="#c8b58c" stroke-width="5"/>
+<circle cx="80" cy="80" r="64" fill="none" stroke="#bea4dc" stroke-width="2" opacity=".45"/>
+<g clip-path="url(#khrysalis-disc)">
+<g fill="none" stroke="#8d73ad" stroke-width="4" stroke-linecap="round">
+<path d="m38 35 84 91M31 78l98-2M43 124l74-91M80 29v103"/>
+<path d="M49 47q30 19 62-1-8 33 13 62-32-8-60 12 3-31-15-73Z"/>
+</g>
+<circle cx="80" cy="77" r="32" fill="#dcc9ec"/>
+<circle cx="88" cy="71" r="28" fill="#443256"/>
+<path d="m80 120 8 9-8 10-8-10Z" fill="#d8bb94"/>
+</g>
+<path d="m80 5 5 5-5 5-5-5Z" fill="#efe0ba"/>
+</svg>

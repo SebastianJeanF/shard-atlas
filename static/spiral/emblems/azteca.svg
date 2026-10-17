@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-labelledby="azteca-title azteca-desc">
+<title id="azteca-title">Azteca inspired original medallion</title>
+<desc id="azteca-desc">A stepped temple stands before a low golden sun. Original geometric artwork for Shard Atlas, with no official game imagery reproduced.</desc>
+<defs><clipPath id="azteca-disc"><circle cx="80" cy="80" r="66"/></clipPath></defs>
+<circle cx="80" cy="80" r="75" fill="#25313b"/>
+<circle cx="80" cy="80" r="71" fill="#334d43" stroke="#c8b58c" stroke-width="5"/>
+<circle cx="80" cy="80" r="64" fill="none" stroke="#dfb476" stroke-width="2" opacity=".45"/>
+<g clip-path="url(#azteca-disc)">
+<circle cx="80" cy="64" r="34" fill="#d89555"/>
+<path d="M26 128v-17h15V96h14V81h13V63h24v18h13v15h14v15h15v17Z" fill="#dfbf87"/>
+<path d="M73 128V83h14v45" fill="#547967"/>
+<path d="M60 88h13m14 0h13M46 103h27m14 0h27M33 118h40m14 0h40" stroke="#a6845d" stroke-width="4"/>
+<rect x="73" y="62" width="14" height="13" rx="2" fill="#324e49"/>
+</g>
+<path d="m80 5 5 5-5 5-5-5Z" fill="#efe0ba"/>
+</svg>

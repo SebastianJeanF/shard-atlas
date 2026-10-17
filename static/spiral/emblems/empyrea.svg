@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-labelledby="empyrea-title empyrea-desc">
+<title id="empyrea-title">Empyrea inspired original medallion</title>
+<desc id="empyrea-desc">A bright cloud island floats above angular stone and lightning. Original geometric artwork for Shard Atlas, with no official game imagery reproduced.</desc>
+<defs><clipPath id="empyrea-disc"><circle cx="80" cy="80" r="66"/></clipPath></defs>
+<circle cx="80" cy="80" r="75" fill="#25313b"/>
+<circle cx="80" cy="80" r="71" fill="#293d5a" stroke="#c8b58c" stroke-width="5"/>
+<circle cx="80" cy="80" r="64" fill="none" stroke="#adced2" stroke-width="2" opacity=".45"/>
+<g clip-path="url(#empyrea-disc)">
+<path d="m79 29-15 29h16L69 82l32-34H84l13-19Z" fill="#edcf85"/>
+<path d="M39 95q-14-7-6-20 5-9 17-7 3-18 23-16 15-1 20 13 18-6 26 10 13 0 14 12 0 12-15 13H46Z" fill="#bdd6d9"/>
+<path d="m46 102 24 29 10-15 10 17 28-31Z" fill="#7292a0"/>
+<path d="m71 102 9 14 10-14Z" fill="#e1d5aa"/>
+<path d="M31 116h15m74 0h10" stroke="#c1d2d9" stroke-width="4" stroke-linecap="round"/>
+</g>
+<path d="m80 5 5 5-5 5-5-5Z" fill="#efe0ba"/>
+</svg>

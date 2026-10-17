@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-labelledby="wallaru-title wallaru-desc">
+<title id="wallaru-title">Wallaru inspired original medallion</title>
+<desc id="wallaru-desc">Pale eucalyptus leaves rise in front of an Outback sunset. Original geometric artwork for Shard Atlas, with no official game imagery reproduced.</desc>
+<defs><clipPath id="wallaru-disc"><circle cx="80" cy="80" r="66"/></clipPath></defs>
+<circle cx="80" cy="80" r="75" fill="#25313b"/>
+<circle cx="80" cy="80" r="71" fill="#58413c" stroke="#c8b58c" stroke-width="5"/>
+<circle cx="80" cy="80" r="64" fill="none" stroke="#c8c59d" stroke-width="2" opacity=".45"/>
+<g clip-path="url(#wallaru-disc)">
+<circle cx="94" cy="74" r="37" fill="#dba071"/>
+<path d="M20 125q36-15 65-4t58-3v24H20Z" fill="#a66d50"/>
+<path d="M58 128q-2-51 33-91" fill="none" stroke="#e0d6ae" stroke-width="6" stroke-linecap="round"/>
+<g fill="#a9c4a0">
+<ellipse cx="57" cy="100" rx="9" ry="20" transform="rotate(-44 57 100)"/>
+<ellipse cx="80" cy="93" rx="9" ry="22" transform="rotate(42 80 93)"/>
+<ellipse cx="66" cy="72" rx="9" ry="21" transform="rotate(-41 66 72)"/>
+<ellipse cx="95" cy="65" rx="9" ry="21" transform="rotate(40 95 65)"/>
+</g>
+</g>
+<path d="m80 5 5 5-5 5-5-5Z" fill="#efe0ba"/>
+</svg>

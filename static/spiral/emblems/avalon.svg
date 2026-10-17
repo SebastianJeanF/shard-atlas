@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-labelledby="avalon-title avalon-desc">
+<title id="avalon-title">Avalon inspired original medallion</title>
+<desc id="avalon-desc">A broad heraldic shield contains a simple crenellated castle. Original geometric artwork for Shard Atlas, with no official game imagery reproduced.</desc>
+<defs><clipPath id="avalon-disc"><circle cx="80" cy="80" r="66"/></clipPath></defs>
+<circle cx="80" cy="80" r="75" fill="#25313b"/>
+<circle cx="80" cy="80" r="71" fill="#253c4b" stroke="#c8b58c" stroke-width="5"/>
+<circle cx="80" cy="80" r="64" fill="none" stroke="#b6cebc" stroke-width="2" opacity=".45"/>
+<g clip-path="url(#avalon-disc)">
+<path d="M80 30q25 15 48 15v41q-1 29-48 48-47-19-48-48V45q23 0 48-15Z" fill="#b6cebc" stroke="#e6d4a4" stroke-width="5"/>
+<path d="M48 101V62h12v10h12V56h16v16h12V62h12v39Z" fill="#345760"/>
+<path d="M70 104V88a10 10 0 0 1 20 0v16" fill="#e7d6aa"/>
+<path d="M47 108h66" stroke="#345760" stroke-width="6" stroke-linecap="round"/>
+</g>
+<path d="m80 5 5 5-5 5-5-5Z" fill="#efe0ba"/>
+</svg>

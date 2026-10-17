@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-labelledby="zafaria-title zafaria-desc">
+<title id="zafaria-title">Zafaria inspired original medallion</title>
+<desc id="zafaria-desc">A spreading acacia silhouette crosses a large savanna sun. Original geometric artwork for Shard Atlas, with no official game imagery reproduced.</desc>
+<defs><clipPath id="zafaria-disc"><circle cx="80" cy="80" r="66"/></clipPath></defs>
+<circle cx="80" cy="80" r="75" fill="#25313b"/>
+<circle cx="80" cy="80" r="71" fill="#653e29" stroke="#c8b58c" stroke-width="5"/>
+<circle cx="80" cy="80" r="64" fill="none" stroke="#edbf69" stroke-width="2" opacity=".45"/>
+<g clip-path="url(#zafaria-disc)">
+<circle cx="92" cy="64" r="32" fill="#eeb663"/>
+<path d="M22 126q31-15 59-5t57 0v15H22Z" fill="#b77243"/>
+<path d="M77 121 81 80 60 67m20 26 24-22" fill="none" stroke="#e7d9a0" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M31 68q0-17 19-15 11-19 29-8 21-13 32 7 18-2 21 15-24 13-50 7-27 8-51-6Z" fill="#2a5942"/>
+<path d="M39 62q15-7 29-4m23-1 27 5" fill="none" stroke="#6f9d65" stroke-width="4" stroke-linecap="round"/>
+</g>
+<path d="m80 5 5 5-5 5-5-5Z" fill="#efe0ba"/>
+</svg>

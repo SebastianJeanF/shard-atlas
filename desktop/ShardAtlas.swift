@@ -25,7 +25,7 @@ struct DesktopConfiguration {
         let metadataURL = Bundle.main.url(forResource: "desktop-config", withExtension: "json")
         let metadata = suppliedMetadata ?? metadataURL.flatMap { try? Data(contentsOf: $0) }
             .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
-        backendVersion = metadata["backendVersion"] as? String ?? "2.4.3"
+        backendVersion = metadata["backendVersion"] as? String ?? "2.4.4"
         let qaDatabase = argument("--qa-db") ?? metadata["qaDatabase"] as? String
         isQA = qaDatabase != nil
         if let qaDatabase {

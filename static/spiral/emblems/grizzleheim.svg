@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-labelledby="grizzleheim-title grizzleheim-desc">
+<title id="grizzleheim-title">Grizzleheim inspired original medallion</title>
+<desc id="grizzleheim-desc">A geometric pine above a warm timber crosspiece. Original geometric artwork for Shard Atlas, with no official game imagery reproduced.</desc>
+<defs><clipPath id="grizzleheim-disc"><circle cx="80" cy="80" r="66"/></clipPath></defs>
+<circle cx="80" cy="80" r="75" fill="#25313b"/>
+<circle cx="80" cy="80" r="71" fill="#183d36" stroke="#c8b58c" stroke-width="5"/>
+<circle cx="80" cy="80" r="64" fill="none" stroke="#a7c59c" stroke-width="2" opacity=".45"/>
+<g clip-path="url(#grizzleheim-disc)">
+<rect x="72" y="87" width="16" height="38" rx="3" fill="#d5af79"/>
+<path d="m80 30-24 33h13L46 91h18l-24 22h80L96 91h18L91 63h13Z" fill="#a9cea5"/>
+<path d="m80 48-9 20h9V96l17 9H63l17-24" fill="#70a78e"/>
+<rect x="43" y="119" width="74" height="11" rx="5" fill="#b68761"/>
+<path d="M51 123h56" stroke="#e7c792" stroke-width="3" stroke-linecap="round"/>
+</g>
+<path d="m80 5 5 5-5 5-5-5Z" fill="#efe0ba"/>
+</svg>

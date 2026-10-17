@@ -4,7 +4,7 @@
   "licenseFile": "LICENSE.txt",
   "copyright": "Copyright (c) 2026 Sebastian Jean-Francois",
   "creator": "Shard Atlas contributors",
-  "notice": "Unofficial educational fan theme. Wizard101 and world names are trademarks of their respective owners. These original geometric landscapes are not official KingsIsle artwork.",
+  "notice": "Unofficial educational fan theme. Wizard101 and world names are trademarks of their respective owners. These original landscapes and fallback emblems are not official KingsIsle artwork. Any locally installed game icons are excluded from this inventory and retain their separate rights.",
   "assets": [
     {
       "file": "cpp98.svg",
@@ -84,6 +84,141 @@
       "license": "MIT",
       "source": "Original SVG geometry authored for Shard Atlas. No third-party image files or official game artwork were used.",
       "inspiration": "Karamelle, Lemuria, Novus and Wallaru",
+      "officialArtwork": false
+    },
+    {
+      "file": "emblems/dragonspyre.svg",
+      "title": "Dragonspyre study emblem",
+      "creator": "Shard Atlas contributors",
+      "license": "MIT",
+      "source": "Original SVG geometry authored for Shard Atlas. No third-party image files or official game artwork were used.",
+      "inspiration": "Dragonspyre",
+      "officialArtwork": false
+    },
+    {
+      "file": "emblems/grizzleheim.svg",
+      "title": "Grizzleheim study emblem",
+      "creator": "Shard Atlas contributors",
+      "license": "MIT",
+      "source": "Original SVG geometry authored for Shard Atlas. No third-party image files or official game artwork were used.",
+      "inspiration": "Grizzleheim",
+      "officialArtwork": false
+    },
+    {
+      "file": "emblems/celestia.svg",
+      "title": "Celestia study emblem",
+      "creator": "Shard Atlas contributors",
+      "license": "MIT",
+      "source": "Original SVG geometry authored for Shard Atlas. No third-party image files or official game artwork were used.",
+      "inspiration": "Celestia",
+      "officialArtwork": false
+    },
+    {
+      "file": "emblems/zafaria.svg",
+      "title": "Zafaria study emblem",
+      "creator": "Shard Atlas contributors",
+      "license": "MIT",
+      "source": "Original SVG geometry authored for Shard Atlas. No third-party image files or official game artwork were used.",
+      "inspiration": "Zafaria",
+      "officialArtwork": false
+    },
+    {
+      "file": "emblems/avalon.svg",
+      "title": "Avalon study emblem",
+      "creator": "Shard Atlas contributors",
+      "license": "MIT",
+      "source": "Original SVG geometry authored for Shard Atlas. No third-party image files or official game artwork were used.",
+      "inspiration": "Avalon",
+      "officialArtwork": false
+    },
+    {
+      "file": "emblems/azteca.svg",
+      "title": "Azteca study emblem",
+      "creator": "Shard Atlas contributors",
+      "license": "MIT",
+      "source": "Original SVG geometry authored for Shard Atlas. No third-party image files or official game artwork were used.",
+      "inspiration": "Azteca",
+      "officialArtwork": false
+    },
+    {
+      "file": "emblems/khrysalis.svg",
+      "title": "Khrysalis study emblem",
+      "creator": "Shard Atlas contributors",
+      "license": "MIT",
+      "source": "Original SVG geometry authored for Shard Atlas. No third-party image files or official game artwork were used.",
+      "inspiration": "Khrysalis",
+      "officialArtwork": false
+    },
+    {
+      "file": "emblems/four-dungeons.svg",
+      "title": "Castle Darkmoor study emblem",
+      "creator": "Shard Atlas contributors",
+      "license": "MIT",
+      "source": "Original SVG geometry authored for Shard Atlas. No third-party image files or official game artwork were used.",
+      "inspiration": "Castle Darkmoor",
+      "officialArtwork": false
+    },
+    {
+      "file": "emblems/polaris.svg",
+      "title": "Polaris study emblem",
+      "creator": "Shard Atlas contributors",
+      "license": "MIT",
+      "source": "Original SVG geometry authored for Shard Atlas. No third-party image files or official game artwork were used.",
+      "inspiration": "Polaris",
+      "officialArtwork": false
+    },
+    {
+      "file": "emblems/mirage.svg",
+      "title": "Mirage study emblem",
+      "creator": "Shard Atlas contributors",
+      "license": "MIT",
+      "source": "Original SVG geometry authored for Shard Atlas. No third-party image files or official game artwork were used.",
+      "inspiration": "Mirage",
+      "officialArtwork": false
+    },
+    {
+      "file": "emblems/empyrea.svg",
+      "title": "Empyrea study emblem",
+      "creator": "Shard Atlas contributors",
+      "license": "MIT",
+      "source": "Original SVG geometry authored for Shard Atlas. No third-party image files or official game artwork were used.",
+      "inspiration": "Empyrea",
+      "officialArtwork": false
+    },
+    {
+      "file": "emblems/karamelle.svg",
+      "title": "Karamelle study emblem",
+      "creator": "Shard Atlas contributors",
+      "license": "MIT",
+      "source": "Original SVG geometry authored for Shard Atlas. No third-party image files or official game artwork were used.",
+      "inspiration": "Karamelle",
+      "officialArtwork": false
+    },
+    {
+      "file": "emblems/lemuria.svg",
+      "title": "Lemuria study emblem",
+      "creator": "Shard Atlas contributors",
+      "license": "MIT",
+      "source": "Original SVG geometry authored for Shard Atlas. No third-party image files or official game artwork were used.",
+      "inspiration": "Lemuria",
+      "officialArtwork": false
+    },
+    {
+      "file": "emblems/novus.svg",
+      "title": "Novus study emblem",
+      "creator": "Shard Atlas contributors",
+      "license": "MIT",
+      "source": "Original SVG geometry authored for Shard Atlas. No third-party image files or official game artwork were used.",
+      "inspiration": "Novus",
+      "officialArtwork": false
+    },
+    {
+      "file": "emblems/wallaru.svg",
+      "title": "Wallaru study emblem",
+      "creator": "Shard Atlas contributors",
+      "license": "MIT",
+      "source": "Original SVG geometry authored for Shard Atlas. No third-party image files or official game artwork were used.",
+      "inspiration": "Wallaru",
       "officialArtwork": false
     }
   ]

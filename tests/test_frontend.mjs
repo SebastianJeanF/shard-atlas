@@ -491,6 +491,28 @@ try {
       });
     } finally { if (oldPreference === undefined) storage.delete('shard-atlas-timeline-theme'); else storage.set('shard-atlas-timeline-theme', oldPreference); }
   });
+  await check('Every world has a distinct bundled fallback emblem and grouped releases show all worlds', async () => {
+    await withWorldTimeline(async () => {
+      const worlds = Object.values(t.state.spiralCatalog.releases), emblems = worlds.flatMap(world => world.emblems);
+      assert.equal(emblems.length, 15); assert.equal(new Set(emblems.map(emblem => emblem.id)).size, 15);
+      for (const world of worlds) {
+        assert.deepEqual(Array.from(world.emblems, emblem => emblem.name), Array.from(world.worldNames));
+        for (const emblem of world.emblems) {
+          assert.match(emblem.src, /^\/spiral\/emblems\/[a-z0-9-]+\.svg$/);
+          assert.ok(fs.existsSync(path.join(project, 'static', emblem.src)));
+          assert.equal(emblem.license, 'MIT'); assert.equal(emblem.officialArtwork, false);
+        }
+      }
+      const output = t.renderTimeline();
+      assert.equal((output.match(/class="spiral-world-emblem"/g) || []).length, 15);
+      assert.equal((output.match(/class="spiral-portal-emblems"/g) || []).length, 8);
+      assert.equal((output.match(/class="spiral-trail-emblems"/g) || []).length, 6);
+      assert.ok(!output.includes('class="spiral-portal-art"'));
+      assert.match(output, /data-world="four-dungeons"/);
+      t.state.timelineTheme = 'plain';
+      assert.ok(!/data-spiral-release=|spiral-world-emblem|spiral-portal-emblem/.test(t.renderTimeline()));
+    });
+  });
   await check('Portal keyboard navigation and activation reach every release with reduced-motion support', async () => {
     await withWorldTimeline(async () => {
       const ids = t.state.releaseCatalog.releases.map(release => release.id);
