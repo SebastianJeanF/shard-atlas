@@ -2,6 +2,7 @@
 
 import copy
 import concurrent.futures
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -49,6 +50,13 @@ class ContributionToolsTests(unittest.TestCase):
 
     def run_cli(self, *arguments):
         return subprocess.run([sys.executable, str(ROOT / "tools/shard_atlas_client.py"), "--base-url", self.url, *arguments], text=True, capture_output=True, timeout=15)
+
+    def instructions_fixture(self, content=b"# Contribution guide\r\n\r\nKeep examples precise.\n"):
+        guide_root = self.root / "guide-source"
+        guide_path = guide_root / "static" / "ai-instructions.md"
+        guide_path.parent.mkdir(parents=True, exist_ok=True)
+        guide_path.write_bytes(content)
+        return guide_root, guide_path
 
     def test_loopback_restrictions_and_backend_identity(self):
         self.assertEqual(loopback_url(self.url + "/"), self.url)
@@ -286,30 +294,157 @@ class ContributionToolsTests(unittest.TestCase):
         self.assertNotEqual(duplicate_output.returncode, 0)
         self.assertEqual(duplicate_output.stdout, "")
 
+    def test_cli_instructions_returns_canonical_guide(self):
+        expected = client_module.contribution_instructions()
+        result = self.run_cli("instructions")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr, "")
+        self.assertEqual(json.loads(result.stdout), expected)
+        self.assertEqual(self.store.state()["shards"], [])
+
+    def test_mcp_instructions_read_is_fresh_exact_and_does_not_contact_collection(self):
+        original = "# Guide\r\n\r\nExplain the mechanism, café.\n".encode("utf-8")
+        guide_root, guide_path = self.instructions_fixture(original)
+        collection = mock.Mock(spec=AtlasClient)
+        server = MCPServer(collection)
+        with mock.patch.object(client_module, "ROOT", guide_root):
+            result = server.call({"name": "shard_atlas_get_instructions", "arguments": {}})
+            self.assertFalse(result["isError"])
+            self.assertEqual(result["structuredContent"], {
+                "version": hashlib.sha256(original).hexdigest(), "content": original.decode("utf-8")})
+            self.assertEqual(server.instructions_version, result["structuredContent"]["version"])
+            updated = original + b"Preserve the source.\n"
+            guide_path.write_bytes(updated)
+            refreshed = server.call({"name": "shard_atlas_get_instructions", "arguments": {}})
+            self.assertEqual(refreshed["structuredContent"]["version"], hashlib.sha256(updated).hexdigest())
+            self.assertEqual(refreshed["structuredContent"]["content"], updated.decode("utf-8"))
+        self.assertEqual(collection.mock_calls, [])
+
+    def test_mcp_missing_unread_or_fabricated_instructions_cannot_write(self):
+        guide_root, guide_path = self.instructions_fixture()
+        version = hashlib.sha256(guide_path.read_bytes()).hexdigest()
+        collection = mock.Mock(spec=AtlasClient)
+        original = copy.deepcopy(self.batch)
+        with mock.patch.object(client_module, "ROOT", guide_root):
+            unread = MCPServer(collection)
+            for arguments in ({"batch": self.batch}, {"batch": self.batch, "instructionsVersion": version}):
+                with self.subTest(arguments=arguments):
+                    denied = unread.call({"name": "shard_atlas_add_knowledge", "arguments": arguments})
+                    self.assertTrue(denied["isError"])
+                    self.assertIn("shard_atlas_get_instructions", denied["content"][0]["text"])
+            served = MCPServer(collection)
+            served.call({"name": "shard_atlas_get_instructions", "arguments": {}})
+            for acknowledgment in (None, "fabricated-version"):
+                arguments = {"batch": self.batch}
+                if acknowledgment is not None:
+                    arguments["instructionsVersion"] = acknowledgment
+                with self.subTest(acknowledgment=acknowledgment):
+                    denied = served.call({"name": "shard_atlas_add_knowledge", "arguments": arguments})
+                    self.assertTrue(denied["isError"])
+                    self.assertIn("shard_atlas_get_instructions", denied["content"][0]["text"])
+        self.assertEqual(collection.mock_calls, [])
+        self.assertEqual(self.batch, original)
+
+    def test_mcp_acknowledged_guidance_saves_and_exact_retry_stays_safe(self):
+        guide_root, _ = self.instructions_fixture()
+        server = MCPServer(self.client)
+        original = copy.deepcopy(self.batch)
+        with mock.patch.object(client_module, "ROOT", guide_root):
+            instructions = server.call({"name": "shard_atlas_get_instructions", "arguments": {}})["structuredContent"]
+            request = {"name": "shard_atlas_add_knowledge", "arguments": {
+                "batch": self.batch, "instructionsVersion": instructions["version"]}}
+            saved = server.call(request)
+            self.assertFalse(saved["isError"])
+            self.assertTrue(saved["structuredContent"]["verified"])
+            self.assertEqual(saved["structuredContent"]["added"], {"shards": 2, "links": 1})
+            retried = server.call(request)
+            self.assertFalse(retried["isError"])
+            self.assertTrue(retried["structuredContent"]["verified"])
+            self.assertTrue(retried["structuredContent"]["replayed"])
+        self.assertEqual(len(self.store.state()["shards"]), 2)
+        self.assertEqual(self.batch, original)
+
+    def test_mcp_changed_guide_refuses_before_add_and_reread_allows_save(self):
+        guide_root, guide_path = self.instructions_fixture()
+        server = MCPServer(self.client)
+        original = copy.deepcopy(self.batch)
+        with mock.patch.object(client_module, "ROOT", guide_root):
+            old_version = server.call({"name": "shard_atlas_get_instructions", "arguments": {}})["structuredContent"]["version"]
+            guide_path.write_bytes(guide_path.read_bytes() + b"Check exact saved code.\n")
+            with mock.patch.object(self.client, "add", wraps=self.client.add) as add, mock.patch.object(self.client, "connect", wraps=self.client.connect) as connect:
+                denied = server.call({"name": "shard_atlas_add_knowledge", "arguments": {
+                    "batch": self.batch, "instructionsVersion": old_version}})
+                self.assertTrue(denied["isError"])
+                self.assertIn("shard_atlas_get_instructions", denied["content"][0]["text"])
+                add.assert_not_called()
+                connect.assert_not_called()
+            self.assertEqual(self.store.state()["shards"], [])
+            fresh_version = server.call({"name": "shard_atlas_get_instructions", "arguments": {}})["structuredContent"]["version"]
+            self.assertNotEqual(fresh_version, old_version)
+            saved = server.call({"name": "shard_atlas_add_knowledge", "arguments": {
+                "batch": self.batch, "instructionsVersion": fresh_version}})
+            self.assertFalse(saved["isError"])
+            self.assertTrue(saved["structuredContent"]["verified"])
+        self.assertEqual(self.batch, original)
+
+    def test_mcp_missing_guide_fails_closed_even_after_successful_read(self):
+        guide_root, guide_path = self.instructions_fixture()
+        collection = mock.Mock(spec=AtlasClient)
+        server = MCPServer(collection)
+        with mock.patch.object(client_module, "ROOT", guide_root):
+            version = server.call({"name": "shard_atlas_get_instructions", "arguments": {}})["structuredContent"]["version"]
+            guide_path.unlink()
+            self.assertTrue(server.call({"name": "shard_atlas_get_instructions", "arguments": {}})["isError"])
+            denied = server.call({"name": "shard_atlas_add_knowledge", "arguments": {
+                "batch": self.batch, "instructionsVersion": version}})
+            self.assertTrue(denied["isError"])
+        self.assertEqual(collection.mock_calls, [])
+
+    def test_mcp_instruction_arguments_keep_protocol_validation(self):
+        server = MCPServer(mock.Mock(spec=AtlasClient))
+        invalid = [
+            {"name": "shard_atlas_get_instructions", "arguments": {"unknown": True}},
+            {"name": "shard_atlas_get_instructions", "arguments": []},
+            {"name": "shard_atlas_add_knowledge", "arguments": {"batch": self.batch, "instructionsVersion": 1}},
+            {"name": "shard_atlas_add_knowledge", "arguments": {"batch": self.batch, "instructionsVersion": "version", "unknown": True}},
+        ]
+        for request in invalid:
+            with self.subTest(request=request), self.assertRaises(ProtocolError) as raised:
+                server.call(request)
+            self.assertEqual(raised.exception.code, -32602)
+
     def test_mcp_subprocess_protocol_add_and_verified_readback(self):
+        instructions = client_module.contribution_instructions()
         messages = [
             {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "qa", "version": "1"}}},
             {"jsonrpc": "2.0", "method": "notifications/initialized"},
             {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
-            {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "shard_atlas_search", "arguments": {"query": "RAII"}}},
-            {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "shard_atlas_add_knowledge", "arguments": {"batch": self.batch}}},
-            {"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "shard_atlas_read", "arguments": {"ids": ["qa-raii"]}}},
-            {"jsonrpc": "2.0", "id": 6, "method": "ping"},
+            {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "shard_atlas_get_instructions", "arguments": {}}},
+            {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "shard_atlas_search", "arguments": {"query": "RAII"}}},
+            {"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "shard_atlas_add_knowledge", "arguments": {"batch": self.batch, "instructionsVersion": instructions["version"]}}},
+            {"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "shard_atlas_read", "arguments": {"ids": ["qa-raii"]}}},
+            {"jsonrpc": "2.0", "id": 7, "method": "ping"},
         ]
         process = subprocess.run([sys.executable, str(ROOT / "tools/shard_atlas_mcp.py"), "--base-url", self.url], input="\n".join(json.dumps(item) for item in messages) + "\n", text=True, capture_output=True, timeout=20)
         self.assertEqual(process.returncode, 0, process.stderr)
         self.assertEqual(process.stderr, "")
         replies = [json.loads(line) for line in process.stdout.splitlines()]
-        self.assertEqual([item["id"] for item in replies], [1, 2, 3, 4, 5, 6])
+        self.assertEqual([item["id"] for item in replies], [1, 2, 3, 4, 5, 6, 7])
         self.assertEqual(replies[0]["result"]["protocolVersion"], "2025-11-25")
+        self.assertIn("shard_atlas_get_instructions", replies[0]["result"]["instructions"])
         listed = replies[1]["result"]["tools"]
-        self.assertEqual(len(listed), 3)
-        self.assertFalse(listed[2]["annotations"]["destructiveHint"])
-        self.assertTrue(listed[2]["annotations"]["idempotentHint"])
-        self.assertEqual(replies[2]["result"]["structuredContent"]["total"], 0)
-        self.assertTrue(replies[3]["result"]["structuredContent"]["verified"])
-        self.assertEqual(replies[4]["result"]["structuredContent"]["shards"][0]["id"], "qa-raii")
-        self.assertEqual(replies[5]["result"], {})
+        self.assertEqual(len(listed), 4)
+        by_name = {tool["name"]: tool for tool in listed}
+        add_tool = by_name["shard_atlas_add_knowledge"]
+        self.assertFalse(add_tool["annotations"]["destructiveHint"])
+        self.assertTrue(add_tool["annotations"]["idempotentHint"])
+        self.assertIn("instructionsVersion", add_tool["inputSchema"]["required"])
+        self.assertTrue(by_name["shard_atlas_get_instructions"]["annotations"]["readOnlyHint"])
+        self.assertEqual(replies[2]["result"]["structuredContent"], instructions)
+        self.assertEqual(replies[3]["result"]["structuredContent"]["total"], 0)
+        self.assertTrue(replies[4]["result"]["structuredContent"]["verified"])
+        self.assertEqual(replies[5]["result"]["structuredContent"]["shards"][0]["id"], "qa-raii")
+        self.assertEqual(replies[6]["result"], {})
 
     def test_mcp_error_types_notifications_and_protocol_only_stdout(self):
         messages = [b'not JSON\n', b'[]\n', b'{"jsonrpc":"2.0","method":"notifications/initialized"}\n', b'{"jsonrpc":"2.0","id":1,"method":"tools/list"}\n', b'{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":"future","capabilities":{},"clientInfo":{"name":"qa","version":"1"}}}\n', b'{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"unknown","arguments":{}}}\n', b'{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"shard_atlas_read","arguments":{"ids":[]}}}\n']

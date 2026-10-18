@@ -583,20 +583,21 @@ function showWikiSuggestions(){
 }
 function insertWiki(id){const s=byId(id),field=$('#shard-content');if(!s)return;const before=field.value.slice(0,field.selectionStart),match=before.match(/\[\[([^\]\n]{0,100})$/);if(!match)return;let end=field.selectionEnd;if(field.value.slice(end,end+2)===']]')end+=2;field.setRangeText(`[[id:${s.id}|${s.title.replace(/\]/g,'')}]]`,match.index,end,'end');$('#wiki-suggestions').hidden=true;field.focus();scheduleDraft('editor');refreshPreview();}
 function refreshPreview(){updateImageRecognitionButton();if(previewOpen)$('#editor-preview').innerHTML=markdown($('#shard-content').value);}
-async function loadAiInstructions(){
-  if(aiInstructions)return aiInstructions;if(aiInstructionsLoading)return aiInstructionsLoading;
+async function loadAiInstructions(refresh=false){
+  if(aiInstructionsLoading)return aiInstructionsLoading;if(aiInstructions&&!refresh)return aiInstructions;
+  aiInstructions='';$('#ai-instructions-text').value='';
   $('#ai-instructions-status').textContent='Opening instructions…';
   aiInstructionsLoading=(async()=>{const response=await fetch('/ai-instructions.md',{cache:'no-store'});if(!response.ok)throw new Error('The instructions could not be opened. Close this window and try again.');const text=await response.text();if(!text.trim())throw new Error('The instructions are empty. Reopen Shard Atlas and try again.');aiInstructions=text;$('#ai-instructions-text').value=text;$('#ai-instructions-status').textContent='Ready to copy. Your atlas stays on this Mac.';return text;})();
   try{return await aiInstructionsLoading;}catch(error){$('#ai-instructions-status').textContent=error.message;throw error;}finally{aiInstructionsLoading=null;}
 }
 async function openAiHelp(){
   if($('#help-dialog').open)$('#help-dialog').close();document.body.classList.remove('sidebar-open');if(!$('#ai-dialog').open)$('#ai-dialog').showModal();
-  try{await loadAiInstructions();}catch{}
+  try{await loadAiInstructions(true);}catch{}
 }
-async function selectAiInstructions(){await loadAiInstructions();$('#ai-instructions-panel').open=true;$('#ai-instructions-text').focus();$('#ai-instructions-text').select();}
+async function selectAiInstructions(text=null){if(text===null)text=await loadAiInstructions();$('#ai-instructions-text').value=text;$('#ai-instructions-panel').open=true;$('#ai-instructions-text').focus();$('#ai-instructions-text').select();}
 async function copyAiInstructions(){
   const button=$('#copy-ai-instructions');button.disabled=true;
-  try{const text=await loadAiInstructions(),native=window.webkit?.messageHandlers?.nativeClipboard;try{if(native)native.postMessage({text});else await navigator.clipboard.writeText(text);$('#ai-instructions-status').textContent='Instructions copied. Paste them into your other chat.';toast('AI instructions copied.');}catch{await selectAiInstructions();$('#ai-instructions-status').textContent='Automatic copying is unavailable. The instructions are selected below; press ⌘ C or Ctrl C to copy them.';}}
+  try{const text=await loadAiInstructions(true),native=window.webkit?.messageHandlers?.nativeClipboard;try{if(native)native.postMessage({text});else await navigator.clipboard.writeText(text);$('#ai-instructions-status').textContent='Instructions copied. Paste them into your other chat.';toast('AI instructions copied.');}catch{await selectAiInstructions(text);$('#ai-instructions-status').textContent='Automatic copying is unavailable. The instructions are selected below; press ⌘ C or Ctrl C to copy them.';}}
   finally{button.disabled=false;}
 }
 function imageIdsInEditor(){return [...$('#shard-content').value.matchAll(/!\[[^\]]*\]\(\/assets\/([A-Za-z0-9_.:-]+)\)/g)].map(m=>m[1]);}

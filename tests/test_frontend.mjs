@@ -136,7 +136,8 @@ try {
   let failDelete = false, failDraftPut = false, failReleaseLoad = false, releaseResponse = null, failSpiralLoad = false, spiralResponse = null, reducedMotion = false, activeWrites = 0, maxActiveWrites = 0;
   let failAiInstructions = false, failClipboard = false, aiInstructionsRequests = 0;
   let stateReadCount = 0, stateResponseGate = null, releaseReadCount = 0, releaseResponseGate = null;
-  const instructionText = '# Add knowledge to Shard Atlas\n\nCheck for duplicates and verify every saved note.\n', clipboardWrites = [];
+  let instructionText = '# Add knowledge to Shard Atlas\n\nCheck for duplicates and verify every saved note.\n';
+  const clipboardWrites = [];
   const browserFetch = async (url, options = {}) => {
     const full = new URL(url, base), method = options.method || 'GET';
     if (method !== 'GET') { apiWrites++; activeWrites++; maxActiveWrites = Math.max(maxActiveWrites, activeWrites); }
@@ -150,7 +151,7 @@ try {
       if (full.pathname === '/cpp-releases.json' && releaseResponse) return { ok: true, json: async () => releaseResponse };
       if (full.pathname === '/spiral-timeline.json' && failSpiralLoad) return { ok: false, json: async () => ({ error: 'Simulated missing world guide' }) };
       if (full.pathname === '/spiral-timeline.json' && spiralResponse) return { ok: true, json: async () => spiralResponse };
-      if (full.pathname === '/ai-instructions.md') { aiInstructionsRequests++; return { ok: !failAiInstructions, text: async () => instructionText }; }
+      if (full.pathname === '/ai-instructions.md') { assert.equal(options.cache, 'no-store'); aiInstructionsRequests++; return { ok: !failAiInstructions, text: async () => instructionText }; }
       if (failDelete && method === 'DELETE' && full.pathname.startsWith('/api/drafts/')) return { ok: false, json: async () => ({ error: 'Simulated draft delete failure' }) };
       if (failDraftPut && method === 'PUT' && full.pathname.startsWith('/api/drafts/')) return { ok: false, json: async () => ({ error: 'Simulated draft save failure' }) };
       await delay(4); return await fetch(full, options);
@@ -390,8 +391,27 @@ try {
     await t.runAction('copy-ai-instructions', { dataset: {} }); assert.equal(nativeCopies[0], instructionText);
     delete w.webkit; failClipboard = true; await t.runAction('copy-ai-instructions', { dataset: {} });
     assert.ok($('#ai-instructions-panel').open); assert.equal($('#ai-instructions-text').selectionEnd, instructionText.length);
-    assert.match($('#ai-instructions-status').textContent, /selected below/); assert.equal(aiInstructionsRequests, 2); failClipboard = false;
+    assert.match($('#ai-instructions-status').textContent, /selected below/); assert.equal(aiInstructionsRequests, 4); failClipboard = false;
     $('#ai-instructions-text').selectionEnd = 0; await t.runAction('select-ai-instructions', { dataset: {} }); assert.equal($('#ai-instructions-text').selectionEnd, instructionText.length);
+    assert.equal(aiInstructionsRequests, 4);
+  });
+  await check('Opening and copying AI instructions refreshes changed guidance and never copies a stale fallback', async () => {
+    const requests = aiInstructionsRequests, writes = apiWrites;
+    instructionText = '# Updated Shard Atlas guide\n\nExplain every release assignment.\n';
+    $('#ai-dialog').close(); await t.runAction('use-ai', { dataset: {} });
+    assert.equal(aiInstructionsRequests, requests + 1); assert.equal($('#ai-instructions-text').value, instructionText);
+    instructionText += '\nLabel runnable and illustrative examples accurately.\n';
+    await t.runAction('copy-ai-instructions', { dataset: {} });
+    assert.equal(aiInstructionsRequests, requests + 2); assert.equal(clipboardWrites.at(-1), instructionText);
+    instructionText += '\nKeep useful caveats with their claim.\n'; failClipboard = true;
+    await t.runAction('copy-ai-instructions', { dataset: {} }); failClipboard = false;
+    assert.equal(aiInstructionsRequests, requests + 3); assert.equal($('#ai-instructions-text').value, instructionText);
+    assert.equal($('#ai-instructions-text').selectionEnd, instructionText.length);
+    const copies = clipboardWrites.length; failAiInstructions = true;
+    await assert.rejects(t.runAction('copy-ai-instructions', { dataset: {} }), /could not be opened/);
+    assert.equal(clipboardWrites.length, copies); assert.equal($('#ai-instructions-text').value, '');
+    assert.ok(!$('#copy-ai-instructions').disabled); failAiInstructions = false;
+    assert.equal(apiWrites, writes);
   });
   await check('AI archive handoff closes its dialog and opens the existing JSON picker', async () => {
     let pickerOpened = false; const file = $('#import-file'), originalClick = file.click; file.click = () => { pickerOpened = true; };

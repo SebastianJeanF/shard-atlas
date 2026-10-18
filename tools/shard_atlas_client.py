@@ -368,6 +368,18 @@ class AtlasClient:
         return receipt
 
 
+def contribution_instructions():
+    """Read the canonical authoring guide without contacting the collection."""
+    try:
+        raw = (ROOT / "static/ai-instructions.md").read_bytes()
+        content = raw.decode("utf-8")
+    except (OSError, UnicodeError) as error:
+        raise ClientError("The contribution guide could not be read. Restore static/ai-instructions.md before preparing or saving knowledge.") from error
+    if not content.strip() or len(raw) > 128 * 1024:
+        raise ClientError("The contribution guide is empty or too large. Restore static/ai-instructions.md before saving knowledge.")
+    return {"version": hashlib.sha256(raw).hexdigest(), "content": content}
+
+
 def load_json(path, maximum=MAX_BATCH_BYTES):
     try:
         raw = Path(path).read_bytes()
@@ -383,6 +395,7 @@ def main(argv=None):
     parser.add_argument("--base-url", help="Explicit loopback service URL; only use an isolated URL for tests.")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("status")
+    sub.add_parser("instructions", help="Read the current full contribution guide before preparing knowledge.")
     search = sub.add_parser("search")
     search.add_argument("--query", required=True)
     search.add_argument("--limit", type=int, default=12)
@@ -398,7 +411,9 @@ def main(argv=None):
         importer.add_argument("--file", required=True)
     args = parser.parse_args(argv)
     try:
-        if args.command == "archive":
+        if args.command == "instructions":
+            result = contribution_instructions()
+        elif args.command == "archive":
             data = portable_archive(load_json(args.file))
             output = Path(args.output).expanduser().resolve()
             with output.open("x", encoding="utf-8") as handle:

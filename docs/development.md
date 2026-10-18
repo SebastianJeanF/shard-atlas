@@ -115,9 +115,13 @@ For an AI client that supports MCP stdio servers, configure a server named `shar
 
 Configuration locations and supported syntax depend on the AI client. This example is the common `mcpServers` shape, not an instruction to overwrite an existing configuration. Preserve other servers and restart the client or start a new chat if required by that client.
 
-The bridge exposes `shard_atlas_search`, `shard_atlas_read`, and `shard_atlas_add_knowledge`. It discovers or starts the local storage service without opening a browser. By default it uses the working collection. Use `--base-url http://127.0.0.1:PORT` only to select an isolated test service deliberately.
+The bridge exposes `shard_atlas_get_instructions`, `shard_atlas_search`, `shard_atlas_read`, and `shard_atlas_add_knowledge`. Knowledge tools discover or start the local storage service without opening a browser. Reading the guide does not contact the collection. By default it uses the working collection. Use `--base-url http://127.0.0.1:PORT` only to select an isolated test service deliberately.
 
-The checked-in skill is [integrations/add-to-shard-atlas](../integrations/add-to-shard-atlas/SKILL.md). Install it using your client's supported skill mechanism if available, or provide the [canonical contribution guide](../static/ai-instructions.md) as instructions. The **Use with AI** button copies that guide for a chat. Installing or opening Shard Atlas alone does not configure external AI clients.
+The checked-in skill is [integrations/add-to-shard-atlas](../integrations/add-to-shard-atlas/SKILL.md). Install it using your client's supported skill mechanism if available, or provide the [canonical contribution guide](../static/ai-instructions.md) as instructions. The **Use with AI** button refreshes and copies that guide for a chat.
+
+The MCP bridge exposes `shard_atlas_get_instructions`, which returns the full guide and a content version without contacting the collection. Before saving, the agent must fetch the guide in the current tool session, apply it, and pass its version as `instructionsVersion` alongside the immutable batch. The bridge rejects a missing or stale guide read before calling the collection. This verifies delivery and freshness of the instructions. It cannot automatically assess whether the prose or examples follow them.
+
+Start a new chat or reconnect an existing client after updating the bridge so it discovers the current tools and schema. The command helper also offers an offline `instructions` command. Installing or opening Shard Atlas alone does not configure external AI clients.
 
 The command-line helper provides the same local contribution boundary:
 
