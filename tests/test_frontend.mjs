@@ -25,7 +25,7 @@ class Element {
     this.id = attrs.id || ''; this.name = attrs.name || ''; this.type = attrs.type || (tag === 'button' ? 'submit' : 'text');
     this.value = attrs.value || ''; this.defaultValue = this.value; this.dataset = {};
     this.hidden = 'hidden' in attrs; this.open = false; this.disabled = false; this.inert = false;
-    this.style = {}; this.clientWidth = 900; this.clientHeight = 600; this.selectionStart = 0; this.selectionEnd = 0; this.listeners = new Map(); this._html = ''; this._text = '';
+    this.style = {}; this.clientWidth = 900; this.clientHeight = 600; this.naturalWidth = 0; this.naturalHeight = 0; this.scrollLeft = 0; this.scrollTop = 0; this.selectionStart = 0; this.selectionEnd = 0; this.listeners = new Map(); this._html = ''; this._text = '';
     for (const [key, value] of Object.entries(attrs)) if (key.startsWith('data-')) this.dataset[key.slice(5).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = value;
     const classes = new Set((attrs.class || '').split(/\s+/).filter(Boolean));
     this.classList = { contains: name => classes.has(name), toggle: (name, force) => { const add = force ?? !classes.has(name); if (add) classes.add(name); else classes.delete(name); return add; }, remove: name => classes.delete(name) };
@@ -43,7 +43,7 @@ class Element {
   set textContent(value) { this._text = String(value); }
   get textContent() { return this._text || this._html.replace(/<[^>]*>/g, ' '); }
   addEventListener(name, callback) { const listeners = this.listeners.get(name) || []; listeners.push(callback); this.listeners.set(name, listeners); }
-  dispatchEvent(event) { event.target ||= this; for (const listener of this.listeners.get(event.type) || []) listener(event); if (event.bubbles && !event.propagationStopped) this.document?.dispatchEvent(event); return !event.defaultPrevented; }
+  dispatchEvent(event) { event.target ||= this; event.currentTarget = this; for (const listener of this.listeners.get(event.type) || []) listener(event); if (event.bubbles && !event.propagationStopped) this.document?.dispatchEvent(event); return !event.defaultPrevented; }
   showModal() { this.open = true; }
   close() { this.open = false; }
   focus() { if (this.document) this.document.activeElement = this; }
@@ -52,6 +52,7 @@ class Element {
   closest() { return null; }
   setRangeText(text, start, end) { this.value = this.value.slice(0, start) + text + this.value.slice(end); this.selectionStart = this.selectionEnd = start + text.length; }
   setAttribute(name, value) { this.attrs[name] = value; }
+  removeAttribute(name) { delete this.attrs[name]; if (name === 'src') this.src = ''; }
   getBoundingClientRect() { return { left: 0, top: 0, width: this.clientWidth, height: this.clientHeight }; }
   setPointerCapture() {}
   querySelector(selector) { return this.document?.querySelector(selector, this._html) || null; }
@@ -112,11 +113,12 @@ class DocumentFixture {
   }
   querySelectorAll(selector) {
     if (selector === '[data-view]') return this.staticElements;
+    if (selector === 'dialog[open]') return [...this.ids.values()].filter(element => element.tagName === 'DIALOG' && element.open);
     if (selector === 'dialog form' || selector === 'dialog[open] form') return [...this.ids.values()].filter(element => element instanceof Form && (selector === 'dialog form' || this.ids.get(element.dialogId)?.open));
     return [];
   }
   addEventListener(name, callback) { const listeners = this.listeners.get(name) || []; listeners.push(callback); this.listeners.set(name, listeners); }
-  dispatchEvent(event) { event.target ||= this; for (const listener of this.listeners.get(event.type) || []) listener(event); return !event.defaultPrevented; }
+  dispatchEvent(event) { event.target ||= this; event.currentTarget = this; for (const listener of this.listeners.get(event.type) || []) listener(event); return !event.defaultPrevented; }
 }
 
 const server = spawn(process.env.SHARD_ATLAS_TEST_PYTHON || 'python3', ['-u', path.join(project, 'server.py'), '--db', path.join(temporary, 'atlas.sqlite3'), '--backup-dir', path.join(temporary, 'backups'), '--port', '0'], { cwd: project, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -163,7 +165,7 @@ try {
   const w = { document, matchMedia: () => ({ matches: reducedMotion }), addEventListener(name, callback) { const listeners = windowListeners.get(name) || []; listeners.push(callback); windowListeners.set(name, listeners); }, katex: require(path.join(project, 'static/vendor/katex/katex.min.js')), confirm: () => true };
   context = vm.createContext({ window: w, document, fetch: browserFetch, FormData: FixtureFormData, FileReader: FixtureFileReader, navigator: { clipboard: { writeText: async text => { if (failClipboard) throw new Error('Clipboard permission denied'); clipboardWrites.push(text); } } }, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key=>storage.delete(key) }, setTimeout: trackedSetTimeout, clearTimeout: timer => { timers.delete(timer); clearTimeout(timer); }, console, Blob, URL });
   const code = fs.readFileSync(path.join(project, 'static/app.js'), 'utf8');
-  vm.runInContext(code + '\nwindow.testAtlas={state,drafts,filteredShards,markdown,stabilizeWikiLinks,renderNav,renderLibrary,renderTimeline,renderBoards,atlasModel,atlasRelationshipModel,renderAtlas,renderDetail,dateLabel,previewImport,saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,renderReleaseFeature,loadReleaseCatalog,loadSpiralCatalog,setTimelineTheme,savedTimelineTheme,filteredSpiralExamples,handlePortalKey,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,uploadImage,showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
+  vm.runInContext(code + '\nwindow.testAtlas={state,drafts,openImageViewer,imageViewerLoaded,imageViewerFailed,fitImageViewer,setImageViewerScale,zoomImageViewer,handleImageViewerKey,get imageViewer(){return imageViewer},filteredShards,markdown,stabilizeWikiLinks,renderNav,renderLibrary,renderTimeline,renderBoards,atlasModel,atlasRelationshipModel,renderAtlas,renderDetail,dateLabel,previewImport,saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,renderReleaseFeature,loadReleaseCatalog,loadSpiralCatalog,setTimelineTheme,savedTimelineTheme,filteredSpiralExamples,handlePortalKey,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,uploadImage,showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
   const t = w.testAtlas, $ = selector => document.querySelector(selector), results = [];
   async function until(predicate) { for (let i = 0; i < 300; i++) { if (predicate()) return; await delay(10); } throw new Error('Timed out waiting for frontend state'); }
   async function get(url) { const response = await fetch(base + url), data = await response.json(); assert.ok(response.ok, JSON.stringify(data)); return data; }
@@ -1052,6 +1054,104 @@ try {
     const stable = t.stabilizeWikiLinks('[[' + target.title + ']]'); assert.ok(stable.includes('id:' + target.id));
     const oldTitle = target.title; target.title = 'Renamed but same identity'; assert.ok(t.markdown(stable).includes('data-shard-id="' + target.id + '"')); target.title = oldTitle;
     assert.ok(t.markdown('`[[' + oldTitle + ']]`').includes('<code>'));
+  });
+  await check('Note images expose accessible zoom buttons without interpreting captions as HTML', async () => {
+    const caption = '<img src=x onerror="bad()"> & "quoted"', source = '/assets/image.v1:copy';
+    const output = t.markdown('![' + caption + '](' + source + ')');
+    const previews = openingAttributes(output, 'button', 'image-preview');
+    assert.equal(previews.length, 1); assert.equal(previews[0].type, 'button');
+    assert.equal(previews[0]['data-action'], 'open-image'); assert.equal(previews[0]['data-image-src'], source);
+    assert.equal(previews[0]['data-image-alt'], caption); assert.match(previews[0]['aria-label'], /(?:zoom|enlarge|open|view)/i);
+    assert.match(output, /<figure class="note-image">/); assert.match(output, /<figcaption>&lt;img src=x onerror=&quot;bad\(\)&quot;&gt; &amp; &quot;quoted&quot;<\/figcaption>/);
+    assert.equal((output.match(/<img\b/g) || []).length, 1);
+    for (const source of ['https://example.com/image.png', '//example.com/image.png', 'javascript:alert(1)', '/assets/../secret', '/assets/image?download=1']) {
+      assert.equal(openingAttributes(t.markdown('![Unsafe](' + source + ')'), 'button', 'image-preview').length, 0, source);
+    }
+  });
+  await check('Image viewer fits dense diagrams and switches to actual size and bounded zoom without saving', async () => {
+    await until(() => t.pending === 0);
+    const writes = apiWrites, before = JSON.stringify(t.state.data), trigger = new Element('button', { 'data-image-src': '/assets/dense-container-diagram', 'data-image-alt': 'Container hierarchy' }, document);
+    const viewport = $('#image-viewer-viewport'), image = $('#image-viewer-image');
+    viewport.clientWidth = 900; viewport.clientHeight = 600; image.naturalWidth = 0; image.naturalHeight = 0;
+    trigger.focus(); await t.runAction('open-image', trigger);
+    assert.ok($('#image-viewer-dialog').open); assert.equal(image.src, '/assets/dense-container-diagram');
+    assert.equal(image.alt, 'Container hierarchy'); assert.match($('#image-viewer-title').textContent, /Container hierarchy/);
+    assert.ok(!$('#image-viewer-message').hidden); assert.match($('#image-viewer-message').textContent, /loading|opening/i);
+    assert.ok($('#image-zoom-in').disabled && $('#image-actual').disabled);
+    image.naturalWidth = 2400; image.naturalHeight = 1600; image.dispatchEvent(new FixtureEvent('load'));
+    assert.ok($('#image-viewer-message').hidden); assert.equal(t.imageViewer.mode, 'fit');
+    assert.ok(!$('#image-zoom-in').disabled && !$('#image-actual').disabled);
+    assert.ok(Math.abs(t.imageViewer.scale - 568 / 1600) < 1e-8);
+    await t.runAction('image-actual', { dataset: {} }); assert.equal(t.imageViewer.scale, 1); assert.notEqual(t.imageViewer.mode, 'fit');
+    assert.equal(viewport.scrollLeft, 766, 'Actual size should keep the fitted image center in view when scrollbars first appear');
+    assert.equal(viewport.scrollTop, 516);
+    await t.runAction('image-zoom-in', { dataset: {} }); assert.ok(t.imageViewer.scale > 1);
+    t.setImageViewerScale(100); assert.equal(t.imageViewer.scale, 4);
+    t.setImageViewerScale(0.00001); assert.equal(t.imageViewer.scale, 0.1);
+    await t.runAction('image-fit', { dataset: {} }); assert.equal(t.imageViewer.mode, 'fit');
+    assert.ok(Math.abs(t.imageViewer.scale - 568 / 1600) < 1e-8);
+    t.closeDialog('image-viewer-dialog'); assert.ok(!$('#image-viewer-dialog').open); assert.equal(document.activeElement, trigger);
+    image.naturalWidth = 320; image.naturalHeight = 200; t.openImageViewer('/assets/small-image', 'Small image', trigger); t.imageViewerLoaded();
+    assert.equal(t.imageViewer.scale, 1, 'Fit should not blur a small image by enlarging it automatically');
+    t.closeDialog('image-viewer-dialog');
+    image.naturalWidth = 20000; image.naturalHeight = 12000; t.openImageViewer('/assets/large-diagram', 'Large diagram', trigger); t.imageViewerLoaded();
+    const largeFit = t.imageViewer.scale; assert.ok(largeFit < 0.1); t.setImageViewerScale(0.00001); assert.equal(t.imageViewer.scale, largeFit, 'Very large diagrams can still zoom out far enough to fit');
+    t.closeDialog('image-viewer-dialog'); assert.equal(apiWrites, writes); assert.equal(JSON.stringify(t.state.data), before);
+  });
+  await check('Image viewer refuses nonlocal paths and gives a recoverable missing-image message', async () => {
+    const writes = apiWrites, image = $('#image-viewer-image');
+    for (const source of ['https://example.com/image.png', '//example.com/image.png', 'data:image/png;base64,AAAA', 'javascript:alert(1)', '/assets/../secret', '/assets/image?download=1']) {
+      t.openImageViewer(source, 'Unsafe image'); assert.ok(!$('#image-viewer-dialog').open, source);
+    }
+    image.naturalWidth = 0; image.naturalHeight = 0; t.openImageViewer('/assets/missing-image', 'Missing image');
+    image.dispatchEvent(new FixtureEvent('error')); assert.ok($('#image-viewer-dialog').open);
+    assert.ok(!$('#image-viewer-message').hidden); assert.match($('#image-viewer-message').textContent, /unavailable|could not|couldn.t|unable|failed/i);
+    assert.ok($('#image-zoom-in').disabled && $('#image-fit').disabled && $('#image-actual').disabled);
+    assert.ok(Number.isFinite(t.imageViewer.scale)); t.closeDialog('image-viewer-dialog'); assert.equal(apiWrites, writes);
+  });
+  await check('Image shortcuts zoom, fit, and close while leaving text input keys alone', async () => {
+    const image = $('#image-viewer-image'), trigger = new Element('button', {}, document);
+    image.naturalWidth = 2400; image.naturalHeight = 1600; t.openImageViewer('/assets/keyboard-diagram', 'Keyboard diagram', trigger); t.imageViewerLoaded();
+    const press = (key, target = $('#image-viewer-viewport'), options = {}) => {
+      const event = new FixtureEvent('keydown', { key, target, ...options }); t.handleImageViewerKey(event); return event;
+    };
+    const fit = t.imageViewer.scale; assert.ok(press('+').defaultPrevented); assert.ok(t.imageViewer.scale > fit);
+    const zoomed = t.imageViewer.scale; assert.ok(press('-').defaultPrevented); assert.ok(t.imageViewer.scale < zoomed);
+    assert.ok(press('1').defaultPrevented); assert.equal(t.imageViewer.scale, 1);
+    assert.ok(press('0').defaultPrevented); assert.equal(t.imageViewer.mode, 'fit'); assert.equal(t.imageViewer.scale, fit);
+    const input = new Element('input', {}, document), typed = press('+', input); assert.ok(!typed.defaultPrevented); assert.equal(t.imageViewer.scale, fit);
+    const modified = press('+', $('#image-viewer-viewport'), { metaKey: true }); assert.ok(!modified.defaultPrevented); assert.equal(t.imageViewer.scale, fit);
+    assert.ok(press('Escape').defaultPrevented); assert.ok(!$('#image-viewer-dialog').open); assert.equal(document.activeElement, trigger);
+  });
+  await check('Enlarged images pan by dragging and pointer zoom keeps the inspected point in place', async () => {
+    const image = $('#image-viewer-image'), viewport = $('#image-viewer-viewport'), writes = apiWrites;
+    image.naturalWidth = 2400; image.naturalHeight = 1600; t.openImageViewer('/assets/pannable-diagram', 'Pannable diagram'); t.imageViewerLoaded();
+    await t.runAction('image-actual', { dataset: {} }); viewport.scrollLeft = 400; viewport.scrollTop = 300;
+    const down = new FixtureEvent('pointerdown', { button: 0, pointerType: 'mouse', pointerId: 7, clientX: 300, clientY: 200 }); viewport.dispatchEvent(down);
+    assert.ok(down.defaultPrevented); assert.equal(viewport.dataset.dragging, 'true');
+    viewport.dispatchEvent(new FixtureEvent('pointermove', { pointerId: 8, clientX: 240, clientY: 150 })); assert.equal(viewport.scrollLeft, 400);
+    viewport.dispatchEvent(new FixtureEvent('pointermove', { pointerId: 7, clientX: 240, clientY: 150 })); assert.equal(viewport.scrollLeft, 460); assert.equal(viewport.scrollTop, 350);
+    viewport.dispatchEvent(new FixtureEvent('pointerup', { pointerId: 7 })); assert.ok(!viewport.dataset.dragging);
+    viewport.dispatchEvent(new FixtureEvent('pointermove', { pointerId: 7, clientX: 200, clientY: 100 })); assert.equal(viewport.scrollLeft, 460);
+    const point = () => ({ x: (viewport.scrollLeft + 300 - parseFloat(image.style.left)) / t.imageViewer.scale, y: (viewport.scrollTop + 200 - parseFloat(image.style.top)) / t.imageViewer.scale });
+    const before = point(), wheel = new FixtureEvent('wheel', { ctrlKey: true, deltaY: -50, clientX: 300, clientY: 200 }); viewport.dispatchEvent(wheel);
+    assert.ok(wheel.defaultPrevented); assert.ok(t.imageViewer.scale > 1); assert.ok(Math.abs(point().x - before.x) < 1); assert.ok(Math.abs(point().y - before.y) < 1);
+    t.closeDialog('image-viewer-dialog'); assert.equal(apiWrites, writes);
+  });
+  await check('Closing a zoomed editor preview preserves the underlying unsaved note and its durable draft', async () => {
+    t.openEditor(); $('#shard-title').value = 'Unfinished note with an image'; $('#shard-content').value = 'Keep my explanation.\n\n![Diagram](/assets/editor-image)';
+    t.scheduleDraft('editor'); await t.persistDraft('editor'); await until(() => t.pending === 0);
+    const draftBefore = JSON.stringify(t.drafts.editor), durableBefore = JSON.stringify((await get('/api/drafts')).drafts.editor), writes = apiWrites;
+    const trigger = new Element('button', {}, document), image = $('#image-viewer-image');
+    trigger.focus(); image.naturalWidth = 2000; image.naturalHeight = 1000; t.openImageViewer('/assets/editor-image', 'Diagram', trigger); t.imageViewerLoaded();
+    assert.ok($('#editor-dialog').open && $('#image-viewer-dialog').open);
+    document.dispatchEvent(new FixtureEvent('keydown', { key: 'Enter', metaKey: true, target: $('#image-viewer-viewport') }));
+    await delay(20); assert.ok($('#editor-dialog').open && $('#image-viewer-dialog').open); assert.equal(apiWrites, writes, 'Viewer shortcuts must not submit the editor underneath');
+    t.closeDialog('image-viewer-dialog');
+    assert.ok($('#editor-dialog').open); assert.ok(!$('#draft-close-dialog').open); assert.equal(document.activeElement, trigger);
+    assert.equal($('#shard-content').value, 'Keep my explanation.\n\n![Diagram](/assets/editor-image)');
+    assert.equal(JSON.stringify(t.drafts.editor), draftBefore); assert.equal(JSON.stringify((await get('/api/drafts')).drafts.editor), durableBefore); assert.equal(apiWrites, writes);
+    await t.deleteDraft('editor'); $('#editor-dialog').close();
   });
   await check('Reverted editor draft clears local and durable recovery', async () => {
     t.openEditor(); $('#shard-title').value = 'Temporary draft'; t.scheduleDraft('editor'); await t.persistDraft('editor');
