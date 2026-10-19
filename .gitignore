@@ -11,3 +11,5 @@ work/
 *.dSYM/
 /desktop/.build/
 /static/spiral/local-emblems/
+
+/mobile-dist/

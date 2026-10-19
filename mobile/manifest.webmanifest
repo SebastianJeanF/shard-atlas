@@ -1,0 +1,16 @@
+{
+  "id": "./",
+  "name": "Shard Atlas",
+  "short_name": "Shard Atlas",
+  "description": "Your connected technical knowledge, within reach.",
+  "lang": "en",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f5f0",
+  "theme_color": "#315645",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
