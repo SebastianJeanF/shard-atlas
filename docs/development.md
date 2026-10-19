@@ -131,4 +131,4 @@ python3 tools/shard_atlas_client.py --help
 
 Agents should search before writing, reuse appropriate topics and IDs, preserve exact code and attribution, and verify saved notes through readback. A batch is additive and atomic, with a safety snapshot and stable retry receipt. It does not grant permission to overwrite existing notes or change application code.
 
-When a chat cannot access local tools, it can prepare a portable JSON file for **Use with AI → Import a file**. The guide documents its schema. A handoff file is not a completed save or a synchronization service.
+When a chat cannot access local tools, it can prepare a portable JSON file for **Use with AI → Preview a file**. The guide documents its schema. A handoff file is not a completed save or a synchronization service.

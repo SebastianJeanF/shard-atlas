@@ -24,6 +24,8 @@ let aiInstructions = '', aiInstructionsLoading = null;
 const imageViewer = {src:'',alt:'',width:0,height:0,scale:1,mode:'fit',returnFocus:null,drag:null,layout:null};
 let atlasRefreshLoading = null;
 let editingBoardId=null, editingSectionId=null, editingBoardItemId=null, importArchive=null, importPreview=null, boardDirty=false;
+let importSelectedIndex=0, importListLimit=100, importPreviewRequest=0;
+const importImageUrls=new Map();
 
 function toast(message) {
   const el=$('#toast');el.textContent=message;el.hidden=false;
@@ -71,7 +73,7 @@ function mathMarkup(source,displayMode=false) {
   if(!window.katex)return '<code>'+esc(source)+'</code>';
   return window.katex.renderToString(source,{displayMode,throwOnError:false,trust:false,strict:'ignore',maxExpand:1000,maxSize:10,macros:{}});
 }
-function inlineMarkdown(text) {
+function inlineMarkdown(text,context=null) {
   const protectedParts=[];
   const protect=html=>{protectedParts.push(html);return '\u0000'+(protectedParts.length-1)+'\u0000';};
   let output=String(text).replace(/\u0000/g,'');
@@ -84,8 +86,8 @@ function inlineMarkdown(text) {
   })).join('');
   output=output.replace(/`([^`]+)`|\[\[([^\]\n]+)\]\]|!\[([^\]\n]*)\]\((\/assets\/[A-Za-z0-9_.:-]+)\)|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|(?<!\\)\$(?!\$)([^$\n]+)(?<!\\)\$/g,(whole,code,wiki,alt,image,label,url,math)=>{
     if(code!==undefined)return protect('<code>'+esc(code)+'</code>');
-    if(wiki!==undefined){const split=wiki.indexOf('|'),target=split<0?wiki:wiki.slice(0,split),alias=split<0?null:wiki.slice(split+1),s=resolveWiki(target);return protect(s?`<button type="button" class="wiki-link" data-shard-id="${esc(s.id)}">${esc(alias||s.title)}</button>`:`<span class="wiki-unresolved" title="No shard with this title yet">${esc(alias||target)}</span>`);}
-    if(image!==undefined)return protect(`<figure class="note-image"><button type="button" class="image-preview" data-action="open-image" data-image-src="${esc(image)}" data-image-alt="${esc(alt)}" aria-label="${esc(alt?'Enlarge image: '+alt:'Enlarge image')}" aria-haspopup="dialog"><img src="${esc(image)}" alt="${esc(alt)}" loading="lazy"><span class="image-preview-hint" aria-hidden="true">Click to enlarge</span></button>${alt?`<figcaption>${esc(alt)}</figcaption>`:''}</figure>`);
+    if(wiki!==undefined){const split=wiki.indexOf('|'),target=split<0?wiki:wiki.slice(0,split),alias=split<0?null:wiki.slice(split+1),s=context?.resolveWiki?context.resolveWiki(target):resolveWiki(target);return protect(s?(context?.renderWiki?context.renderWiki(s,alias||s.title):`<button type="button" class="wiki-link" data-shard-id="${esc(s.id)}">${esc(alias||s.title)}</button>`):`<span class="wiki-unresolved" title="No shard with this title yet">${esc(alias||target)}</span>`);}
+    if(image!==undefined){const src=context?.imageSource?context.imageSource(image):image;if(!src)return protect(`<figure class="note-image"><p class="import-image-missing">Image unavailable in this file${alt?': '+esc(alt):''}.</p></figure>`);return protect(`<figure class="note-image"><button type="button" class="image-preview" data-action="open-image" data-image-src="${esc(src)}" data-image-alt="${esc(alt)}" aria-label="${esc(alt?'Enlarge image: '+alt:'Enlarge image')}" aria-haspopup="dialog"><img src="${esc(src)}" alt="${esc(alt)}" loading="lazy"><span class="image-preview-hint" aria-hidden="true">Click to enlarge</span></button>${alt?`<figcaption>${esc(alt)}</figcaption>`:''}</figure>`);}
     if(url!==undefined)return protect(`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(label)} ↗</a>`);
     return protect(mathMarkup(math));
   });
@@ -142,7 +144,7 @@ function imageViewerFailed(){
   $('#image-zoom-level').textContent='Unavailable';for(const id of ['image-zoom-out','image-zoom-in','image-fit','image-actual'])$('#'+id).disabled=true;
 }
 function openImageViewer(src,alt='',trigger=null){
-  if(!/^\/assets\/[A-Za-z0-9_.:-]+$/.test(String(src||''))){toast('This image cannot be opened.');return false;}
+  if(!/^\/assets\/[A-Za-z0-9_.:-]+$/.test(String(src||''))&&!($('#import-preview-dialog').open&&[...importImageUrls.values()].includes(src))){toast('This image cannot be opened.');return false;}
   const dialog=$('#image-viewer-dialog'),image=$('#image-viewer-image'),viewport=$('#image-viewer-viewport');
   Object.assign(imageViewer,{src,alt:String(alt||''),width:0,height:0,scale:1,mode:'fit',returnFocus:trigger||document.activeElement,drag:null,layout:null});
   $('#image-viewer-title').textContent=imageViewer.alt||'Image';image.alt=imageViewer.alt;image.hidden=true;
@@ -211,11 +213,11 @@ function highlightCpp(code) {
 }
 
 
-function markdown(text) {
+function markdown(text,context=null) {
   const provenance=String(text||'').match(/\n\nOriginal Lucid shape data:\n```json\n([\s\S]*?)\n```\s*$/);
-  if(provenance){try{JSON.parse(provenance[1]);return markdown(String(text).slice(0,provenance.index))+`<details class="diagram-provenance"><summary>Original diagram data</summary><p class="muted">Exact source text, styles, and geometry retained from your Lucid diagram.</p><div class="code-block"><div class="code-toolbar"><span>Source JSON</span><button type="button" class="text-button" data-action="copy-code">Copy</button></div><pre><code>${esc(provenance[1])}</code></pre></div></details>`;}catch{}}
+  if(provenance){try{JSON.parse(provenance[1]);return markdown(String(text).slice(0,provenance.index),context)+`<details class="diagram-provenance"><summary>Original diagram data</summary><p class="muted">Exact source text, styles, and geometry retained from your Lucid diagram.</p><div class="code-block"><div class="code-toolbar"><span>Source JSON</span><button type="button" class="text-button" data-action="copy-code">Copy</button></div><pre><code>${esc(provenance[1])}</code></pre></div></details>`;}catch{}}
   const lines=String(text||'').replace(/\r\n/g,'\n').split('\n');let html='',paragraph=[],list=null,cppKey=false;
-  const flush=()=>{if(paragraph.length){html+='<p>'+inlineMarkdown(paragraph.join(' '))+'</p>';paragraph=[];}if(list){html+='</'+list+'>';list=null;}};
+  const flush=()=>{if(paragraph.length){html+='<p>'+inlineMarkdown(paragraph.join(' '),context)+'</p>';paragraph=[];}if(list){html+='</'+list+'>';list=null;}};
   for(let i=0;i<lines.length;i++){
     const line=lines[i];
     if(line.startsWith('```')){
@@ -224,11 +226,11 @@ function markdown(text) {
       html+='<div class="code-block"><div class="code-toolbar"><span>'+esc(lang||'code')+'</span><button type="button" class="text-button" data-action="copy-code">Copy</button></div><pre><code>'+(cpp?highlightCpp(code.join('\n')):esc(code.join('\n')))+'</code></pre></div>';
     }else if(line.trim().startsWith('$$')){
       flush();let source=line.trim().slice(2);if(source.endsWith('$$'))source=source.slice(0,-2);else{const parts=[source];while(++i<lines.length){if(lines[i].trim().endsWith('$$')){parts.push(lines[i].trim().slice(0,-2));break;}parts.push(lines[i]);}source=parts.join('\n');}html+='<div class="math-display">'+mathMarkup(source,true)+'</div>';
-    }else if(/^#{1,6}\s/.test(line)){flush();const match=line.match(/^(#{1,6})\s+(.*)/),n=Math.min(4,match[1].length+1);html+=`<h${n}>${inlineMarkdown(match[2])}</h${n}>`;
+    }else if(/^#{1,6}\s/.test(line)){flush();const match=line.match(/^(#{1,6})\s+(.*)/),n=Math.min(4,match[1].length+1);html+=`<h${n}>${inlineMarkdown(match[2],context)}</h${n}>`;
     }else if(/^\s*[-*]\s+/.test(line)||/^\s*\d+[.)]\s+/.test(line)){
-      if(paragraph.length){html+='<p>'+inlineMarkdown(paragraph.join(' '))+'</p>';paragraph=[];}const type=/^\s*\d/.test(line)?'ol':'ul';if(list!==type){if(list)html+='</'+list+'>';html+='<'+type+'>';list=type;}html+='<li>'+inlineMarkdown(line.replace(/^\s*(?:[-*]|\d+[.)])\s+/,''))+'</li>';
-    }else if(line.startsWith('> ')){flush();html+='<blockquote>'+inlineMarkdown(line.slice(2))+'</blockquote>';}
-    else if(/^!\[[^\]]*\]\(\/assets\/[A-Za-z0-9_.:-]+\)\s*$/.test(line)){flush();html+=inlineMarkdown(line);}
+      if(paragraph.length){html+='<p>'+inlineMarkdown(paragraph.join(' '),context)+'</p>';paragraph=[];}const type=/^\s*\d/.test(line)?'ol':'ul';if(list!==type){if(list)html+='</'+list+'>';html+='<'+type+'>';list=type;}html+='<li>'+inlineMarkdown(line.replace(/^\s*(?:[-*]|\d+[.)])\s+/,''),context)+'</li>';
+    }else if(line.startsWith('> ')){flush();html+='<blockquote>'+inlineMarkdown(line.slice(2),context)+'</blockquote>';}
+    else if(/^!\[[^\]]*\]\(\/assets\/[A-Za-z0-9_.:-]+\)\s*$/.test(line)){flush();html+=inlineMarkdown(line,context);}
     else if(!line.trim())flush();else{if(list){html+='</'+list+'>';list=null;}paragraph.push(line);}
   }
   flush();return html||'<p class="muted">This idea is waiting for your explanation.</p>';
@@ -648,6 +650,7 @@ function restoreDraft(kind){const draft=drafts[kind];if(!draft)return;if(documen
 function extraFormDirty(){return ['board','board-item','section'].some(name=>$('#'+name+'-dialog').open&&$('#'+name+'-form').dataset.baseline!==formSnapshot($('#'+name+'-form')));}
 function closeDialog(id){
   if(id==='image-viewer-dialog'){closeImageViewer();return;}
+  if(id==='import-preview-dialog'&&!busy){$('#import-preview-dialog').close();clearImportPreview();return;}
   if(busy){toast('Saving your change…');return;}
   if(['board-dialog','board-item-dialog','section-dialog'].includes(id)){const form=$('#'+id.replace('-dialog','-form'));if(form.dataset.baseline!==formSnapshot(form)){confirmAction('Discard these unfinished changes?','The last saved canvas arrangement stays intact. You can continue editing by cancelling.','Discard changes',()=>{$('#'+id).close();},true);return;}}
   const kind=id==='editor-dialog'?'editor':id==='link-dialog'?'connection':null;
@@ -704,6 +707,8 @@ async function uploadImage(file){
   });$('#shard-content').focus();toast('Image added to your explanation.');
 }
 async function runAction(action,button){
+  if(action==='preview-import-shard'){selectImportShard(button.dataset.index);return;}
+  if(action==='more-import-shards'){importListLimit+=100;renderImportReview();return;}
   if(action==='open-image'){openImageViewer(button.dataset.imageSrc,button.dataset.imageAlt,button);return;}
   if(action==='image-zoom-in'){zoomImageViewer(1.25);return;}
   if(action==='image-zoom-out'){zoomImageViewer(1/1.25);return;}
@@ -751,7 +756,55 @@ function renderStructuredEditor(kind){
   $('#source-editor').innerHTML=readStructured(kind).map((row,index)=>`<div class="structured-row" data-structured-row="${index}"><div class="structured-row-heading"><span>Source ${index+1}</span><button type="button" class="icon-button" data-action="remove-${kind}" data-index="${index}" aria-label="Remove source ${index+1}">×</button></div><div class="structured-fields">${fields.map(([key,label])=>`<label class="field">${label}<input data-structured="${kind}" data-row="${index}" data-key="${key}" value="${esc(row[key]||'')}" ${['url','sourceUrl'].includes(key)?'type="url"':'type="text"'} placeholder="${key.toLowerCase().includes('date')||key==='asOf'?'YYYY, YYYY-MM, or YYYY-MM-DD':''}"></label>`).join('')}</div></div>`).join('');
 }
 function syncStructuredEditor(kind){const rows=readStructured(kind);document.querySelectorAll(`[data-structured="${kind}"]`).forEach(el=>{if(rows[Number(el.dataset.row)])rows[Number(el.dataset.row)][el.dataset.key]=el.value;});$('#editor-form').elements[kind].value=JSON.stringify(rows);}
-async function previewImport(data,name='Archive'){const preview=await api('/api/import/preview','POST',{data});importArchive=data;importPreview=preview;$('#settings-dialog').close();$('#import-preview-title').textContent=name;$('#confirm-import').disabled=preview.valid===false;const stats=preview.added||preview.counts||{};$('#import-preview-content').innerHTML=`<p class="dialog-intro">Review the content before it enters your atlas. Existing IDs are preserved; conflicting content is reported.</p><div class="import-counts">${Object.entries(stats).map(([key,value])=>`<div><strong>${esc(value)}</strong><span>${esc(key)}</span></div>`).join('')}</div>${preview.skipped?`<p class="muted">Skipped: ${esc(Object.entries(preview.skipped).map(([k,v])=>v+' '+k).join(', '))}</p>`:''}${['missing','duplicates','conflicts','warnings'].map(key=>(preview[key]||[]).length?`<details class="import-issues" open><summary>${esc(key)} · ${preview[key].length}</summary><ul>${preview[key].map(item=>`<li>${esc(typeof item==='string'?item:JSON.stringify(item))}</li>`).join('')}</ul></details>`:'').join('')}${preview.coverage?`<details class="import-coverage"><summary>Source coverage</summary><pre>${esc(typeof preview.coverage==='string'?preview.coverage:JSON.stringify(preview.coverage,null,2))}</pre></details>`:''}`;$('#import-preview-dialog').showModal();}
+function clearImportPreview(){
+  importPreviewRequest++;
+  if([...importImageUrls.values()].includes(imageViewer.src))closeImageViewer();
+  for(const url of importImageUrls.values())URL.revokeObjectURL(url);
+  importImageUrls.clear();importArchive=null;importPreview=null;importSelectedIndex=0;importListLimit=100;
+  $('#confirm-import').disabled=true;$('#import-preview-content').innerHTML='';
+}
+function prepareImportImages(){
+  const existing=new Set((state.data.assets||[]).map(asset=>asset.id));
+  if(importPreview?.valid===false)return;
+  for(const asset of importArchive?.assets||[]){
+    if(!asset||existing.has(asset.id)||importImageUrls.has(asset.id)||!['image/png','image/jpeg','image/gif','image/webp'].includes(asset.mimeType)||typeof asset.data!=='string'||asset.data.length>Math.ceil(8*1024*1024/3)*4)continue;
+    try{const bytes=Uint8Array.from(atob(asset.data),char=>char.charCodeAt(0));importImageUrls.set(asset.id,URL.createObjectURL(new Blob([bytes],{type:asset.mimeType})));}catch{}
+  }
+}
+function importShards(){return Array.isArray(importArchive?.shards)?importArchive.shards.filter(shard=>shard&&typeof shard==='object'&&!Array.isArray(shard)):[];}
+function importShardValue(shard){return {...shard,id:String(shard.id||''),title:String(shard.title||'Untitled shard'),content:String(shard.content||''),languageVersion:typeof shard.languageVersion==='string'?shard.languageVersion:'',tags:Array.isArray(shard.tags)?shard.tags.filter(tag=>typeof tag==='string'):[],sources:Array.isArray(shard.sources)?shard.sources.filter(source=>source&&typeof source==='object'):[],sourceUrl:typeof shard.sourceUrl==='string'?shard.sourceUrl:''};}
+function importShardLabel(shard){return byId(shard.id)?'Existing card kept':'New shard';}
+function importPreviewContext(){
+  const shards=importShards().map(importShardValue);
+  return {
+    resolveWiki:target=>target.startsWith('id:')?(shards.find(shard=>shard.id===target.slice(3))||resolveWiki(target)):(shards.find(shard=>shard.title.toLocaleLowerCase()===target.toLocaleLowerCase())||resolveWiki(target)),
+    renderWiki:(shard,label)=>{const index=shards.findIndex(item=>item.id===shard.id);return index<0?`<span class="wiki-link" title="Already in your atlas">${esc(label)}</span>`:`<button type="button" class="wiki-link" data-action="preview-import-shard" data-index="${index}">${esc(label)}</button>`;},
+    imageSource:src=>{const id=src.slice('/assets/'.length);return (state.data.assets||[]).some(asset=>asset.id===id)?src:importImageUrls.get(id)||null;}
+  };
+}
+function renderImportCards(){
+  const shards=importShards();if(!shards.length)return '<p class="dialog-intro">This file contains no cards to preview. Other archive records are listed above.</p>';
+  const shard=importShardValue(shards[importSelectedIndex]||shards[0]),context=importPreviewContext();
+  const connections=(Array.isArray(importArchive.links)?importArchive.links:[]).filter(link=>link&&typeof link==='object'&&(link.fromId===shard.id||link.toId===shard.id));
+  const inverse={depends_on:'is a dependency of',explains:'is explained by',contrasts_with:'contrasts with',example_of:'has an example in',related_to:'relates to',part_of:'contains',supports:'is supported by',contradicts:'contradicts',supersedes:'is superseded by',released_by:'released'};
+  return `<section class="import-card-review" aria-label="Card previews"><div class="import-review-heading"><h3>Preview your cards</h3><p>${shards.length} ${shards.length===1?'card':'cards'} · Select a card to read its full explanation.</p></div><div class="import-review-layout"><nav class="import-review-list" aria-label="Cards in this file">${shards.slice(0,importListLimit).map((raw,index)=>{const item=importShardValue(raw);return `<button type="button" class="import-review-item${index===importSelectedIndex?' selected':''}" data-action="preview-import-shard" data-index="${index}" aria-pressed="${index===importSelectedIndex}"><small>${esc(importShardLabel(item))} · ${esc(kinds[item.kind]||'Concept')}</small><h4>${esc(item.title)}</h4><div class="import-review-releases">${renderShardReleaseChips(item)}</div><p>${esc(excerpt(item.content).slice(0,100))}</p></button>`;}).join('')}${shards.length>importListLimit?`<button type="button" class="secondary" data-action="more-import-shards">Show more cards · ${shards.length-importListLimit} remaining</button>`:''}</nav><article id="import-card-preview" class="import-review-card"${shardThemeAttributes(shard)} aria-label="${esc('Preview: '+shard.title)}"><header class="import-card-header"><div class="import-card-topline"><small>${esc(kinds[shard.kind]||'Concept')} · ${esc(statuses[shard.status]||'Learning')}</small><span class="import-state">${esc(importShardLabel(shard))}</span></div><h3>${esc(shard.title)}</h3>${renderShardReleaseChips(shard)}${!shard.languageVersion?'':`<p class="muted">Release scope: ${esc(shard.languageVersion)}</p>`}<div class="tag-row">${shard.tags.map(tag=>`<span class="tag">${esc(tag)}</span>`).join('')}</div>${byId(shard.id)?'<p class="import-existing-note">This file’s version is shown below. It will not replace the card already in your atlas.</p>':''}</header><div class="import-card-body markdown">${markdown(shard.content,context)}</div>${connections.length?`<section class="import-card-connections"><h4>Connections in this file · ${connections.length}</h4><ul>${connections.map(link=>{const outgoing=link.fromId===shard.id,target=outgoing?link.toId:link.fromId,other=context.resolveWiki('id:'+target),relationship=(outgoing?relations:inverse)[link.type]||'relates to';return `<li><span>${esc(relationship)} </span>${other?context.renderWiki(other,other.title):`<span class="wiki-unresolved">${esc(target||'Missing card')}</span>`}${link.note?`<p>${esc(link.note)}</p>`:''}</li>`;}).join('')}</ul></section>`:''}<footer class="import-card-footer">${shard.sourceUrl?sourceAnchor(shard.sourceUrl,'Original source'):''}${renderSources(shard)}</footer></article></div></section>`;
+}
+function renderImportReview(){
+  const preview=importPreview;if(!preview)return;
+  const stats=preview.added||preview.counts||{};
+  $('#import-preview-content').innerHTML=`<p class="dialog-intro">Read the generated cards before saving. Save to atlas adds all new records in this file, including its photos and connections. Nothing is saved before you confirm. Existing cards are preserved.</p><div class="import-counts">${Object.entries(stats).filter(([,value])=>value>0).map(([key,value])=>`<div><strong>${esc(value)}</strong><span>${esc(key)}</span></div>`).join('')||'<p class="muted">No new records to add.</p>'}</div>${preview.skipped&&Object.values(preview.skipped).some(Boolean)?`<p class="muted">Already present: ${esc(Object.entries(preview.skipped).filter(([,value])=>value>0).map(([key,value])=>value+' '+key).join(', '))}</p>`:''}${['missing','duplicates','conflicts','warnings'].map(key=>(preview[key]||[]).length?`<details class="import-issues" open><summary>${esc(key)} · ${preview[key].length}</summary><ul>${preview[key].map(item=>`<li>${esc(typeof item==='string'?item:JSON.stringify(item))}</li>`).join('')}</ul></details>`:'').join('')}${renderImportCards()}${preview.coverage?`<details class="import-coverage"><summary>Archive summary</summary><pre>${esc(typeof preview.coverage==='string'?preview.coverage:JSON.stringify(preview.coverage,null,2))}</pre></details>`:''}`;
+}
+function selectImportShard(index){
+  index=Number(index);if(!Number.isInteger(index)||index<0||index>=importShards().length)return;
+  importSelectedIndex=index;importListLimit=Math.max(importListLimit,index+1);renderImportReview();
+}
+async function previewImport(data,name='Archive'){
+  clearImportPreview();const request=importPreviewRequest;
+  const preview=await api('/api/import/preview','POST',{data});if(request!==importPreviewRequest)return;
+  importArchive=data;importPreview=preview;prepareImportImages();
+  $('#settings-dialog').close();$('#import-preview-title').textContent=name;$('#confirm-import').disabled=preview.valid===false;
+  renderImportReview();if(!$('#import-preview-dialog').open)$('#import-preview-dialog').showModal();
+}
 function renderUndoSummary(summary){if(!summary)return '';const removed=summary.removed||{},skipped=summary.skipped||[];return `<div class="import-undo-summary"><p><strong>Removed:</strong> ${esc(Object.entries(removed).map(([kind,count])=>count+' '+kind).join(', ')||'No records')}</p>${skipped.length?`<details open><summary>${skipped.length} records preserved</summary><ul>${skipped.map(item=>`<li><strong>${esc(item.kind)} · ${esc(byId(item.id)?.title||state.data.boards?.find(b=>b.id===item.id)?.title||item.id)}</strong><span>${esc(item.reason||'Retained to preserve your knowledge')}</span></li>`).join('')}</ul></details>`:'<p>No imported records needed to be preserved.</p>'}</div>`;}
 async function showImports(){const result=await api('/api/imports');recoveryMode='imports';recoveryRecords=result.imports||[];$('#settings-dialog').close();$('#recovery-title').textContent='Import history';$('#recovery-content').innerHTML=recoveryRecords.map(receipt=>`<article class="import-receipt"><div><h3>${esc(receipt.title||receipt.sourceTitle||'Imported archive')}</h3><small>${dateTimeLabel(receipt.createdAt)} · ${esc(receipt.id)}</small></div><p>${esc(Object.entries(receipt.added||receipt.summary?.added||{}).map(([kind,count])=>count+' '+kind).join(', '))}</p>${receipt.undoneAt?'<span class="muted">Import undone</span>'+renderUndoSummary(receipt.undoSummary):`<button class="secondary" data-action="undo-import" data-id="${esc(receipt.id)}">Undo import</button>`}</article>`).join('')||'<p class="dialog-intro">Your future imports will appear here, with a receipt and an undo option.</p>';$('#recovery-dialog').showModal();}
 const currentBoard=()=>state.data.boards?.find(b=>b.id===state.boardId)||state.data.boards?.[0]||null;
@@ -824,7 +877,7 @@ async function legacyBoardAction(action,button){const id=button?.dataset.id,boar
   else if(action==='fit-board')fitBoard();
   else if(action==='find-board-match'&&board){const item=board.items.find(i=>byId(i.shardId)&&boardMatches(byId(i.shardId)));if(item)jumpToBoardItem(item);else toast('No matching note on this canvas.');}
   else if(action==='import-history')await showImports();
-  else if(action==='confirm-import'){if(!importArchive||importPreview?.valid===false)return true;await withBusy(async()=>{const result=await writeRequest('/api/import','POST',{data:importArchive});state.data=mergeBoardDrafts(result);importArchive=null;$('#import-preview-dialog').close();state.view='library';render();toast(`Imported ${result.importSummary?.added?.shards||0} notes. Saved canvas data remains in your archive. A receipt is available in Backup & export.`);});}
+  else if(action==='confirm-import'){if(!importArchive||importPreview?.valid===false)return true;await withBusy(async()=>{const result=await writeRequest('/api/import','POST',{data:importArchive});state.data=mergeBoardDrafts(result);$('#import-preview-dialog').close();clearImportPreview();state.view='library';render();toast(`Imported ${result.importSummary?.added?.shards||0} notes. Saved canvas data remains in your archive. A receipt is available in Backup & export.`);});}
   else if(action==='undo-import')confirmAction('Undo this import?','Unchanged records added by this import will be removed. Edited records and existing knowledge are preserved. A backup is saved first.','Undo import',async()=>{const result=await mutate('/api/imports/'+encodeURIComponent(id)+'/undo','POST',{});await showImports();toast(`Import undone.${result.undoSummary?.skipped?.length?' '+result.undoSummary.skipped.length+' records were preserved. See their reasons in import history.':''}`);},true);
   else return false;return true;
 }
@@ -838,11 +891,13 @@ document.addEventListener('keydown',event=>{
   if(handleImageViewerKey(event)||$('#image-viewer-dialog').open)return;
   if(busy){if(event.metaKey||event.ctrlKey)event.preventDefault();return;}if(handlePortalKey(event))return;const node=event.target.closest?.('[data-graph-id]');if(node&&(event.key==='Enter'||event.key===' ')){event.preventDefault();selectShard(node.dataset.graphId);return;}if(!(event.metaKey||event.ctrlKey))return;
   if(event.key.toLowerCase()==='k'){event.preventDefault();if(!document.querySelector('dialog[open]')){$('#search').focus();$('#search').select();}}
-  else if(event.key.toLowerCase()==='n'){event.preventDefault();if(!document.querySelector('dialog[open]'))openEditor();}else if(event.key==='Enter'&&$('#editor-dialog').open){event.preventDefault();$('#editor-form').requestSubmit();}
+  else if(event.key.toLowerCase()==='n'){event.preventDefault();if(!document.querySelector('dialog[open]'))openEditor();}else if(event.key==='Enter'&&$('#editor-dialog').open&&!$('#import-preview-dialog').open){event.preventDefault();$('#editor-form').requestSubmit();}
 });
 $('#mobile-menu').addEventListener('click',()=>document.body.classList.toggle('sidebar-open'));
 let searchTimer;$('#search').addEventListener('input',event=>{state.query=event.target.value;clearTimeout(searchTimer);searchTimer=setTimeout(render,100);});
 $('#topic-search').addEventListener('input',event=>{state.topicQuery=event.target.value;renderTopics();});
+$('#import-preview-dialog').addEventListener('cancel',event=>{event.preventDefault();closeDialog('import-preview-dialog');});
+$('#import-preview-dialog').addEventListener('close',()=>{if(!$('#import-preview-dialog').open)clearImportPreview();});
 $('#image-viewer-image').addEventListener('load',imageViewerLoaded);
 $('#image-viewer-image').addEventListener('error',imageViewerFailed);
 $('#image-viewer-dialog').addEventListener('cancel',event=>{event.preventDefault();closeImageViewer();});

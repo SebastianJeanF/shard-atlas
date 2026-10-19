@@ -6,7 +6,7 @@
 
 **A chat with access to this Mac:** use the Shard Atlas tools to search, read, and add knowledge. The local integration can start the storage service when the app window is closed. It keeps the collection on this Mac. Start a new chat after installing the integration so its tools and instructions can load.
 
-**A chat without access to this Mac:** create a downloadable Shard Atlas JSON archive and tell the user to choose **Use with AI → Import a file** or **Backup & export → Choose JSON**. Say that the file is ready to import. Do not claim it was saved in the app. If an export or relevant existing notes were supplied, use those to avoid duplicates and connect to existing IDs. Without those notes, do not invent existing IDs or pretend to have checked the collection.
+**A chat without access to this Mac:** create a downloadable Shard Atlas JSON archive and tell the user to choose **Use with AI → Preview a file** or **Backup & export → Choose JSON**. The user can inspect the rendered cards, embedded photos, and connections before choosing **Save to atlas**. Say that the file is ready to preview and import. Do not claim it was saved in the app. If an export or relevant existing notes were supplied, use those to avoid duplicates and connect to existing IDs. Without those notes, do not invent existing IDs or pretend to have checked the collection.
 
 ## Prepare useful knowledge
 
@@ -108,6 +108,10 @@ Legacy archive fields remain readable for recovery. They do not require creating
 For a portable import file, use `schemaVersion: 1`, `shards`, `links`, and `reviews: []`. Omit `requestId`. Supply stable IDs for both shards and links. The app supplies missing capture timestamps and defaults. The helper's archive operation converts a batch into this format without saving it to the app. A portable import preserves existing IDs and does not overwrite existing notes. An import file is a handoff, not a live synchronization connection.
 
 Images require complete archive assets and local `/assets/<id>` references. Do not embed local filesystem paths or remote image markup that the app cannot display. Preserve images from a supplied complete archive when possible. If an image cannot be transferred, report that limitation rather than claiming it was imported.
+
+**JSON archives can include photos and diagrams.** When an image helps explain a shard and the actual image file is available, embed its bytes in the archive's top-level `assets` array. Each asset needs a stable `id`, a descriptive `name`, a supported `mimeType` (`image/png`, `image/jpeg`, `image/gif`, or `image/webp`), and `data` containing the file's base64 bytes without a `data:` URL prefix. The app supplies `createdAt` when omitted. Reference the same ID from the shard's Markdown, for example `![Diagram explaining ownership](/assets/ownership-diagram)`. Use useful alt text and retain image attribution or source links in the explanation. One asset can be referenced by several shards.
+
+Each image must be at most 8 MB, and the complete JSON archive must be at most 256 MB. A filename, local path, remote image URL, or Markdown reference alone does not include the image. If the chat cannot access the bytes, explain that limitation and retain an ordinary source link instead. The JSON preview displays embedded images without saving them, and **Save to atlas** imports the original image data along with the cards. These archive assets are separate from the additive batch schema used by the local add-knowledge tool.
 
 ## Optional pointer for another chat
 

@@ -444,9 +444,9 @@ kbd { font-family: inherit; font-size: 10px; line-height: 1.6; white-space: nowr
 [data-spiral-release="cpp20"] { --world-accent: var(--cpp20-accent); --world-ink: var(--cpp20-ink); --world-muted: var(--cpp20-muted); --world-soft: var(--cpp20-soft); --world-line: var(--cpp20-line); --world-seam: var(--cpp20-seam); }
 [data-spiral-release="cpp23"] { --world-accent: var(--cpp23-accent); --world-ink: var(--cpp23-ink); --world-muted: var(--cpp23-muted); --world-soft: var(--cpp23-soft); --world-line: var(--cpp23-line); --world-seam: var(--cpp23-seam); }
 [data-spiral-release="cpp26"] { --world-accent: var(--cpp26-accent); --world-ink: var(--cpp26-ink); --world-muted: var(--cpp26-muted); --world-soft: var(--cpp26-soft); --world-line: var(--cpp26-line); --world-seam: var(--cpp26-seam); }
-.detail-panel[data-shard-worlds], .shard-card[data-shard-worlds], .release-note[data-shard-worlds] { --shard-edge: var(--world-accent,var(--green)); --shard-background: var(--shard-tint,linear-gradient(var(--world-soft,var(--surface)),var(--world-soft,var(--surface)))); position: relative; background-color: var(--surface); background-image: linear-gradient(#fffefab3,#fffefab3),var(--shard-background); }
-.shard-card[data-shard-worlds], .release-note[data-shard-worlds] { overflow: hidden; }
-.detail-panel[data-shard-worlds]::before, .shard-card[data-shard-worlds]::before, .release-note[data-shard-worlds]::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; background: var(--shard-seam,var(--world-seam,linear-gradient(var(--green),var(--green)))); pointer-events: none; }
+.detail-panel[data-shard-worlds], .shard-card[data-shard-worlds], .release-note[data-shard-worlds], .import-review-card[data-shard-worlds] { --shard-edge: var(--world-accent,var(--green)); --shard-background: var(--shard-tint,linear-gradient(var(--world-soft,var(--surface)),var(--world-soft,var(--surface)))); position: relative; background-color: var(--surface); background-image: linear-gradient(#fffefab3,#fffefab3),var(--shard-background); }
+.shard-card[data-shard-worlds], .release-note[data-shard-worlds], .import-review-card[data-shard-worlds] { overflow: hidden; }
+.detail-panel[data-shard-worlds]::before, .shard-card[data-shard-worlds]::before, .release-note[data-shard-worlds]::before, .import-review-card[data-shard-worlds]::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; background: var(--shard-seam,var(--world-seam,linear-gradient(var(--green),var(--green)))); pointer-events: none; }
 .detail-panel[data-shard-worlds] { border-color: color-mix(in srgb,var(--shard-edge) 27%,var(--line)); }
 .detail-panel[data-shard-worlds] .note-header { background-image: linear-gradient(#fffefa80,#fffefa80),var(--shard-background); border-bottom-color: var(--world-line,var(--line)); }
 .shard-card[data-shard-worlds] { border-color: var(--line-soft); }
@@ -919,6 +919,61 @@ body[data-saving] dialog form { opacity: .75; }
 .import-issues,.import-coverage { padding: 12px 0; border-top: 1px solid var(--line); font-size: 11px; }
 .import-issues ul { max-height: 180px; overflow: auto; padding-left: 20px; overflow-wrap: anywhere; }
 .import-coverage pre { white-space: pre-wrap; font-size: 10px; max-height: 260px; overflow: auto; }
+.import-preview-dialog { width: min(1120px,calc(100vw - 32px)); }
+.import-preview-dialog .dialog-heading h2 { overflow-wrap: anywhere; }
+.import-preview-dialog .dialog-footer { margin-top: 24px; padding-top: 18px; }
+.import-preview-dialog .import-counts { grid-template-columns: repeat(auto-fit,minmax(min(100%,120px),1fr)); }
+.import-card-review { margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--line); }
+.import-review-heading { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 15px; }
+.import-review-heading h3 { font: 24px/1.35 Georgia,"Times New Roman",serif; letter-spacing: -.3px; margin: 0; }
+.import-review-heading p { color: var(--muted); font-size: 11px; margin: 0; }
+.import-review-layout { display: grid; grid-template-columns: 250px minmax(0,1fr); gap: 20px; align-items: start; }
+.import-review-list { position: sticky; top: 0; display: grid; align-content: start; gap: 8px; max-height: min(65dvh,650px); padding: 3px 7px 7px 3px; overflow-y: auto; scrollbar-width: thin; min-width: 0; }
+.import-review-item { display: block; width: 100%; min-width: 0; text-align: left; padding: 14px; border: 1px solid var(--line); border-radius: 9px; background: #fbfbf6; transition: background .15s,border-color .15s; overflow-wrap: anywhere; }
+.import-review-item:hover { background: #f1f4eb; border-color: #acb9a2; }
+.import-review-item.selected { background: var(--green-soft); border-color: #6c876d; box-shadow: inset 0 0 0 1px #6c876d; }
+.import-review-item > small { display: block; color: var(--muted); font-size: 9px; line-height: 1.5; margin-bottom: 7px; }
+.import-review-item.selected > small { color: #566e4f; }
+.import-review-item h4 { font-size: 12px; font-weight: 600; line-height: 1.5; margin: 0 0 7px; }
+.import-review-item p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--muted); font-size: 10px; line-height: 1.7; margin: 0; }
+.import-review-releases { display: flex; flex-wrap: wrap; gap: 4px; color: var(--green); font-size: 9px; margin-top: 9px; }
+.import-review-releases:empty { display: none; }
+.import-review-card { min-width: 0; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); overflow: hidden; }
+.import-review-card[data-shard-worlds] { border-color: color-mix(in srgb,var(--shard-edge) 30%,var(--line)); }
+.import-card-header { padding: 23px 25px 20px; border-bottom: 1px solid var(--line-soft); }
+.import-review-card[data-shard-worlds] .import-card-header { background-image: linear-gradient(#fffefa80,#fffefa80),var(--shard-background); border-bottom-color: var(--world-line,var(--line)); }
+.import-card-topline { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 7px 12px; margin-bottom: 13px; }
+.import-card-topline > small { color: var(--muted); font-size: 10px; }
+.import-state { display: inline-flex; align-items: center; border: 1px solid #cfdbc8; border-radius: 5px; background: #f0f4e9; color: #526a46; padding: 3px 7px; font-size: 9px; font-weight: 600; line-height: 1.4; }
+.import-card-header > h3 { font: 29px/1.3 Georgia,"Times New Roman",serif; letter-spacing: -.5px; margin: 0 0 17px; overflow-wrap: anywhere; }
+.import-card-header .tag-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 14px; }
+.import-card-body { padding: 24px 25px; min-width: 0; }
+.import-card-body:empty { display: none; }
+.import-card-body .note-image { margin-inline: 0; }
+.import-card-connections { padding: 19px 25px; border-top: 1px solid var(--line-soft); background: #fffefa80; font-size: 11px; }
+.import-card-connections h4 { font-size: 11px; font-weight: 600; margin: 0 0 11px; }
+.import-card-connections ul { display: grid; gap: 9px; list-style: none; padding: 0; margin: 0; }
+.import-card-connections li { padding: 10px 12px; border: 1px solid var(--line); border-radius: 7px; background: #fafbf6; overflow-wrap: anywhere; line-height: 1.75; }
+.import-card-connections li small, .import-card-connections li p { display: block; color: var(--muted); font-size: 10px; margin: 4px 0 0; }
+.import-card-connections button { display: inline; border: 0; background: transparent; color: var(--green); font-size: 11px; font-weight: 600; text-align: left; padding: 0; text-decoration: underline; text-underline-offset: 3px; }
+.import-card-connections button:hover { color: var(--green-dark); }
+.import-card-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 7px 14px; border-top: 1px solid var(--line-soft); padding: 15px 25px; color: var(--muted); font-size: 10px; background: #fffefa80; }
+.import-card-footer:empty { display: none; }
+@media (max-width: 760px) {
+  .import-review-layout { grid-template-columns: 1fr; gap: 15px; }
+  .import-review-list { position: static; max-height: 180px; padding-right: 5px; }
+  .import-review-item { padding: 11px 13px; }
+  .import-review-item h4 { margin-bottom: 4px; }
+  .import-review-item > small { margin-bottom: 4px; }
+  .import-review-item p { -webkit-line-clamp: 1; }
+  .import-review-releases { margin-top: 5px; }
+  .import-preview-dialog { width: calc(100vw - 24px); padding: 22px 18px; }
+  .import-card-header, .import-card-body, .import-card-connections, .import-card-footer { padding-inline: 18px; }
+  .import-card-header > h3 { font-size: 25px; }
+  .import-preview-dialog .dialog-footer { flex-wrap: wrap; gap: 12px; }
+  .import-preview-dialog .dialog-footer > span { max-width: 100%; }
+  .import-preview-dialog .dialog-footer > div { width: 100%; justify-content: space-between; }
+}
 .import-receipt { border: 1px solid var(--line); border-radius: 8px; padding: 18px; margin-bottom: 12px; }
 .import-receipt h3 { font-size: 13px; margin-bottom: 5px; }
 .import-receipt small,.import-receipt p { font-size: 10px; color: var(--muted); }

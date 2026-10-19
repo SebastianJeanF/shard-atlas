@@ -138,12 +138,19 @@ try {
   let failDelete = false, failDraftPut = false, failReleaseLoad = false, releaseResponse = null, failSpiralLoad = false, spiralResponse = null, reducedMotion = false, activeWrites = 0, maxActiveWrites = 0;
   let failAiInstructions = false, failClipboard = false, aiInstructionsRequests = 0;
   let stateReadCount = 0, stateResponseGate = null, releaseReadCount = 0, releaseResponseGate = null;
+  let importPreviewGate = null, importPreviewStarted = false;
+  const previewObjectUrls = new Set(), revokedPreviewUrls = [];
+  class FixtureURL extends URL {
+    static createObjectURL(blob) { const url = URL.createObjectURL(blob); previewObjectUrls.add(url); return url; }
+    static revokeObjectURL(url) { revokedPreviewUrls.push(url); previewObjectUrls.delete(url); URL.revokeObjectURL(url); }
+  }
   let instructionText = '# Add knowledge to Shard Atlas\n\nCheck for duplicates and verify every saved note.\n';
   const clipboardWrites = [];
   const browserFetch = async (url, options = {}) => {
     const full = new URL(url, base), method = options.method || 'GET';
     if (method !== 'GET') { apiWrites++; activeWrites++; maxActiveWrites = Math.max(maxActiveWrites, activeWrites); }
     try {
+      if (full.pathname === '/api/import/preview' && importPreviewGate) { const gate = importPreviewGate; importPreviewGate = null; const response = await fetch(full, options); importPreviewStarted = true; await gate; return response; }
       if(method==='PUT'&&full.pathname.startsWith('/api/boards/')&&failBoardPut)return {ok:false,json:async()=>({error:'Simulated board save failure'})};
       if(method==='PUT'&&full.pathname.startsWith('/api/boards/')&&boardPutGate){const gate=boardPutGate;boardPutGate=null;const response=await fetch(full,options);boardPutStarted=true;await gate;return response;}
       if (full.pathname.startsWith('/api/assets/') && full.pathname.endsWith('/text') && ocrResponse) return {ok:true,json:async()=>ocrResponse};
@@ -163,9 +170,9 @@ try {
   const require = createRequire(import.meta.url);
   const windowListeners = new Map();
   const w = { document, matchMedia: () => ({ matches: reducedMotion }), addEventListener(name, callback) { const listeners = windowListeners.get(name) || []; listeners.push(callback); windowListeners.set(name, listeners); }, katex: require(path.join(project, 'static/vendor/katex/katex.min.js')), confirm: () => true };
-  context = vm.createContext({ window: w, document, fetch: browserFetch, FormData: FixtureFormData, FileReader: FixtureFileReader, navigator: { clipboard: { writeText: async text => { if (failClipboard) throw new Error('Clipboard permission denied'); clipboardWrites.push(text); } } }, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key=>storage.delete(key) }, setTimeout: trackedSetTimeout, clearTimeout: timer => { timers.delete(timer); clearTimeout(timer); }, console, Blob, URL });
+  context = vm.createContext({ window: w, document, fetch: browserFetch, FormData: FixtureFormData, FileReader: FixtureFileReader, navigator: { clipboard: { writeText: async text => { if (failClipboard) throw new Error('Clipboard permission denied'); clipboardWrites.push(text); } } }, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key=>storage.delete(key) }, setTimeout: trackedSetTimeout, clearTimeout: timer => { timers.delete(timer); clearTimeout(timer); }, console, Blob, URL: FixtureURL, atob: value => Buffer.from(value, 'base64').toString('binary') });
   const code = fs.readFileSync(path.join(project, 'static/app.js'), 'utf8');
-  vm.runInContext(code + '\nwindow.testAtlas={state,drafts,openImageViewer,imageViewerLoaded,imageViewerFailed,fitImageViewer,setImageViewerScale,zoomImageViewer,handleImageViewerKey,get imageViewer(){return imageViewer},filteredShards,markdown,stabilizeWikiLinks,renderNav,renderLibrary,renderTimeline,renderBoards,atlasModel,atlasRelationshipModel,renderAtlas,renderDetail,dateLabel,previewImport,saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,renderReleaseFeature,loadReleaseCatalog,loadSpiralCatalog,setTimelineTheme,savedTimelineTheme,filteredSpiralExamples,handlePortalKey,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,uploadImage,showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
+  vm.runInContext(code + '\nwindow.testAtlas={state,drafts,openImageViewer,imageViewerLoaded,imageViewerFailed,fitImageViewer,setImageViewerScale,zoomImageViewer,handleImageViewerKey,get imageViewer(){return imageViewer},filteredShards,markdown,stabilizeWikiLinks,renderNav,renderLibrary,renderTimeline,renderBoards,atlasModel,atlasRelationshipModel,renderAtlas,renderDetail,dateLabel,previewImport,clearImportPreview,selectImportShard,get importImageUrls(){return importImageUrls},saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,renderReleaseFeature,loadReleaseCatalog,loadSpiralCatalog,setTimelineTheme,savedTimelineTheme,filteredSpiralExamples,handlePortalKey,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,uploadImage,showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
   const t = w.testAtlas, $ = selector => document.querySelector(selector), results = [];
   async function until(predicate) { for (let i = 0; i < 300; i++) { if (predicate()) return; await delay(10); } throw new Error('Timed out waiting for frontend state'); }
   async function get(url) { const response = await fetch(base + url), data = await response.json(); assert.ok(response.ok, JSON.stringify(data)); return data; }
@@ -1231,6 +1238,96 @@ try {
     const board=t.state.data.boards.find(b=>b.title==='C++ connections QA');assert.ok(board);const shard=t.state.data.shards[0];board.items=[{shardId:shard.id,x:-20,y:60,width:270,height:210,sectionId:'research'}];board.sections=[{id:'research',title:'Research',x:-50,y:0,width:700,height:500,collapsed:true}];board.viewport={x:40,y:80,zoom:.2};await t.saveBoard(board);
     const persisted=(await get('/api/state')).boards.find(b=>b.id===board.id);assert.equal(persisted.items[0].x,-20);assert.equal(persisted.sections[0].collapsed,true);assert.equal(persisted.viewport.zoom,.2);t.state.boardId=board.id;assert.match(t.renderBoards(),/board-minimap/);assert.match(t.renderBoards(),/Research/);assert.match(t.renderBoards(),/0 visible \/ 1 saved cards/);
     await t.runAction('toggle-section',{dataset:{id:'research'}});await until(()=>t.pending===0);await delay(350);await until(()=>t.pending===0);assert.match(t.renderBoards(),/data-board-card=/);t.state.view='library';
+  });
+  await check('AI JSON review renders full cards, syntax, math, releases, sources and pending relationships without saving', async () => {
+    const before = JSON.stringify(await get('/api/state')), clientBefore = JSON.stringify(t.state.data);
+    const archive = { schemaVersion: 1, shards: [
+      { id: 'review-rich-note', title: 'Generated <script>alert(1)</script> card', kind: 'concept', status: 'learning', tags: ['Templates'], languageVersion: 'C++11 / C++20', sourceUrl: 'https://en.cppreference.com/w/cpp/language/templates.html', sources: [{ url: 'https://en.cppreference.com/w/cpp/language/constraints.html', title: 'Constraints reference', note: 'Checked supporting source.' }], content: '## A complete explanation\n\n```cpp\ntemplate<class T>\nT twice(T value) { return value + value; }\n```\n\n$x+1$\n\nRead [[id:review-peer-note|Pending peer]].\n\nThe last paragraph must remain visible in full.' },
+      { id: 'review-peer-note', title: 'Pending peer', content: 'A second incoming card.', tags: ['Types'] }
+    ], links: [{ id: 'review-generated-link', fromId: 'review-rich-note', toId: 'review-peer-note', type: 'depends_on', note: 'Understand this dependency first.' }], boards: [] };
+    const originalArchive = JSON.stringify(archive);
+    t.openEditor(); $('#shard-title').value = 'An unfinished personal draft'; $('#shard-content').value = 'Keep this draft exactly.';
+    await t.previewImport(archive, 'Generated cards.json');
+    let output = $('#import-preview-content').innerHTML;
+    assert.ok($('#import-preview-dialog').open); assert.match(output, /class="import-card-review"/); assert.match(output, /class="import-review-card/);
+    assert.match(output, /Generated &lt;script&gt;alert\(1\)&lt;\/script&gt; card/); assert.ok(!output.includes('<script>'));
+    assert.match(output, /syn-keyword/); assert.match(output, /class="katex"/); assert.match(output, /Templates/); assert.match(output, /C\+\+11/); assert.match(output, /C\+\+20/);
+    assert.match(output, /Constraints reference/); assert.match(output, /Checked supporting source/); assert.match(output, /The last paragraph must remain visible in full\./);
+    assert.match(output, /Pending peer/); assert.match(output, /Understand this dependency first\./); assert.match(output, /depends on|depends_on/i); assert.ok(!output.includes('wiki-link missing'));
+    assert.match(output, /data-action="preview-import-shard"[^>]*data-index="1"/);
+    await t.runAction('preview-import-shard', { dataset: { index: '1' } }); output = $('#import-preview-content').innerHTML;
+    assert.match(output, /A second incoming card\./); assert.match(output, /Types/);
+    t.selectImportShard(-1); t.selectImportShard(99); assert.match($('#import-preview-content').innerHTML, /A second incoming card\./);
+    const editor = $('#editor-form'), requestSubmit = editor.requestSubmit, writes = apiWrites; let submitted = 0;
+    editor.requestSubmit = function () { submitted++; return requestSubmit.call(this); };
+    try {
+      document.dispatchEvent(new FixtureEvent('keydown', { key: 'Enter', metaKey: true, target: $('#import-preview-content') }));
+      document.dispatchEvent(new FixtureEvent('keydown', { key: 'Enter', ctrlKey: true, target: $('#import-preview-content') }));
+      await delay(20); assert.equal(submitted, 0, 'Review shortcuts must not submit the editor underneath'); assert.equal(apiWrites, writes);
+      assert.ok($('#import-preview-dialog').open && $('#editor-dialog').open);
+    } finally { editor.requestSubmit = requestSubmit; }
+    assert.equal($('#shard-title').value, 'An unfinished personal draft'); assert.equal($('#shard-content').value, 'Keep this draft exactly.'); assert.ok($('#editor-dialog').open);
+    assert.equal(JSON.stringify(t.state.data), clientBefore); assert.equal(JSON.stringify(await get('/api/state')), before); assert.equal(JSON.stringify(archive), originalArchive);
+    t.closeDialog('import-preview-dialog'); $('#editor-dialog').close();
+  });
+  await check('Embedded JSON photos are reviewable and enlargeable before commit, then revoked on cancel', async () => {
+    const before = JSON.stringify(await get('/api/state'));
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7m8AAAAASUVORK5CYII=';
+    const archive = { schemaVersion: 1, shards: [{ id: 'review-photo-note', title: 'Pending photo', content: '![Diagram <caption>](/assets/review-photo-asset)', tags: [] }], assets: [{ id: 'review-photo-asset', name: 'diagram.png', mimeType: 'image/png', data: png }], links: [] };
+    const original = JSON.stringify(archive); await t.previewImport(archive, 'With a photo.json');
+    assert.equal($('#confirm-import').disabled, false); const url = t.importImageUrls.get('review-photo-asset'); assert.ok(url?.startsWith('blob:')); assert.ok(previewObjectUrls.has(url));
+    const output = $('#import-preview-content').innerHTML; assert.ok(output.includes('src="' + url + '"')); assert.ok(output.includes('data-image-src="' + url + '"')); assert.match(output, /Diagram &lt;caption&gt;/);
+    assert.equal((await fetch(base + '/assets/review-photo-asset')).status, 404); assert.equal(JSON.stringify(await get('/api/state')), before); assert.equal(JSON.stringify(archive), original);
+    t.openImageViewer(url, 'Pending diagram'); assert.ok($('#image-viewer-dialog').open); assert.equal($('#image-viewer-image').src, url);
+    t.closeDialog('image-viewer-dialog'); t.closeDialog('import-preview-dialog');
+    assert.equal(t.importImageUrls.size, 0); assert.ok(!previewObjectUrls.has(url)); assert.ok(revokedPreviewUrls.includes(url));
+    t.openImageViewer(url, 'Expired preview'); assert.ok(!$('#image-viewer-dialog').open); assert.equal(JSON.stringify(await get('/api/state')), before);
+  });
+  await check('Import review labels existing-ID conflicts while preserving the current card', async () => {
+    const existing = t.state.data.shards[0], before = JSON.stringify(await get('/api/state'));
+    await t.previewImport({ schemaVersion: 1, shards: [{ id: existing.id, title: 'Different incoming title', content: 'Incoming content cannot replace the existing card.', tags: [] }], links: [] }, 'Conflicting card.json');
+    const output = $('#import-preview-content').innerHTML;
+    assert.match(output, /Existing card kept|Already in your atlas/); assert.match(output, /Incoming content cannot replace the existing card/); assert.match(output, /existing content will be preserved|will not replace|won.t replace/i);
+    assert.equal(JSON.stringify(await get('/api/state')), before); t.closeDialog('import-preview-dialog');
+  });
+  await check('Invalid JSON archives remain previewable but cannot be confirmed', async () => {
+    const before = JSON.stringify(await get('/api/state'));
+    await t.previewImport({ schemaVersion: 1, shards: [{ id: 'review-invalid-note', title: 'Invalid photo fixture', content: '![Missing](/assets/review-bad-photo)', tags: [] }], assets: [{ id: 'review-bad-photo', name: 'bad.png', mimeType: 'image/png', data: 'not-base64' }] }, 'Invalid archive.json');
+    assert.equal($('#confirm-import').disabled, true); assert.equal(t.importImageUrls.size, 0); assert.match($('#import-preview-content').innerHTML, /base64|supported raster|invalid/i);
+    const writes = apiWrites; await t.runAction('confirm-import', { dataset: {} }); assert.equal(apiWrites, writes); assert.equal(JSON.stringify(await get('/api/state')), before); assert.ok($('#import-preview-dialog').open);
+    t.closeDialog('import-preview-dialog');
+  });
+  await check('Replacing or cancelling an import review releases photo previews and clears confirmation state', async () => {
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7m8AAAAASUVORK5CYII=';
+    await t.previewImport({ schemaVersion: 1, shards: [{ id: 'review-replaced-photo-note', title: 'Replaced photo', content: '![Diagram](/assets/review-replaced-photo)', tags: [] }], assets: [{ id: 'review-replaced-photo', name: 'diagram.png', mimeType: 'image/png', data: png }] });
+    const oldUrl = t.importImageUrls.get('review-replaced-photo'); assert.ok(oldUrl);
+    await t.previewImport({ schemaVersion: 1, shards: [{ id: 'review-replacement-note', title: 'Replacement card', content: 'Use this replacement.', tags: [] }] });
+    assert.ok(revokedPreviewUrls.includes(oldUrl)); assert.equal(t.importImageUrls.size, 0); assert.match($('#import-preview-content').innerHTML, /Use this replacement/);
+    t.closeDialog('import-preview-dialog'); const writes = apiWrites; await t.runAction('confirm-import', { dataset: {} }); assert.equal(apiWrites, writes); assert.ok(!$('#import-preview-dialog').open);
+  });
+  await check('A later import selection wins over a delayed earlier preview response', async () => {
+    let release; importPreviewGate = new Promise(resolve => { release = resolve; }); importPreviewStarted = false;
+    const old = t.previewImport({ schemaVersion: 1, shards: [{ id: 'review-stale-old', title: 'Old delayed card', content: 'Do not reopen this.', tags: [] }] }, 'Earlier file');
+    await until(() => importPreviewStarted);
+    await t.previewImport({ schemaVersion: 1, shards: [{ id: 'review-stale-new', title: 'Newest selected card', content: 'Keep the newest selection.', tags: [] }] }, 'Newest file');
+    release(); await old;
+    assert.equal($('#import-preview-title').textContent, 'Newest file'); assert.match($('#import-preview-content').innerHTML, /Keep the newest selection/); assert.ok(!$('#import-preview-content').innerHTML.includes('Do not reopen this.'));
+    t.closeDialog('import-preview-dialog');
+  });
+  await check('Cancelling a pending import response cannot reopen or confirm it', async () => {
+    let release; importPreviewGate = new Promise(resolve => { release = resolve; }); importPreviewStarted = false;
+    const pending = t.previewImport({ schemaVersion: 1, shards: [{ id: 'review-cancelled-response', title: 'Cancelled delayed card', content: 'Never save this.', tags: [] }] });
+    await until(() => importPreviewStarted); t.clearImportPreview(); release(); await pending;
+    assert.ok(!$('#import-preview-dialog').open); const writes = apiWrites; await t.runAction('confirm-import', { dataset: {} }); assert.equal(apiWrites, writes);
+  });
+  await check('Confirming a reviewed embedded photo imports the original bytes and card text', async () => {
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7m8AAAAASUVORK5CYII=';
+    const content = '![Kept caption](/assets/review-committed-photo)';
+    await t.previewImport({ schemaVersion: 1, shards: [{ id: 'review-committed-photo-note', title: 'Committed photo fixture', content, tags: [] }], assets: [{ id: 'review-committed-photo', name: 'diagram.png', mimeType: 'image/png', data: png }], links: [] });
+    const url = t.importImageUrls.get('review-committed-photo'); await t.runAction('confirm-import', { dataset: {} });
+    assert.ok(!$('#import-preview-dialog').open); assert.equal(t.importImageUrls.size, 0); assert.ok(revokedPreviewUrls.includes(url));
+    assert.equal(t.state.data.shards.find(shard => shard.id === 'review-committed-photo-note').content, content);
+    const response = await fetch(base + '/assets/review-committed-photo'); assert.equal(response.status, 200); assert.deepEqual(Buffer.from(await response.arrayBuffer()), Buffer.from(png, 'base64'));
   });
   await check('Import preview is read-only, confirmation produces a receipt and undo preserves edited notes', async () => {
     const count=(await get('/api/state')).shards.length;await t.previewImport({schemaVersion:1,shards:[{id:'frontend-preview-note',title:'Preview fixture',content:'Original import text',tags:[]}],links:[],boards:[]},'QA import');assert.ok($('#import-preview-dialog').open);assert.equal((await get('/api/state')).shards.length,count);await t.runAction('confirm-import',{dataset:{}});assert.ok(!$('#import-preview-dialog').open);assert.ok(t.state.data.shards.some(s=>s.id==='frontend-preview-note'));const receipt=(await get('/api/imports')).imports[0];assert.ok(receipt.id);
