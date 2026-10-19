@@ -1,0 +1,73 @@
+/* Touch layout for the browser app; the Mac bundle keeps its original CSS. */
+.phone-offline-status { padding: 10px 12px 0; color: var(--muted); font-size: 11px; }
+.phone-nav, .phone-back { display: none; }
+.phone-install-steps { padding-left: 23px; line-height: 1.8; }
+.phone-install-steps li { padding: 5px 0 5px 6px; }
+.phone-app .sidebar { padding-top: max(22px, env(safe-area-inset-top)); padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+.phone-app .toast { bottom: max(24px, env(safe-area-inset-bottom)); }
+@media (max-width: 800px) {
+  .phone-app input, .phone-app textarea, .phone-app select { font-size: 16px; }
+  .phone-app .primary, .phone-app .secondary, .phone-app .text-button, .phone-app .icon-button { min-height: 44px; }
+  .phone-app .icon-button { min-width: 44px; }
+  .phone-app .sidebar { width: min(310px, 85vw); }
+  .phone-app .nav-item, .phone-app .topic-list button { min-height: 44px; font-size: 14px; }
+  .phone-app .topic-search-field input { min-height: 44px; }
+  .phone-app .topic-search-field .icon-button { top: 0; right: 0; }
+  .phone-app .brand small { font-size: 11px; }
+  .phone-app .local-status { font-size: 12px; }
+  .phone-app .local-status small { font-size: 11px; }
+  .phone-app .sidebar .new-shard kbd { display: none; }
+  .phone-app .topbar { min-height: 64px; height: auto; padding-top: env(safe-area-inset-top); position: sticky; top: 0; z-index: 15; }
+  .phone-app dialog { max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y: auto; }
+  .phone-app .dialog-heading { gap: 10px; }
+  .phone-app .settings-option { gap: 12px; flex-wrap: wrap; }
+  .phone-app .field-hint { font-size: 12px; line-height: 1.5; }
+  .phone-app .dialog-footer { gap: 12px; flex-wrap: wrap; }
+  .phone-app .search-box input { font-size: 16px; }
+}
+@media (max-width: 600px) {
+  .phone-app { padding-bottom: calc(74px + env(safe-area-inset-bottom)); }
+  .phone-nav { position: fixed; display: grid; grid-template-columns: repeat(4, 1fr); left: 0; right: 0; bottom: 0; z-index: 35; padding: 5px 8px calc(5px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); }
+  .phone-nav button { border: 0; background: transparent; border-radius: 8px; min-height: 58px; color: var(--muted); font-size: 11px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 2px; }
+  .phone-nav button span { font-size: 23px; line-height: 1.2; }
+  .phone-nav button[aria-current="page"] { background: var(--green-soft); color: var(--green-dark); font-weight: 650; }
+  .phone-nav button:last-child { color: var(--green); }
+  .phone-app .toast { bottom: calc(86px + env(safe-area-inset-bottom)); max-width: calc(100vw - 28px); width: max-content; }
+  .phone-app .workspace { padding: 22px 14px; }
+  .phone-app .library-layout { display: block; }
+  .phone-app .library-layout .detail-panel, .phone-app .library-layout .context-panel { display: none; }
+  .phone-app .shard-list, .phone-app .has-selection .shard-list { max-height: none; overflow: visible; }
+  .phone-app .shard-card { padding: 17px 13px; }
+  .phone-app .card-title { font-size: 16px; }
+  .phone-app .card-excerpt { font-size: 13px; -webkit-line-clamp: 2; }
+  .phone-app .card-date, .phone-app .kind-label { font-size: 11px; }
+  .phone-app .filter-row select { font-size: 13px; min-height: 44px; }
+  .phone-app .markdown { font-size: 16px; line-height: 1.8; }
+  .phone-app .markdown pre code, .phone-app .code-block code { font-size: 13px; }
+  .phone-app .note-actions { flex-wrap: wrap; }
+  .phone-app .note-actions button { font-size: 13px; }
+  .phone-app .note-body, .phone-app .note-header { padding: 20px 17px; }
+  .phone-app .note-title { font-size: 29px; }
+  .phone-app .note-sources { padding-inline: 17px; }
+  .phone-app .connection-title { font-size: 15px; }
+  .phone-app .connection-note, .phone-app .relation { font-size: 12px; }
+  .phone-app .connection-open { min-height: 48px; }
+  .phone-reading .phone-back { display: inline-flex; white-space: nowrap; font-size: 13px; }
+  .phone-reading .search-box { display: none; }
+  .phone-reading .topbar > :last-child { margin-left: auto; }
+  .phone-reading .workspace > .page-heading, .phone-reading .workspace > .stats-row { display: none; }
+  .phone-reading .library-layout .library-panel { display: none; }
+  .phone-reading .library-layout .detail-panel { display: block; }
+  .phone-app .empty-state { padding: 30px 19px; }
+  .phone-app .empty-state > .primary { margin-bottom: 20px; }
+  .phone-app .empty-state p { font-size: 14px; }
+  .phone-app dialog { width: calc(100vw - 20px); max-width: none; margin: auto; padding: 21px 17px; }
+  .phone-app .field-row { grid-template-columns: 1fr; }
+  .phone-app .dialog-intro { font-size: 14px; }
+  .phone-app .ai-actions { flex-wrap: wrap; }
+  .phone-app .settings-option h3 { font-size: 15px; }
+  .phone-app .settings-option p { font-size: 13px; }
+  .phone-app .source-record { font-size: 13px; }
+  .phone-app .import-review-layout { display: block; }
+  .phone-app .import-review-list { max-height: 180px; margin-bottom: 16px; }
+}
