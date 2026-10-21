@@ -34,6 +34,29 @@ SHARD_SCHEMA["properties"]["sources"] = {
         "publishedDate": {"type": "string", "maxLength": 10}, "accessedDate": {"type": "string", "maxLength": 10},
         "note": {"type": "string", "maxLength": 2000}}},
 }
+SHARD_SCHEMA["properties"].update({
+    "subjects": {"type": "array", "maxItems": 20, "uniqueItems": True,
+        "items": {"type": "string", "minLength": 1, "maxLength": 80},
+        "description": "Overlapping subject memberships, such as Mathematics and ML. Reuse existing subject names; a subject is not a separate copy of a note."},
+    "courses": {"type": "array", "maxItems": 100,
+        "description": "Source-backed appearances of this concept in courses or lectures. Preserve each occurrence's notation context and exact source location.",
+        "items": {"type": "object", "additionalProperties": False, "required": ["courseCode"], "properties": {
+            "courseCode": {"type": "string", "minLength": 1, "maxLength": 80},
+            "courseTitle": {"type": "string", "maxLength": 240}, "term": {"type": "string", "maxLength": 80},
+            "lecture": {"type": "string", "maxLength": 240}, "position": {"type": "number", "minimum": 0, "maximum": 100000},
+            "sourceUrl": {"type": "string", "maxLength": 2048}, "sourceLocation": {"type": "string", "maxLength": 240},
+            "context": {"type": "string", "maxLength": 5000}}}},
+    "notation": {"type": "array", "maxItems": 100,
+        "description": "Definitions scoped to this note or a named course occurrence; the same symbol may mean something else elsewhere.",
+        "items": {"type": "object", "additionalProperties": False, "required": ["symbol", "meaning"], "properties": {
+            "symbol": {"type": "string", "minLength": 1, "maxLength": 120},
+            "meaning": {"type": "string", "minLength": 1, "maxLength": 2000},
+            "shape": {"type": "string", "maxLength": 120}, "role": {"type": "string", "maxLength": 240},
+            "scope": {"type": "string", "maxLength": 240}}}},
+    "assumptions": {"type": "array", "maxItems": 100,
+        "items": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "description": "Explicit conditions under which this explanation, method, or result applies. Do not invent assumptions absent from the source."},
+})
 LINK_SCHEMA = {
     "type": "object", "additionalProperties": False, "required": ["fromId", "toId", "type"],
     "properties": {

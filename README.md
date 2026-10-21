@@ -2,9 +2,9 @@
 
 **A local workspace for technical ideas and the connections between them.**
 
-Write an explanation, keep the code and sources beside it, and connect it to what you already know. Shard Atlas brings notes, an automatic topic map, and a C++ release timeline into a macOS app that works offline.
+Write an explanation, keep its examples and sources beside it, and connect it to what you already know. Shard Atlas brings notes, course context, an automatic topic map, and a C++ release timeline into a macOS app that works offline.
 
-[User guide](docs/guide.md) · [Development](docs/development.md) · [Contributing](CONTRIBUTING.md)
+[User guide](docs/guide.md) · [Roadmap](docs/roadmap.md) · [Development](docs/development.md) · [Contributing](CONTRIBUTING.md)
 
 ![A short tour of Shard Atlas using the included sample collection](docs/images/demo.gif)
 
@@ -13,6 +13,7 @@ Write an explanation, keep the code and sources beside it, and connect it to wha
 - **Keep the details.** Notes support Markdown, highlighted C++ code, mathematics, images, source references, and links to other notes.
 - **Explain the relationship.** Connect ideas with labels such as *depends on*, *contrasts with*, and *is an example of*, with a reason for each connection.
 - **See how topics fit together.** Explore automatic neighborhoods, find shards shared by several topics, and expand saved relationships without arranging cards or drawing lines.
+- **Follow an idea across subjects and courses.** Use Generic, C++, Computer science, Mathematics, or Machine learning views of the same collection. Keep a concept's course and lecture occurrences, source locations, notation, and assumptions beside its explanation.
 - **Keep your bearings.** Search notes or find topics by typing, then filter by topic, kind, or understanding. Topics grow freely with your notes. Explore the separate, sourced C++ release reference from C++98 through the C++26 working draft.
 - **Give each release a familiar place.** An optional Wizard101 inspired timeline pairs C++ releases with illustrated worlds, distinct emblems, coordinated column colors, source-linked context, and small programming examples. Grouped releases show every mapped world. Switch to Plain for the original timeline presentation. The public source includes original artwork, with support for a separate local game-icon pack.
 
@@ -47,7 +48,7 @@ The service listens on the local loopback interface. Shard Atlas is a personal d
 
 ## Capture from an AI chat
 
-**“Add this to Shard Atlas”** can save technical explanations and useful connections when your AI client has the optional local integration configured. The app's **Use with AI** guide explains the workflow. Without local access, a chat can prepare a portable JSON file for you to import.
+**“Add this to Shard Atlas”** can save technical explanations and useful connections when your AI client has the optional local integration configured. The app's **Use with AI** guide explains the workflow. Without local access, a chat can prepare a portable JSON file with source references and course context. Review, select, and edit its cards in the import preview before saving.
 
 The application does not automatically install tools into every AI service. See the [AI integration setup](docs/development.md#optional-ai-integration) and the [knowledge contribution guide](static/ai-instructions.md).
 

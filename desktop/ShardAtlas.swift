@@ -25,7 +25,7 @@ struct DesktopConfiguration {
         let metadataURL = Bundle.main.url(forResource: "desktop-config", withExtension: "json")
         let metadata = suppliedMetadata ?? metadataURL.flatMap { try? Data(contentsOf: $0) }
             .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
-        backendVersion = metadata["backendVersion"] as? String ?? "2.4.4"
+        backendVersion = metadata["backendVersion"] as? String ?? "2.5.0"
         let qaDatabase = argument("--qa-db") ?? metadata["qaDatabase"] as? String
         isQA = qaDatabase != nil
         if let qaDatabase {
@@ -269,7 +269,7 @@ final class DesktopDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, 
         edit.addItem(.separator()); edit.addItem(menuItem("Find Shards", command: "search", key: "k"))
         addMenu(edit, to: main)
         let view = NSMenu(title: "View")
-        for (title, command, key) in [("Library", "library", "1"), ("Topic Map", "atlas", "3"),
+        for (title, command, key) in [("Library", "library", "1"), ("Courses", "courses", "2"), ("Topic Map", "atlas", "3"),
                                       ("C++ Releases", "timeline", "4")] {
             view.addItem(menuItem(title, command: command, key: key))
         }
@@ -297,7 +297,7 @@ final class DesktopDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, 
     @objc private func runCommand(_ sender: NSMenuItem) {
         guard loaded, !checkingQuit, window.attachedSheet == nil,
               let command = sender.representedObject as? String,
-              ["new", "search", "library", "graph", "atlas", "timeline", "settings", "boards"].contains(command) else { return }
+              ["new", "search", "library", "courses", "graph", "atlas", "timeline", "settings", "boards"].contains(command) else { return }
         window.makeKeyAndOrderFront(nil)
         webView.evaluateJavaScript("window.shardAtlasDesktop?.command('\(command)')", completionHandler: nil)
     }

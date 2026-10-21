@@ -1,6 +1,6 @@
 # Using Shard Atlas
 
-Shard Atlas stores explanations and the relationships between them. A *shard* is a note about one technical idea. The Library, Topic map, and C++ timeline offer different ways to explore your notes.
+Shard Atlas stores explanations and the relationships between them. A *shard* is a note about one technical idea. The Library, Courses, Topic map, and C++ timeline offer different ways to explore your notes.
 
 [Back to the project](../README.md) · [Build and development](development.md) · [AI contribution guide](../static/ai-instructions.md)
 
@@ -42,11 +42,23 @@ Direction matters. An arrow runs from the note making the relationship to its ta
 
 The Library includes a compact preview of nearby ideas. Use Topic map to explore saved relationships one step at a time.
 
+## Follow subjects and courses
+
+**Generic · all subjects** shows the shared collection. Choose **C++**, **Computer science**, **Mathematics**, or **Machine learning** to focus on a subject. These views can overlap. An idea can belong to several subjects without becoming several notes. Subject focus changes what you see, rather than moving or copying knowledge.
+
+Use **Courses** to find notes through their course and lecture context. In the editor's **Course & notation** section, add a course code and, when known, a course title, term, lecture or reading, source link, source location, and a short explanation of how the course uses the concept. **Lecture order** provides a numeric order, followed by the lecture label. A source location can identify a page, slide, section, or timestamp. Leave unknown details empty instead of guessing them.
+
+Courses groups occurrences by course code and term. Occurrences without a lecture appear under **Course foundations**. The view starts empty until you add course context to a shard.
+
+**Keep the concept once and record where it appears.** The same shard can have several course occurrences, including several lectures in one course. Its explanation remains available in Library and Topic map. Course context preserves the local framing without turning each lecture mention into a duplicate concept.
+
+Add expandable notation entries to explain each symbol's meaning, type or shape, role, and scope. For example, a role can identify a quantity as an input or a current estimate, while scope identifies the lecture or formulation where that meaning applies. The editor defaults scope to **This explanation**. A symbol's definition belongs to this note and its stated context, rather than a global dictionary. Record the assumptions needed for the explanation's claims, one per line. Course context, notation, and assumptions are included in recoverable editor drafts.
+
 ## Explore the Topic map
 
 **Topic map** automatically arranges your collection into topic neighborhoods. Open a neighborhood to explore its shards. Every assigned topic counts, so a shard about both Classes and Templates can bridge those neighborhoods. Search and filters narrow the view without changing your saved notes.
 
-Shared-topic links show which subjects overlap. Saved conceptual relationships have a distinct style and retain their labels and direction. Select a shard to explore its saved relationships, then expand a neighboring shard to follow another step. A shared topic does not imply that one idea explains or depends on another.
+Shared-topic links show which topics overlap. Saved conceptual relationships have a distinct style and retain their labels and direction. Select a shard to explore its saved relationships, then expand a neighboring shard to follow another step. A shared topic does not imply that one idea explains or depends on another.
 
 Broad organizational tags, such as C++, LucidChart, and Images, are hidden by default. Show them when they are useful. The same data and view settings generate the same layout, without manually arranging cards or drawing connections.
 
@@ -56,9 +68,11 @@ Topic map replaces the manual Canvas interface. Existing saved canvases remain i
 
 **C++ timeline** shows your shards alongside a bundled, sourced reference from C++98 through the **C++26 working draft**. Your shard cards appear openly at the top of each release. Use **Show** to choose **My shards & reference**, **My shards**, or **Release reference**. Jump to a release, search, and combine topics with all or any matching. Open a shard to read or edit it in Library, or open a reference entry for its explanation and sources.
 
+Subject focus is disabled in this view. The timeline keeps C++ notes and older unclassified notes available, while excluding notes explicitly assigned only to other academic subjects.
+
 The reference works offline. External source links need an internet connection when opened. Entries describe feature groups and adopted changes rather than every overload or defect report. The reference's coverage disclosure explains that boundary.
 
-To place a personal note beside a release, assign a recognized version such as `C++17` under **Source & context → Version or scope**. Shards without a recognized version appear in the **No release assigned** column, with a jump button above the timeline. Release placement uses your assigned scope and is never guessed from the note's title or topics. Reference entries are separate from personal notes and do not change your understanding status.
+To place a personal note beside a release, assign a recognized version such as `C++17` under **Source & context → Version or scope**. C++ and unclassified notes without a recognized version appear in the **No release assigned** column, with a jump button above the timeline. Release placement uses your assigned scope and is never guessed from the note's title or topics. Reference entries are separate from personal notes and do not change your understanding status.
 
 ### Explore releases through familiar worlds
 
@@ -72,13 +86,21 @@ Selected releases include expandable C++ examples about spell effects, capabilit
 
 Open **Use with AI** to copy the contribution guide or import a prepared file. An AI client with the optional local integration can search existing notes, reuse topics, add a batch of notes and connections, and verify the result. Saying “Add this to Shard Atlas” works only after that client has been configured. See [integration setup](development.md#optional-ai-integration).
 
-A chat without local access can prepare an importable JSON file. Choose **Use with AI → Preview a file** to review it. A prepared file has not been saved into the atlas until you import it.
+A chat without local access can prepare an importable JSON file. Choose **Use with AI → Preview a file** to review it. A prepared file has not been saved into the atlas until you import it. Capture uses an AI-prepared handoff with source references and optional academic metadata. The app does not automatically extract concepts from a PDF or fetch the contents of a source link.
 
 Knowledge capture should preserve sources, uncertainty, and exact code. It should add useful explanations rather than overwrite an existing note or claim that you have mastered an idea.
 
 ## Import a collection or diagram
 
 **Backup & export → Choose JSON** previews additions, duplicates, conflicts, and missing assets before importing an archive. Imports add missing stable IDs and preserve existing note text. To transfer a complete portable collection, import into an empty collection. To replace an existing collection exactly, restore a database snapshot instead.
+
+Select the cards you want to import. Choose **Edit incoming card** to revise proposed details, then **Apply to review**. Selection and card changes automatically refresh validation for the revised cards, connections, and assets. Check that source references and notation match the selected material. Choose **Save selected to atlas** for a selection or **Save to atlas** for the full archive. Preview edits change the proposed import, not an existing note in your collection.
+
+Use connection checkboxes to include or skip links and expand **Edit connection** to revise their proposed type and rationale, with automatic revalidation and read-only preservation of existing saved relationship IDs.
+
+Choose **Use saved card** when an existing note already covers the incoming idea. Connections and explicit inline links to the incoming ID then point to the saved card. Its saved explanation, courses, and notation stay intact. To add new course context to that card, open it afterward and choose **Edit shard**.
+
+A partial import keeps selected notes' revisions and referenced images. It omits saved canvases and Trash recovery records. Selecting the full archive preserves its complete legacy recovery content. **Import review changes are temporary.** The app asks before discarding a modified review, but those changes are not recoverable editor drafts outside the current session.
 
 The app creates a safety snapshot before an import and saves a receipt with **Undo import**. Undo removes unchanged additions from that import. Notes edited afterward or referenced by later work are retained. Review the result when some additions are retained. Import receipts belong to database snapshots rather than portable knowledge archives.
 
@@ -135,5 +157,7 @@ For complete recovery, open the backup list in **Backup & export** and choose a 
 The desktop app has its own window, Dock icon, menus, clipboard bridge, and file dialogs. Command-Q quits. The app stops a storage service it started and leaves an already-running shared service available.
 
 The shortcut menu lists available keys. Command or Control-K focuses search, Command or Control-N creates a shard, and Command or Control-Enter saves the editor. Native File and View menus provide the main actions.
+
+Choose **View → Courses** or press Command-2 to open course context in the desktop app.
 
 Desktop startup diagnostics are written to `~/Library/Application Support/Shard Atlas/server-desktop.log`. The optional browser launcher uses `server.log` in that folder. For Python selection, rebuilding, or a separate test database, see [development](development.md).

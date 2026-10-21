@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -16,6 +17,15 @@ SPEC.loader.exec_module(desktop_build)
 
 
 class BundleConfigurationTests(unittest.TestCase):
+    def test_every_view_menu_command_is_accepted_by_the_native_dispatcher(self):
+        source = (ROOT / "desktop/ShardAtlas.swift").read_text()
+        view_menu = source.split('let view = NSMenu(title: "View")', 1)[1].split('addMenu(view', 1)[0]
+        commands = re.findall(r'\("[^"]+", "([a-z]+)", "[^"]+"\)', view_menu)
+        dispatcher = source.split('@objc private func runCommand', 1)[1].split('window.makeKeyAndOrderFront', 1)[0]
+        allowed = set(re.findall(r'"([a-z]+)"', dispatcher))
+        self.assertIn("courses", commands)
+        self.assertTrue(set(commands) <= allowed, set(commands) - allowed)
+
     def test_default_bundle_contains_no_builder_paths(self):
         config = desktop_build.desktop_configuration()
         self.assertEqual(set(config), {"backendVersion"})

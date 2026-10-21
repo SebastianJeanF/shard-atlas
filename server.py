@@ -30,7 +30,7 @@ from urllib.parse import unquote, urlsplit
 
 SCHEMA_VERSION = 1
 DATABASE_VERSION = 3
-BACKEND_VERSION = "2.4.4"  # Keep the additive API compatible with already-running contribution clients.
+BACKEND_VERSION = "2.5.0"  # Keep the additive API compatible with already-running contribution clients.
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DB = Path.home() / "Library/Application Support/Shard Atlas/shards.sqlite3"
 KINDS = {"concept", "fact", "example", "mistake", "event", "idea"}
@@ -39,7 +39,8 @@ LINK_TYPES = {"depends_on", "explains", "contrasts_with", "example_of", "related
 EVIDENCE_STATUSES = {"unverified", "reported", "corroborated", "disputed", "superseded"}
 EVENT_TYPES = {"", "event", "announcement", "release", "research", "rumor", "forecast"}
 ENTITY_TYPES = {"", "company", "model", "concept", "person"}
-KNOWLEDGE_DEFAULTS = {"evidenceStatus": "unverified", "sources": [], "publicationDate": "", "verifiedDate": "", "eventType": "", "entities": [], "entityType": "", "inbox": False, "facts": []}
+KNOWLEDGE_DEFAULTS = {"evidenceStatus": "unverified", "sources": [], "publicationDate": "", "verifiedDate": "", "eventType": "", "entities": [], "entityType": "", "inbox": False, "facts": [],
+                      "subjects": [], "courses": [], "notation": [], "assumptions": []}
 REVIEW_DAYS = {"again": 1, "hard": 3, "good": 7, "easy": 14}
 MAX_BODY_BYTES = 260 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
@@ -199,6 +200,54 @@ def validate_knowledge(data):
                 records.append({"label": text_field(item.get("label", ""), "fact label", 240, required=True), "value": text_field(item.get("value", ""), "fact value", 5000),
                     "unit": text_field(item.get("unit", ""), "fact unit", 100), "sourceUrl": source_url(item.get("sourceUrl", "")), "asOf": partial_date(item.get("asOf", ""), "asOf")})
         result[field] = records
+    result.update(validate_academic(data))
+    return result
+
+
+def validate_academic(data):
+    """Course occurrences and notation belong to a shard, not to a global symbol table."""
+    result = {}
+    for field, maximum, limit in (("subjects", 20, 80), ("assumptions", 100, 2000)):
+        values = data.get(field, [])
+        if not isinstance(values, list) or len(values) > maximum:
+            raise AppError(f"{field} must be a list of at most {maximum} text entries.")
+        result[field] = list(dict.fromkeys(text_field(value, field[:-1], limit, required=True).strip() for value in values))
+    courses = data.get("courses", [])
+    if not isinstance(courses, list) or len(courses) > 100:
+        raise AppError("courses must be a list of at most 100 course occurrences.")
+    result["courses"] = []
+    course_fields = {"courseCode", "courseTitle", "term", "lecture", "position", "sourceUrl", "sourceLocation", "context"}
+    for course in courses:
+        if not isinstance(course, dict) or set(course) - course_fields:
+            raise AppError("Each course occurrence must be an object containing only course fields.")
+        position = course.get("position", 0)
+        if type(position) not in (int, float) or not 0 <= position <= 100_000 or not math.isfinite(position):
+            raise AppError("Course position must be a finite number between 0 and 100,000.")
+        result["courses"].append({
+            "courseCode": text_field(course.get("courseCode", ""), "courseCode", 80, required=True).strip(),
+            "courseTitle": text_field(course.get("courseTitle", ""), "courseTitle", 240),
+            "term": text_field(course.get("term", ""), "term", 80),
+            "lecture": text_field(course.get("lecture", ""), "lecture", 240),
+            "position": position,
+            "sourceUrl": source_url(course.get("sourceUrl", ""), "course source URL"),
+            "sourceLocation": text_field(course.get("sourceLocation", ""), "sourceLocation", 240),
+            "context": text_field(course.get("context", ""), "course context", 5000),
+        })
+    notation = data.get("notation", [])
+    if not isinstance(notation, list) or len(notation) > 100:
+        raise AppError("notation must be a list of at most 100 symbol definitions.")
+    result["notation"] = []
+    notation_fields = {"symbol", "meaning", "shape", "role", "scope"}
+    for entry in notation:
+        if not isinstance(entry, dict) or set(entry) - notation_fields:
+            raise AppError("Each notation entry must be an object containing only notation fields.")
+        result["notation"].append({
+            "symbol": text_field(entry.get("symbol", ""), "symbol", 120, required=True),
+            "meaning": text_field(entry.get("meaning", ""), "symbol meaning", 2000, required=True),
+            "shape": text_field(entry.get("shape", ""), "symbol shape", 120),
+            "role": text_field(entry.get("role", ""), "symbol role", 240),
+            "scope": text_field(entry.get("scope", ""), "symbol scope", 240),
+        })
     return result
 
 
@@ -1036,7 +1085,19 @@ class Store:
                 before_reviews = {shard["id"]: {key: shard[key] for key in ("reviewCount", "lastReviewedAt", "nextReviewAt")} for shard in self._state(connection)["shards"]}
                 summary = self._merge(normalized, connection)
                 for shard in self._state(connection)["shards"]:
-                    if connection.execute("SELECT 1 FROM revisions WHERE shard_id=?", (shard["id"],)).fetchone() is None:
+                    snapshots = connection.execute("SELECT snapshot FROM revisions WHERE shard_id=?", (shard["id"],)).fetchall()
+                    # An incoming archive may contain earlier versions while its current
+                    # explanation was refined during bulk review. Preserve that version too.
+                    # Timestamps and recall bookkeeping do not define a new explanation.
+                    current_recorded = True
+                    if shard["id"] not in previous_ids["shards"]:
+                        current_recorded = False
+                        for row in snapshots:
+                            snapshot = validate_shard(json.loads(row[0]), imported=True)
+                            if all(snapshot[field] == shard[field] for field in MUTABLE_SHARD_FIELDS):
+                                current_recorded = True
+                                break
+                    if not snapshots or not current_recorded:
                         self._record_revision(connection, shard, "imported")
                 stamp = now()
                 import_id = str(uuid.uuid4())
@@ -1577,6 +1638,27 @@ class Store:
                         lines.append(f"{label}: {shard[key]}")
                 if shard["entities"]:
                     lines.append("Entities: " + ", ".join(shard["entities"]))
+                if shard["subjects"]:
+                    lines.append("Subjects: " + ", ".join(shard["subjects"]))
+                if shard["courses"]:
+                    lines.extend(["", "## Course occurrences", ""])
+                    for course in shard["courses"]:
+                        label = " · ".join(value for value in (course["courseCode"], course["courseTitle"], course["term"], course["lecture"]) if value)
+                        lines.append(f"- {label} (position: {course['position']})")
+                        if course["sourceUrl"] or course["sourceLocation"]:
+                            lines.append("  Source: " + " · ".join(value for value in (course["sourceUrl"], course["sourceLocation"]) if value))
+                        if course["context"]:
+                            lines.append("  Context: " + course["context"])
+                if shard["notation"]:
+                    lines.extend(["", "## Notation", ""])
+                    for entry in shard["notation"]:
+                        lines.append(f"- {entry['symbol']}: {entry['meaning']}")
+                        for field in ("shape", "role", "scope"):
+                            if entry[field]:
+                                lines.append(f"  {field.capitalize()}: {entry[field]}")
+                if shard["assumptions"]:
+                    lines.extend(["", "## Assumptions", ""])
+                    lines.extend("- " + assumption for assumption in shard["assumptions"])
                 if shard["sources"]:
                     lines.extend(["", "## Sources", ""])
                     for source in shard["sources"]:
@@ -1715,7 +1797,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
         if filename:
             self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
         self.end_headers()

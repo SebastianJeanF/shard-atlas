@@ -829,6 +829,10 @@ class HttpTests(unittest.TestCase):
         self.assertIn(b"Shard Atlas", body)
         self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
         self.assertIn("script-src 'self'", headers["Content-Security-Policy"])
+        directives = dict(part.strip().split(" ", 1) for part in headers["Content-Security-Policy"].split(";") if part.strip())
+        self.assertEqual(set(directives["img-src"].split()), {"'self'", "data:", "blob:"})
+        self.assertEqual(directives["script-src"], "'self'")
+        self.assertEqual(directives["connect-src"], "'self'")
         self.assertEqual(self.request("GET", "/app.js")[0], 200)
         for path in ("/../private.txt", "/%2e%2e/private.txt", "/%2F..%2Fprivate.txt", "/secret.txt", "/api/missing"):
             with self.subTest(path=path):

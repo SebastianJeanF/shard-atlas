@@ -166,13 +166,15 @@ try {
       await delay(4); return await fetch(full, options);
     } finally { if (method !== 'GET') activeWrites--; }
   };
-  const trackedSetTimeout = (callback, milliseconds) => { const timer = setTimeout(() => { timers.delete(timer); callback(); }, milliseconds); timers.add(timer); return timer; };
+  // Exercise refresh explicitly below; background polling must not replace synthetic fixture collections.
+  const trackedSetTimeout = (callback, milliseconds) => { if (milliseconds === 15000) return null; const timer = setTimeout(() => { timers.delete(timer); callback(); }, milliseconds); timers.add(timer); return timer; };
   const require = createRequire(import.meta.url);
   const windowListeners = new Map();
   const w = { document, matchMedia: () => ({ matches: reducedMotion }), addEventListener(name, callback) { const listeners = windowListeners.get(name) || []; listeners.push(callback); windowListeners.set(name, listeners); }, katex: require(path.join(project, 'static/vendor/katex/katex.min.js')), confirm: () => true };
   context = vm.createContext({ window: w, document, fetch: browserFetch, FormData: FixtureFormData, FileReader: FixtureFileReader, navigator: { clipboard: { writeText: async text => { if (failClipboard) throw new Error('Clipboard permission denied'); clipboardWrites.push(text); } } }, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key=>storage.delete(key) }, setTimeout: trackedSetTimeout, clearTimeout: timer => { timers.delete(timer); clearTimeout(timer); }, console, Blob, URL: FixtureURL, atob: value => Buffer.from(value, 'base64').toString('binary') });
+  for (const filename of ['academic.js','import-review.js']) vm.runInContext(fs.readFileSync(path.join(project,'static',filename),'utf8'),context,{filename});
   const code = fs.readFileSync(path.join(project, 'static/app.js'), 'utf8');
-  vm.runInContext(code + '\nwindow.testAtlas={state,drafts,openImageViewer,imageViewerLoaded,imageViewerFailed,fitImageViewer,setImageViewerScale,zoomImageViewer,handleImageViewerKey,get imageViewer(){return imageViewer},filteredShards,markdown,stabilizeWikiLinks,renderNav,renderLibrary,renderTimeline,renderBoards,atlasModel,atlasRelationshipModel,renderAtlas,renderDetail,dateLabel,previewImport,clearImportPreview,selectImportShard,get importImageUrls(){return importImageUrls},saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,renderReleaseFeature,loadReleaseCatalog,loadSpiralCatalog,setTimelineTheme,savedTimelineTheme,filteredSpiralExamples,handlePortalKey,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,uploadImage,showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
+  vm.runInContext(code + '\nwindow.testAtlas={state,drafts,openImageViewer,imageViewerLoaded,imageViewerFailed,fitImageViewer,setImageViewerScale,zoomImageViewer,handleImageViewerKey,get imageViewer(){return imageViewer},filteredShards,subjectMemberships,renderCourses,reviewedImport,revalidateImport,get importIncluded(){return importIncluded},markdown,stabilizeWikiLinks,renderNav,renderLibrary,renderTimeline,renderBoards,atlasModel,atlasRelationshipModel,renderAtlas,renderDetail,dateLabel,previewImport,clearImportPreview,selectImportShard,get importImageUrls(){return importImageUrls},saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,renderReleaseFeature,loadReleaseCatalog,loadSpiralCatalog,setTimelineTheme,savedTimelineTheme,filteredSpiralExamples,handlePortalKey,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,uploadImage,showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
   const t = w.testAtlas, $ = selector => document.querySelector(selector), results = [];
   async function until(predicate) { for (let i = 0; i < 300; i++) { if (predicate()) return; await delay(10); } throw new Error('Timed out waiting for frontend state'); }
   async function get(url) { const response = await fetch(base + url), data = await response.json(); assert.ok(response.ok, JSON.stringify(data)); return data; }
@@ -272,8 +274,8 @@ try {
     assert.ok(!/recall|least reviewed|practice|questions to revisit/i.test(html + t.renderLibrary()));
     assert.equal($('[name=prompt]'), null); assert.ok(!/review/.test(t.renderLibrary()));
   });
-  await check('Technical navigation offers Library, Topic map, and C++ timeline without retired views', async () => {
-    const nav=html.match(/<nav>([\s\S]*?)<\/nav>/)[1];assert.deepEqual([...nav.matchAll(/data-view="([^"]+)"/g)].map(match=>match[1]),['library','atlas','timeline']);assert.match(nav,/> Topic map</);assert.ok(!/data-view="(?:boards|graph)"|> (?:Canvas|Connections)</.test(nav));assert.match(nav,/C\+\+ timeline/);
+  await check('Technical navigation offers Library, Courses, Topic map, and C++ timeline without retired views', async () => {
+    const nav=html.match(/<nav>([\s\S]*?)<\/nav>/)[1];assert.deepEqual([...nav.matchAll(/data-view="([^"]+)"/g)].map(match=>match[1]),['library','courses','atlas','timeline']);assert.match(nav,/> Topic map</);assert.ok(!/data-view="(?:boards|graph)"|> (?:Canvas|Connections)</.test(nav));assert.match(nav,/C\+\+ timeline/);
     for(const retired of ['entities','inbox','compare','ask']){t.changeView(retired);assert.equal(t.state.view,'library');}
     t.changeView('boards');assert.equal(t.state.view,'atlas');assert.equal($('#view-label').textContent,'Topic map');assert.ok(!/data-action="(?:new-board|edit-board|add-board-item|add-section)"/.test($('#workspace').innerHTML));t.changeView('library');
     for(const view of ['library','atlas','timeline']){t.changeView(view);assert.ok(!/Ideas belong together\.|class="graph-controls"|id="graph-(?:color|group)"|data-view="graph"/.test($('#workspace').innerHTML),view);}t.changeView('library');
@@ -1238,6 +1240,65 @@ try {
     const board=t.state.data.boards.find(b=>b.title==='C++ connections QA');assert.ok(board);const shard=t.state.data.shards[0];board.items=[{shardId:shard.id,x:-20,y:60,width:270,height:210,sectionId:'research'}];board.sections=[{id:'research',title:'Research',x:-50,y:0,width:700,height:500,collapsed:true}];board.viewport={x:40,y:80,zoom:.2};await t.saveBoard(board);
     const persisted=(await get('/api/state')).boards.find(b=>b.id===board.id);assert.equal(persisted.items[0].x,-20);assert.equal(persisted.sections[0].collapsed,true);assert.equal(persisted.viewport.zoom,.2);t.state.boardId=board.id;assert.match(t.renderBoards(),/board-minimap/);assert.match(t.renderBoards(),/Research/);assert.match(t.renderBoards(),/0 visible \/ 1 saved cards/);
     await t.runAction('toggle-section',{dataset:{id:'research'}});await until(()=>t.pending===0);await delay(350);await until(()=>t.pending===0);assert.match(t.renderBoards(),/data-board-card=/);t.state.view='library';
+  });
+  await check('Overlapping subject views and course navigation reuse shared shards without changing content', async () => {
+    const previous={...t.state},sample=previous.data.shards[0];
+    try {
+      const common={...sample,id:'academic-shared',title:'A shared mathematical method',languageVersion:'',tags:['Optimization'],subjects:['Mathematics','ML'],content:'A connected explanation.',courses:[{courseCode:'CS 3780',term:'Fall 2026',lecture:'Lecture 11',position:11,context:'Validation context.'},{courseCode:'CS 4789',term:'Fall 2026',lecture:'Notes 3',position:3}],notation:[{symbol:'gamma',meaning:'Local tolerance',shape:'Scalar',role:'Fixed input',scope:'This formulation'}],assumptions:['Bounded observations.']};
+      const cpp={...sample,id:'academic-cpp',title:'C++ fixture',tags:['C++'],subjects:[],courses:[]};
+      t.state.data={...previous.data,shards:[common,cpp],links:[]};t.clearFilters();const before=JSON.stringify(t.state.data);
+      t.state.subject='Mathematics';assert.deepEqual(Array.from(t.filteredShards(),shard=>shard.id),['academic-shared']);
+      t.state.subject='ML';assert.deepEqual(Array.from(t.filteredShards(),shard=>shard.id),['academic-shared']);
+      t.state.subject='CS';assert.deepEqual(Array.from(t.filteredShards(),shard=>shard.id),['academic-cpp']);
+      t.clearFilters();t.changeView('courses');assert.match($('#workspace').innerHTML,/CS 3780/);assert.match($('#workspace').innerHTML,/CS 4789/);
+      await t.runAction('academic-open-course',{dataset:{course:JSON.stringify(['CS 3780','Fall 2026'])}});assert.match($('#workspace').innerHTML,/Validation context/);
+      await t.runAction('academic-open-shard',{dataset:{id:common.id}});assert.equal(t.state.view,'library');assert.equal(t.state.selectedId,common.id);
+      assert.match(t.renderDetail(common),/Local tolerance/);assert.match(t.renderDetail(common),/Bounded observations/);
+      assert.equal(t.filteredReleaseShards().some(shard=>shard.id===common.id),false);assert.equal(JSON.stringify(t.state.data),before);
+    } finally {Object.assign(t.state,previous);t.renderNav();}
+  });
+  await check('Search includes course locations, notation meanings and assumptions', async () => {
+    const previous={...t.state},sample=previous.data.shards[0];
+    try {
+      t.state.data={...previous.data,shards:[{...sample,id:'academic-search',title:'A method',content:'Explanation.',courses:[{courseCode:'CS 4789',sourceLocation:'Appendix fourteen'}],notation:[{symbol:'z',meaning:'Continuation estimate'}],assumptions:['Finite action set']}],links:[]};t.clearFilters();
+      for(const query of ['appendix fourteen','continuation estimate','finite action']){t.state.query=query;assert.equal(t.filteredShards().length,1,query);}
+    } finally {Object.assign(t.state,previous);t.renderNav();}
+  });
+  await check('Malformed academic input stays previewable with validation errors', async () => {
+    await t.previewImport({schemaVersion:1,shards:[{id:'academic-invalid',title:'Malformed metadata',courses:[null],notation:[null]}]});
+    assert.ok($('#import-preview-dialog').open);assert.equal($('#confirm-import').disabled,true);assert.match($('#import-preview-content').innerHTML,/course occurrence|notation|object/i);t.closeDialog('import-preview-dialog');
+  });
+  await check('Partial import saves only selected cards and omits connections to skipped new cards', async () => {
+    await t.previewImport({schemaVersion:1,shards:[{id:'academic-selected',title:'Selected course concept'},{id:'academic-skipped',title:'Skipped course concept'}],links:[{id:'academic-skipped-edge',fromId:'academic-selected',toId:'academic-skipped',type:'depends_on'}]});
+    await t.runAction('import-select-none',{dataset:{}});assert.equal($('#confirm-import').disabled,true);
+    t.importIncluded.add(0);await t.revalidateImport();assert.match($('#import-preview-content').innerHTML,/1 connection is omitted/);
+    const before=await get('/api/state');assert.ok(!before.shards.some(shard=>shard.id==='academic-selected'));
+    await t.runAction('confirm-import',{dataset:{}});const saved=await get('/api/state');assert.ok(saved.shards.some(shard=>shard.id==='academic-selected'));assert.ok(!saved.shards.some(shard=>shard.id==='academic-skipped'));assert.ok(!saved.links.some(link=>link.id==='academic-skipped-edge'));
+  });
+  await check('Connection review can revise type and rationale and skip an edge before saving', async () => {
+    await t.previewImport({schemaVersion:1,shards:[{id:'academic-edge-a',title:'Edge source'},{id:'academic-edge-b',title:'Edge target'}],links:[{id:'academic-edge-kept',fromId:'academic-edge-a',toId:'academic-edge-b',type:'depends_on',note:'Original reason.'},{id:'academic-edge-skipped',fromId:'academic-edge-b',toId:'academic-edge-a',type:'explains'}]});
+    assert.match($('#import-preview-content').innerHTML,/Include this connection/);
+    document.dispatchEvent(new FixtureEvent('change',{target:{dataset:{importLinkField:'note',linkIndex:'0'},value:'Reviewed relationship reason.'}}));await until(()=>!$('#confirm-import').disabled);
+    document.dispatchEvent(new FixtureEvent('change',{target:{dataset:{importLinkField:'type',linkIndex:'0'},value:'related_to'}}));await until(()=>!$('#confirm-import').disabled);
+    document.dispatchEvent(new FixtureEvent('change',{target:{dataset:{importLinkInclude:'1'},checked:false}}));await until(()=>!$('#confirm-import').disabled);
+    assert.match($('#import-preview-content').innerHTML,/1 connection is skipped/);await t.runAction('confirm-import',{dataset:{}});const saved=await get('/api/state');assert.ok(!saved.links.some(link=>link.id==='academic-edge-skipped'));const edge=saved.links.find(link=>link.id==='academic-edge-kept');assert.equal(edge.type,'related_to');assert.equal(edge.note,'Reviewed relationship reason.');
+  });
+  await check('Incoming card edits affect the reviewed batch before any collection write', async () => {
+    await t.previewImport({schemaVersion:1,shards:[{id:'academic-edited',title:'Incoming draft',content:'Original candidate.',tags:[]}]});
+    await t.runAction('edit-import-shard',{dataset:{}});assert.ok($('#import-edit-dialog').open);const form=$('#import-edit-form');form.elements.title.value='Reviewed candidate';form.elements.content.value='Corrected before saving.';submit(form);
+    await until(()=>!$('#import-edit-dialog').open&&!$('#confirm-import').disabled);assert.ok(!(await get('/api/state')).shards.some(shard=>shard.id==='academic-edited'));assert.match($('#import-preview-content').innerHTML,/Corrected before saving/);
+    await t.runAction('confirm-import',{dataset:{}});assert.equal((await get('/api/state')).shards.find(shard=>shard.id==='academic-edited').title,'Reviewed candidate');
+  });
+  await check('Explicit duplicate reuse redirects relationships and inline links while preserving saved metadata', async () => {
+    const existing=t.state.data.shards.find(shard=>shard.id==='academic-selected'),original=JSON.stringify(existing);
+    await t.previewImport({schemaVersion:1,shards:[{id:'academic-referrer',title:'A connected new idea',content:'See [[id:academic-duplicate|the saved idea]].'},{id:'academic-duplicate',title:existing.title,content:'Incoming duplicate.',subjects:['ML']}],links:[{id:'academic-reused-edge',fromId:'academic-referrer',toId:'academic-duplicate',type:'depends_on'}]});
+    t.selectImportShard(1);await t.runAction('import-reuse-card',{dataset:{id:existing.id}});assert.match($('#import-preview-content').innerHTML,/Its saved explanation, course memberships, and notation stay intact/);
+    await t.runAction('confirm-import',{dataset:{}});const saved=await get('/api/state');assert.equal(JSON.stringify(saved.shards.find(shard=>shard.id===existing.id)),original);assert.ok(!saved.shards.some(shard=>shard.id==='academic-duplicate'));assert.equal(saved.links.find(link=>link.id==='academic-reused-edge').toId,existing.id);assert.match(saved.shards.find(shard=>shard.id==='academic-referrer').content,/\[\[id:academic-selected\|/);
+  });
+  await check('Saving rechecks a changed collection and requires review of the new conflict', async () => {
+    await t.previewImport({schemaVersion:1,shards:[{id:'academic-concurrent',title:'Incoming version',content:'Incoming text.'}]});
+    await post('/api/contributions',{requestId:'academic-concurrent-write',shards:[{id:'academic-concurrent',title:'Saved by another chat',content:'Preserve this text.'}],links:[]});
+    await t.runAction('confirm-import',{dataset:{}});assert.ok($('#import-preview-dialog').open);assert.match($('#import-preview-content').innerHTML,/existing content will be preserved/);assert.equal((await get('/api/state')).shards.find(shard=>shard.id==='academic-concurrent').content,'Preserve this text.');t.closeDialog('import-preview-dialog');
   });
   await check('AI JSON review renders full cards, syntax, math, releases, sources and pending relationships without saving', async () => {
     const before = JSON.stringify(await get('/api/state')), clientBefore = JSON.stringify(t.state.data);

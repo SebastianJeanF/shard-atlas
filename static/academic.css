@@ -1,0 +1,100 @@
+.academic-course-search { display: grid; gap: 7px; margin-bottom: 18px; color: var(--muted); font-size: 11px; font-weight: 600; max-width: 570px; }
+.academic-course-search input { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 7px; padding: 10px 12px; background: var(--surface); color: var(--ink); font-size: 12px; font-weight: 400; }
+.academic-course-summary, .academic-course-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 11px; margin-bottom: 18px; }
+.academic-course-toolbar .text-button { padding-left: 0; }
+.academic-course-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(min(100%,260px),1fr)); gap: 16px; }
+.academic-course-card { position: relative; display: flex; flex-direction: column; align-items: flex-start; min-width: 0; padding: 23px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); text-align: left; transition: border-color .15s,background .15s; }
+.academic-course-card:hover { border-color: #a9b9a0; background: #f8faf3; }
+.academic-course-code { display: inline-flex; border-radius: 4px; background: var(--green-soft); color: var(--green-dark); font-size: 10px; font-weight: 650; padding: 3px 7px; margin-bottom: 16px; }
+.academic-course-card h2 { margin: 0 0 9px; font: 400 24px/1.2 Georgia,"Times New Roman",serif; letter-spacing: -.4px; overflow-wrap: anywhere; }
+.academic-course-term { color: var(--muted); font-size: 11px; margin-bottom: 18px; }
+.academic-course-counts { color: var(--muted); font-size: 11px; margin-top: auto; }
+.academic-course-open { color: var(--green); font-size: 11px; font-weight: 600; margin-top: 16px; }
+.academic-empty { display: grid; justify-items: center; padding: 64px 24px; text-align: center; border: 1px dashed #c7cebf; border-radius: var(--radius); background: #fafbf6; }
+.academic-empty > span { color: #849777; font-size: 39px; line-height: 1; margin-bottom: 22px; }
+.academic-empty h2 { font: 400 25px/1.2 Georgia,"Times New Roman",serif; margin-bottom: 12px; }
+.academic-empty p { max-width: 520px; color: var(--muted); font-size: 12px; line-height: 1.75; margin-bottom: 22px; }
+.academic-no-results { padding: 28px 18px; text-align: center; color: var(--muted); font-size: 12px; }
+.academic-lecture-nav { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 30px; }
+.academic-lecture-nav button { max-width: 100%; padding: 6px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--muted); font-size: 10px; text-align: left; overflow-wrap: anywhere; }
+.academic-lecture-nav button:hover { background: #edf1e7; color: var(--green); }
+.academic-lecture-nav button.active { background: var(--green-soft); color: var(--green-dark); border-color: #b7c7ac; }
+.academic-lecture { margin-bottom: 29px; }
+.academic-lecture > header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--line); padding-bottom: 11px; margin-bottom: 14px; }
+.academic-lecture > header h2 { font-size: 15px; font-weight: 600; margin: 0; overflow-wrap: anywhere; }
+.academic-lecture > header > span { color: var(--muted); font-size: 10px; }
+.academic-lecture-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(min(100%,290px),1fr)); align-items: start; gap: 13px; }
+.academic-shard-card { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+.academic-shard-open { display: block; width: 100%; border: 0; background: transparent; text-align: left; padding: 18px 18px 14px; }
+.academic-shard-open:hover { background: #f3f6ed; }
+.academic-shard-open h3 { margin: 0 0 9px; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.academic-shard-open p { margin: 0 0 12px; color: var(--muted); font-size: 11px; line-height: 1.7; overflow-wrap: anywhere; }
+.academic-open-label { color: var(--green); font-size: 10px; font-weight: 600; }
+.academic-course-context { color: var(--muted); font-size: 11px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.academic-shard-card > .academic-course-context { margin: 0 18px 13px; border-left: 2px solid #c6d3bc; padding-left: 10px; }
+.academic-occurrence-footer { display: flex; flex-wrap: wrap; align-items: baseline; gap: 7px 12px; font-size: 10px; color: var(--muted); overflow-wrap: anywhere; }
+.academic-shard-card > .academic-occurrence-footer { padding: 12px 18px; border-top: 1px solid var(--line-soft); }
+.academic-occurrence-footer:empty { display: none; }
+.academic-occurrence-footer a { max-width: 100%; }
+.academic-shared { border-radius: 4px; background: var(--lavender); color: #6b5d82; padding: 2px 5px; }
+.academic-metadata { margin: 0; padding: 18px 25px; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); background: #fafbf7; }
+.academic-subjects { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 13px; }
+.academic-subjects > span { display: inline-flex; max-width: 100%; padding: 3px 7px; border: 1px solid #d7dfce; border-radius: 4px; color: var(--green); background: #f0f4e9; font-size: 10px; overflow-wrap: anywhere; }
+.academic-metadata summary { cursor: pointer; font-size: 11px; color: var(--green-dark); font-weight: 600; }
+.academic-metadata summary > span:not(.academic-symbol) { font-weight: 400; }
+.academic-course-memberships > summary > span, .academic-assumptions > summary > span { margin-left: 5px; color: var(--muted); }
+.academic-course-memberships > div { padding-top: 10px; }
+.academic-course-memberships article { border-left: 2px solid #d1dbc7; padding: 0 0 0 12px; margin: 8px 0 14px; }
+.academic-course-memberships article > .text-button { padding: 3px 0; font-size: 10px; min-height: 26px; text-align: left; justify-content: flex-start; }
+.academic-course-memberships strong { display: block; font-size: 11px; font-weight: 500; margin: 2px 0 5px; }
+.academic-course-memberships p { font-size: 11px; margin: 4px 0 8px; }
+.academic-notation-inspector { margin-top: 16px; }
+.academic-notation-inspector h3 { margin: 0 0 3px; font-size: 11px; font-weight: 600; }
+.academic-notation-inspector > p { color: var(--muted); font-size: 10px; margin-bottom: 10px; }
+.academic-symbol-entry { border: 1px solid #dfe4d8; border-radius: 6px; margin: 7px 0; background: var(--surface); min-width: 0; }
+.academic-symbol-entry > summary { display: flex; gap: 12px; align-items: baseline; padding: 10px 12px; font-size: 11px; line-height: 1.5; }
+.academic-symbol-entry > summary::before { content: '▸'; color: var(--muted); font-size: 10px; flex: 0 0 7px; }
+.academic-symbol-entry[open] > summary::before { content: '▾'; }
+.academic-symbol-entry > summary::-webkit-details-marker { display: none; }
+.academic-symbol-entry > summary > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.academic-symbol { flex: 0 0 auto; max-width: 42%; font-family: Georgia,"Times New Roman",serif; font-size: 16px; color: var(--green-dark); overflow-wrap: anywhere; }
+.academic-symbol-entry dl { margin: 0; padding: 2px 14px 13px 31px; font-size: 11px; }
+.academic-symbol-entry dl > div { display: grid; grid-template-columns: 84px minmax(0,1fr); gap: 9px; margin: 6px 0; }
+.academic-symbol-entry dt { color: var(--muted); }
+.academic-symbol-entry dd { margin: 0; overflow-wrap: anywhere; }
+.academic-assumptions { margin-top: 14px; }
+.academic-assumptions ul { color: var(--muted); padding-left: 19px; font-size: 11px; line-height: 1.8; margin-bottom: 0; }
+.academic-assumptions li { overflow-wrap: anywhere; padding-left: 2px; margin: 5px 0; }
+.academic-editor { min-width: 0; }
+.academic-editor-details { margin: 16px 0; border: 1px solid var(--line); border-radius: 8px; background: #fafbf7; }
+.academic-editor-details > summary { cursor: pointer; padding: 13px 15px; color: var(--green-dark); font-size: 12px; font-weight: 600; }
+.academic-editor-details > summary > span { color: var(--muted); font-size: 10px; font-weight: 400; margin-left: 9px; }
+.academic-editor-body { padding: 2px 15px 15px; }
+.academic-editor-body > .field { margin-top: 10px; }
+.academic-editor-section { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 19px; }
+.academic-editor-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; margin-bottom: 12px; }
+.academic-editor-section-heading > div { min-width: 0; }
+.academic-editor-section-heading h3 { font-size: 12px; margin: 0 0 4px; }
+.academic-editor-section-heading p { color: var(--muted); font-size: 10px; line-height: 1.6; margin: 0; }
+.academic-editor-section-heading > button { flex: 0 0 auto; font-size: 10px; min-height: 30px; padding: 6px 9px; }
+.academic-editor-row { min-width: 0; position: relative; margin: 13px 0; padding: 15px 12px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+.academic-editor-row legend { color: var(--muted); font-size: 10px; padding: 0 5px; }
+.academic-remove-row { position: absolute; right: 8px; top: -18px; background: var(--surface); font-size: 10px; padding: 3px 6px; min-height: 22px; }
+.academic-editor-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.academic-editor-grid .field { margin: 0; min-width: 0; }
+.academic-editor-grid .field > input, .academic-editor-grid .field > textarea { width: 100%; min-width: 0; }
+.academic-field-wide { grid-column: 1 / -1; }
+.academic-editor-empty { color: var(--muted); font-size: 10px; font-style: italic; margin: 10px 0; }
+@media (max-width: 700px) {
+  .academic-metadata { padding: 17px 18px; }
+  .academic-course-grid, .academic-lecture-grid { grid-template-columns: minmax(0,1fr); }
+  .academic-course-card { padding: 19px; }
+  .academic-course-card h2 { font-size: 23px; }
+  .academic-empty { padding: 40px 18px; }
+  .academic-course-summary { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .academic-editor-details > summary > span { display: block; margin: 4px 0 0 16px; }
+  .academic-editor-grid { grid-template-columns: minmax(0,1fr); }
+  .academic-editor-section-heading { gap: 9px; }
+  .academic-symbol-entry dl > div { grid-template-columns: minmax(0,1fr); gap: 2px; }
+  .academic-symbol-entry > summary { gap: 9px; }
+}

@@ -9,7 +9,9 @@ function savedTimelineTheme(){try{return localStorage.getItem(timelineThemeKey)=
 const state = {data:{shards:[],links:[],boards:[]},view:'library',selectedId:null,tags:[],tagMode:'all',kind:'all',status:'all',sort:'updated',query:'',topicQuery:'',timelineMode:'releases',timelineContent:'both',timelineTheme:savedTimelineTheme(),timelineReleaseId:'cpp98',spiralCatalog:null,spiralCatalogError:null,boardId:null,boardSectionId:'',libraryLimit:120,releaseCategory:'all',releaseCatalog:null,releaseCatalogError:null};
 const palette = ['#527444','#467b80','#946b3d','#86618e','#ad6b52','#6077a0','#768041','#96707a'];
 Object.assign(state,{atlasMode:'topics',atlasTopic:null,atlasBridge:null,atlasSelectedId:null,atlasInspectId:null,atlasExpandedIds:[],atlasShowOrganizational:false,atlasRelation:'all',atlasLimit:12,atlasZoom:1,atlasFit:false});
-const editorFields = ['title','content','kind','status','sourceUrl','languageVersion','eventDate','tags','evidenceStatus','eventType','publicationDate','verifiedDate','entityType','entities','inbox','sources','facts'];
+const academicFields = ['subjects','courses','notation','assumptions'];
+Object.assign(state,{subject:'Generic',courseKey:'',courseLecture:'',courseQuery:''});
+const editorFields = ['title','content','kind','status','sourceUrl','languageVersion','eventDate','tags','evidenceStatus','eventType','publicationDate','verifiedDate','entityType','entities','inbox','sources','facts',...academicFields];
 const draftKinds = ['editor','connection'];
 const drafts = {editor:null,connection:null};
 const persistedDrafts = {editor:null,connection:null};
@@ -25,6 +27,7 @@ const imageViewer = {src:'',alt:'',width:0,height:0,scale:1,mode:'fit',returnFoc
 let atlasRefreshLoading = null;
 let editingBoardId=null, editingSectionId=null, editingBoardItemId=null, importArchive=null, importPreview=null, boardDirty=false;
 let importSelectedIndex=0, importListLimit=100, importPreviewRequest=0;
+let importIncluded=new Set(),importExcludedLinks=new Set(),importReuse=new Map(),importEditIndex=null,importReviewChanged=false;
 const importImageUrls=new Map();
 
 function toast(message) {
@@ -56,14 +59,27 @@ let cachedShards=null,cachedLinks=null,shardIndex=new Map(),linkIndex=new Map();
 function indexKnowledge(){if(cachedShards!==state.data.shards){cachedShards=state.data.shards;shardIndex=new Map(cachedShards.map(s=>[s.id,s]));}if(cachedLinks!==state.data.links){cachedLinks=state.data.links;linkIndex=new Map();for(const l of cachedLinks){for(const id of new Set([l.fromId,l.toId])){if(!linkIndex.has(id))linkIndex.set(id,[]);linkIndex.get(id).push(l);}}}}
 const byId=id=>{indexKnowledge();return shardIndex.get(id);};
 const linksFor=id=>{indexKnowledge();return linkIndex.get(id)||[];};
-const formValues=form=>Object.fromEntries(new FormData(form));
+const formValues=form=>Object.fromEntries([...new FormData(form)].filter(([name])=>form.id!=='editor-form'||!name.startsWith('academic-')));
 const formSnapshot=form=>JSON.stringify(formValues(form));
 const dateLabel=date=>{if(!date)return 'Unknown date';if(/^\d{4}$/.test(date))return date;if(/^\d{4}-\d{2}$/.test(date))return new Intl.DateTimeFormat(undefined,{month:'long',year:'numeric'}).format(new Date(date+'-15T12:00:00'));const d=new Date(date.length===10?date+'T12:00:00':date);return Number.isNaN(d.getTime())?'Unknown date':new Intl.DateTimeFormat(undefined,{month:'short',day:'numeric',year:'numeric'}).format(d);};
 const dateTimeLabel=date=>date?new Intl.DateTimeFormat(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(date)):'Unknown date';
 const excerpt=text=>String(text||'').replace(/```[\s\S]*?```/g,' [code example] ').replace(/!\[[^\]]*\]\([^)]*\)/g,' [image] ').replace(/^cppreference:[^\n]*(?:\n|$)/gmi,'').replace(/^#{1,6}\s+|^>\s+/gm,'').replace(/[*`]/g,'').replace(/\s+/g,' ').trim();
 const allTags=()=>[...new Set(state.data.shards.flatMap(s=>s.tags))].sort((a,b)=>a.localeCompare(b));
-const hasFilters=()=>!!(state.query||state.tags.length||state.kind!=='all'||state.status!=='all');
-function clearFilters(){state.query='';state.topicQuery='';state.tags=[];state.kind='all';state.status='all';state.releaseCategory='all';$('#search').value='';}
+const hasFilters=()=>!!(state.query||state.tags.length||state.kind!=='all'||state.status!=='all'||state.subject!=='Generic');
+function clearFilters(){state.query='';state.topicQuery='';state.tags=[];state.kind='all';state.status='all';state.subject='Generic';state.releaseCategory='all';$('#search').value='';}
+function subjectMemberships(shard){
+  const aliases={'c++':'C++','cs':'CS','computer science':'CS','mathematics':'Mathematics','math':'Mathematics','maths':'Mathematics','ml':'ML','machine learning':'ML','reinforcement learning':'ML'};
+  const subjects=new Set([...(shard.subjects||[]),...(shard.tags||[])].map(value=>aliases[String(value).trim().toLocaleLowerCase()]).filter(Boolean));
+  if(subjects.has('C++'))subjects.add('CS');return subjects;
+}
+function subjectMatches(shard){return state.subject==='Generic'||subjectMemberships(shard).has(state.subject);}
+function renderAcademicMetadata(shard){return window.AcademicAtlas?.renderMetadata(shard,{renderSymbol:value=>mathMarkup(String(value).replace(/^\$|\$$/g,''))})||'';}
+function academicFormData(form){return Object.fromEntries(academicFields.map(key=>{try{return [key,JSON.parse(form.elements[key].value||'[]')];}catch{return [key,[]];}}));}
+function installAcademicEditor(shard,container=$('#academic-editor')){
+  if(!window.AcademicAtlas)return;container.innerHTML=window.AcademicAtlas.renderEditor(shard);
+  window.AcademicAtlas.bindEditor(container,metadata=>{if(container.id==='academic-editor'){for(const key of academicFields)$('#editor-form').elements[key].value=JSON.stringify(metadata[key]);scheduleDraft('editor');}});
+}
+function renderCourses(){return window.AcademicAtlas.renderCourses(filteredShards(),{courseKey:state.courseKey,lecture:state.courseLecture,query:state.courseQuery});}
 
 function resolveWiki(target) {
   if(target.startsWith('id:'))return byId(target.slice(3));
@@ -239,15 +255,15 @@ function filteredShards() {
   const words=state.query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
   return state.data.shards.filter(s=>{
     const tagsMatch=!state.tags.length||(state.tagMode==='all'?state.tags.every(t=>s.tags.includes(t)):state.tags.some(t=>s.tags.includes(t)));
-    if(!tagsMatch||(state.kind!=='all'&&s.kind!==state.kind)||(state.status!=='all'&&s.status!==state.status))return false;
+    if(!subjectMatches(s)||!tagsMatch||(state.kind!=='all'&&s.kind!==state.kind)||(state.status!=='all'&&s.status!==state.status))return false;
     const connectedText=linksFor(s.id).map(l=>[relations[l.type],l.note,byId(l.fromId)?.title,byId(l.toId)?.title].join(' ')).join(' ');
-    const haystack=[s.title,s.content,s.tags.join(' '),s.sourceUrl,s.languageVersion,(s.entities||[]).join(' '),JSON.stringify(s.facts||[]),JSON.stringify(s.sources||[]),connectedText].join(' ').toLocaleLowerCase();return words.every(w=>haystack.includes(w));
+    const haystack=[s.title,s.content,s.tags.join(' '),s.sourceUrl,s.languageVersion,(s.entities||[]).join(' '),JSON.stringify(s.facts||[]),JSON.stringify(s.sources||[]),JSON.stringify(s.courses||[]),JSON.stringify(s.notation||[]),(s.subjects||[]).join(' '),(s.assumptions||[]).join(' '),connectedText].join(' ').toLocaleLowerCase();return words.every(w=>haystack.includes(w));
   }).sort((a,b)=>state.sort==='title'?a.title.localeCompare(b.title):state.sort==='created'?b.createdAt.localeCompare(a.createdAt):b.updatedAt.localeCompare(a.updatedAt));
 }
 function sidebarTopics(){
   const counts=new Map(),releaseMode=state.view==='timeline'&&state.timelineMode==='releases',labels=new Map();
   const countTopic=tag=>{const key=releaseMode?tag.toLocaleLowerCase():tag;if(!labels.has(key))labels.set(key,tag);counts.set(key,(counts.get(key)||0)+1);};
-  for(const shard of state.data.shards)for(const tag of shard.tags)countTopic(tag);
+  for(const shard of state.data.shards.filter(releaseMode?isCppTimelineShard:subjectMatches))for(const tag of shard.tags)countTopic(tag);
   if(releaseMode)for(const release of state.releaseCatalog?.releases||[])for(const feature of release.features)for(const tag of feature.tags)countTopic(tag);
   return [...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).map(([key,count])=>({tag:labels.get(key),count}));
 }
@@ -271,22 +287,23 @@ function selectSearchedTopic(){
   if(selected)toggleTag(selected.tag);else if(matches.length)toast('Choose a topic from the matching list.');else toast('No matching topic. Add a new topic in a shard’s Topics field.');
 }
 function renderNav(){
-  $('#library-count').textContent=state.data.shards.length;$('#view-label').textContent={library:'Library',timeline:'C++ timeline',atlas:'Topic map',boards:'Topic map'}[state.view];
+  $('#library-count').textContent=state.data.shards.length;$('#view-label').textContent={library:'Library',courses:'Courses',timeline:'C++ timeline',atlas:'Topic map',boards:'Topic map'}[state.view];
   document.querySelectorAll('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===state.view));
   const releaseMode=state.view==='timeline'&&state.timelineMode==='releases';
   $('#search').placeholder=releaseMode?'Find a C++ feature or one of your notes…':'Find an idea, example, or connection…';$('#search').setAttribute('aria-label',releaseMode?'Search C++ features and notes':'Search shards');
+  if($('#subject-view')){$('#subject-view').value=state.subject;$('#subject-view').disabled=state.view==='timeline';}
   renderTopics();
   renderDraftShelf();
 }
 function pageHeading(eyebrow,title,description,action=''){return `<div class="page-heading"><div><span class="eyebrow">${eyebrow}</span><h1>${title}</h1><p>${description}</p></div><div class="heading-actions">${action}</div></div>`;}
-function render(){renderNav();const views={library:renderLibrary,timeline:renderTimeline,atlas:renderAtlas,boards:renderAtlas};$('#workspace').innerHTML=(views[state.view]||renderLibrary)();bindAtlas();}
+function render(){renderNav();const views={library:renderLibrary,courses:renderCourses,timeline:renderTimeline,atlas:renderAtlas,boards:renderAtlas};$('#workspace').innerHTML=(views[state.view]||renderLibrary)();bindAtlas();}
 function filterMarkup(){
   return `<div class="filter-row"><select id="kind-filter" aria-label="Filter by kind"><option value="all">All kinds</option>${Object.entries(kinds).map(([v,t])=>`<option value="${v}" ${state.kind===v?'selected':''}>${t}</option>`).join('')}</select><select id="status-filter" aria-label="Filter by understanding"><option value="all">Any understanding</option>${Object.entries(statuses).map(([v,t])=>`<option value="${v}" ${state.status===v?'selected':''}>${t}</option>`).join('')}</select><select id="sort-filter" aria-label="Sort shards"><option value="updated" ${state.sort==='updated'?'selected':''}>Recently edited</option><option value="created" ${state.sort==='created'?'selected':''}>Recently captured</option><option value="title" ${state.sort==='title'?'selected':''}>Title A–Z</option></select></div>${state.tags.length?`<div class="selected-topics"><label>Match<select id="tag-mode" aria-label="Match selected topics"><option value="all" ${state.tagMode==='all'?'selected':''}>all topics</option><option value="any" ${state.tagMode==='any'?'selected':''}>any topic</option></select></label><div>${state.tags.map(t=>`<button class="tag" data-tag="${esc(t)}" title="Remove this topic filter">${esc(t)} ×</button>`).join('')}</div></div>`:''}`;
 }
 function renderLibrary(){
   const shards=filteredShards();if(!shards.some(s=>s.id===state.selectedId))state.selectedId=shards[0]?.id||null;
   const connected=new Set(state.data.links.flatMap(l=>[l.fromId,l.toId])).size,selected=byId(state.selectedId);
-  return pageHeading('COLLECT. CONNECT. UNDERSTAND.','Build your technical understanding.','Programming, computer science, and the ideas behind machine learning and AI. Start with your C++ knowledge and follow its connections.',`<button class="primary" data-action="new">＋ New shard</button>`)+
+  return pageHeading('COLLECT. CONNECT. UNDERSTAND.','Build your technical understanding.','Programming, computer science, and the ideas behind machine learning and AI. Explore your knowledge across subjects, courses, and connected explanations.',`<button class="primary" data-action="new">＋ New shard</button>`)+
   `<div class="stats-row"><div class="stat-card"><span class="stat-value">${state.data.shards.length}</span><span class="stat-label">shards in your atlas</span></div><div class="stat-card"><span class="stat-value">${state.data.links.length}</span><span class="stat-label">meaningful connections</span></div><div class="stat-card"><span class="stat-value">${allTags().length}</span><span class="stat-label">topics to explore</span></div></div>`+
   `<div class="library-layout ${selected?'has-selection':''}"><section class="library-panel" aria-label="Shard library"><div class="panel-heading"><h2>${state.tags.length?'Selected topics':'All shards'} <small>${shards.length}</small></h2>${hasFilters()?'<button class="text-button" data-action="clear-filters">Clear</button>':''}</div>${filterMarkup()}<div class="shard-list">${shards.slice(0,state.libraryLimit).map(renderCard).join('')||`<div class="empty-state"><span>◇</span><h3>${hasFilters()?'No matching ideas':'Your atlas starts here'}</h3><p>${hasFilters()?'Try a different search or clear the filters.':'Capture something you learned, wondered about, or changed your mind about.'}</p><button class="secondary" data-action="${hasFilters()?'clear-filters':'new'}">${hasFilters()?'Clear filters':'Create your first shard'}</button></div>`}${shards.length>state.libraryLimit?`<button class="secondary full-width" data-action="more-shards">Show more · ${shards.length-state.libraryLimit} remaining</button>`:''}</div></section><article class="detail-panel"${selected?shardThemeAttributes(selected):''} aria-label="Selected shard">${selected?renderDetail(selected):'<div class="detail-empty"><span>◇</span><h2>Make room for an idea.</h2><p>Select a shard to explore its explanation and connections.</p></div>'}</article><aside class="context-panel" aria-label="Related ideas"><div class="context-heading"><span class="eyebrow">THE BIGGER PICTURE</span><h2>In good company.</h2><p>Every line has a reason.</p></div><div class="graph-surface">${selected?graphSvg(selected.id):'<div class="empty-state">Your connections will appear here.</div>'}</div><div class="graph-legend"><span class="status-dot"></span> Selected idea <span class="neighbor-dot"></span> Connected idea</div><p class="context-note">${selected?`Explore an idea by selecting a node. ${linksFor(selected.id).length} connection${linksFor(selected.id).length===1?'':'s'} around this shard.`:'Start with one idea. Connections can come later.'}</p><button class="secondary full-width" data-action="open-topic-map" data-id="${esc(selected?.id||'')}">Explore in Topic map ↗</button><div class="mini-stat"><strong>${connected}</strong><span>shards woven into your atlas</span></div></aside></div>`;
 }
@@ -322,7 +339,7 @@ function renderShardHeading(shard){
 }
 function renderDetail(s){
   const connections=linksFor(s.id);
-  return `<div class="note-header"><div class="note-heading" data-shard-id="${esc(s.id)}">${renderShardHeading(s)}</div><div class="note-actions"><button class="secondary" data-action="edit" data-id="${esc(s.id)}">Edit shard</button><button class="secondary" data-action="link" data-id="${esc(s.id)}">＋ Connect</button><button class="secondary" data-action="history" data-id="${esc(s.id)}">Saved versions</button><button class="icon-button" data-action="delete" data-id="${esc(s.id)}" aria-label="Move shard to trash" title="Move to trash">⌫</button></div><div class="note-tags">${s.tags.map(t=>`<button class="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join('')}</div></div><div class="note-body markdown">${markdown(s.content)}</div>${renderSources(s)}<section class="connection-section"><div class="panel-heading"><h3>Connected ideas <small>${connections.length}</small></h3><button class="text-button" data-action="link" data-id="${esc(s.id)}">＋ Add</button></div><div class="connection-list">${connections.map(l=>{
+  return `<div class="note-header"><div class="note-heading" data-shard-id="${esc(s.id)}">${renderShardHeading(s)}</div><div class="note-actions"><button class="secondary" data-action="edit" data-id="${esc(s.id)}">Edit shard</button><button class="secondary" data-action="link" data-id="${esc(s.id)}">＋ Connect</button><button class="secondary" data-action="history" data-id="${esc(s.id)}">Saved versions</button><button class="icon-button" data-action="delete" data-id="${esc(s.id)}" aria-label="Move shard to trash" title="Move to trash">⌫</button></div><div class="note-tags">${s.tags.map(t=>`<button class="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join('')}</div></div>${renderAcademicMetadata(s)}<div class="note-body markdown">${markdown(s.content)}</div>${renderSources(s)}<section class="connection-section"><div class="panel-heading"><h3>Connected ideas <small>${connections.length}</small></h3><button class="text-button" data-action="link" data-id="${esc(s.id)}">＋ Add</button></div><div class="connection-list">${connections.map(l=>{
     const out=l.fromId===s.id,other=byId(out?l.toId:l.fromId),inverse={depends_on:'is a dependency of',explains:'is explained by',contrasts_with:'contrasts with',example_of:'has an example in',related_to:'relates to',part_of:'contains',supports:'is supported by',contradicts:'contradicts',supersedes:'is superseded by',released_by:'released'};
     return `<div class="connection-card"><button class="connection-open" data-shard-id="${esc(other?.id)}"><span class="relation">This idea ${out?relations[l.type]:inverse[l.type]}</span><span class="connection-title">${esc(other?.title)} <span class="connection-arrow">↗</span></span>${other?renderShardReleaseChips(other):''}${l.note?`<span class="connection-note">${esc(l.note)}</span>`:''}</button><div class="connection-tools"><button class="icon-button" data-action="edit-link" data-id="${esc(l.id)}" aria-label="Edit relationship" title="Edit relationship">✎</button><button class="icon-button remove-connection" data-action="unlink" data-id="${esc(l.id)}" aria-label="Remove connection" title="Remove connection">×</button></div></div>`;
   }).join('')||'<p class="muted">An idea can stand on its own. Connect it when a relationship helps you understand.</p>'}</div></section><footer class="note-footer">${s.sourceUrl?`<a href="${esc(s.sourceUrl)}" target="_blank" rel="noopener noreferrer">View source ↗</a>`:'<span>No source added</span>'}${s.languageVersion?`<span>${esc(s.languageVersion)}</span>`:''}<span>Edited ${dateLabel(s.updatedAt)}</span></footer>`;
@@ -465,9 +482,10 @@ function filteredReleaseFeatures(release) {
   const words=state.query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
   return release.features.filter(feature=>(state.releaseCategory==='all'||feature.category===state.releaseCategory)&&matchesTimelineTopics(feature.tags)&&words.every(word=>[release.label,feature.title,feature.summary,feature.tags.join(' '),feature.category,...(Array.isArray(feature.cppreferenceLinks)?feature.cppreferenceLinks:[]).map(link=>link?.title||'')].join(' ').toLocaleLowerCase().includes(word)));
 }
+function isCppTimelineShard(shard){return shardReleaseIds(shard).length>0||subjectMemberships(shard).has('C++')||(!(shard.subjects||[]).length&&!(shard.courses||[]).length);}
 function filteredReleaseShards() {
   const words=state.query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
-  return state.data.shards.filter(shard=>matchesTimelineTopics(shard.tags)&&words.every(word=>[shard.title,shard.content,shard.tags.join(' '),shard.languageVersion,shard.sourceUrl].join(' ').toLocaleLowerCase().includes(word)));
+  return state.data.shards.filter(shard=>isCppTimelineShard(shard)&&matchesTimelineTopics(shard.tags)&&words.every(word=>[shard.title,shard.content,shard.tags.join(' '),shard.languageVersion,shard.sourceUrl].join(' ').toLocaleLowerCase().includes(word)));
 }
 const spiralReleaseIds = ['cpp98','cpp03','cpp11','cpp14','cpp17','cpp20','cpp23','cpp26'];
 let spiralCatalogLoading = null, releaseCatalogLoading = null, releaseNavigationToken = 0;
@@ -597,7 +615,7 @@ async function openReleaseColumn(id){
 }
 
 function usePersonalTopicNames(){const tags=allTags();state.tags=[...new Set(state.tags.map(tag=>tags.find(personal=>personal.toLocaleLowerCase()===tag.toLocaleLowerCase())||tag))];}
-function changeView(view){if(view==='graph'){view='atlas';Object.assign(state,{atlasMode:'connections',atlasSelectedId:state.selectedId,atlasInspectId:state.selectedId,atlasExpandedIds:[]});}if(view==='boards')view='atlas';if(!['library','timeline','atlas'].includes(view))return;releaseNavigationToken++;if(state.view==='timeline'&&state.timelineMode==='releases'&&view!=='timeline')usePersonalTopicNames();state.view=view;document.body.classList.remove('sidebar-open');render();}
+function changeView(view){if(view==='graph'){view='atlas';Object.assign(state,{atlasMode:'connections',atlasSelectedId:state.selectedId,atlasInspectId:state.selectedId,atlasExpandedIds:[]});}if(view==='boards')view='atlas';if(!['library','timeline','atlas','courses'].includes(view))return;releaseNavigationToken++;if(state.view==='timeline'&&state.timelineMode==='releases'&&view!=='timeline')usePersonalTopicNames();state.view=view;document.body.classList.remove('sidebar-open');render();}
 function selectShard(id){if(!byId(id))return;state.selectedId=id;state.view='library';if(!filteredShards().some(s=>s.id===id))clearFilters();render();}
 function toggleTag(tag){const releaseMode=state.view==='timeline'&&state.timelineMode==='releases',matches=t=>releaseMode?t.toLocaleLowerCase()===tag.toLocaleLowerCase():t===tag;state.tags=state.tags.some(matches)?state.tags.filter(t=>!matches(t)):[...state.tags,tag];render();}
 
@@ -628,8 +646,8 @@ function openEditor(id=null,recovered=null){
   const s=byId(editingId),form=$('#editor-form');form.reset();editorOcr=null;previewOpen=false;$('#editor-preview').hidden=true;$('#preview-toggle').textContent='Show preview';$('#wiki-suggestions').hidden=true;
   $('#editor-heading').textContent=s?'Refine this idea':'A new shard';$('#editor-eyebrow').textContent=s?'KEEP YOUR THINKING CURRENT':'CAPTURE AN IDEA';
   const selectedKind=recovered?.values.kind||s?.kind||'concept';form.elements.kind.innerHTML=Object.entries(kinds).filter(([key])=>key!=='event'||selectedKind==='event').map(([key,label])=>`<option value="${key}" ${key===selectedKind?'selected':''}>${label}</option>`).join('');
-  for(const key of editorFields){if(recovered&&key in recovered.values)form.elements[key].value=recovered.values[key];else if(s)form.elements[key].value=['tags','entities'].includes(key)?(s[key]||[]).join(', '):['sources','facts'].includes(key)?JSON.stringify(s[key]||[]):key==='inbox'?String(!!s.inbox):(s[key]||'');}
-  renderStructuredEditor('sources');renderImageRecognition();form.dataset.baseline=recovered?.baseline||formSnapshot(form);$('#editor-error').hidden=true;$('#editor-dialog').showModal();draftStatus('editor',recovered?'Recovered draft. Save when ready.':'One idea is enough. You can refine it later.');setTimeout(()=>$('#shard-title').focus(),0);
+  for(const key of editorFields){if(recovered&&key in recovered.values)form.elements[key].value=recovered.values[key];else if(s)form.elements[key].value=['tags','entities'].includes(key)?(s[key]||[]).join(', '):['sources','facts',...academicFields].includes(key)?JSON.stringify(s[key]||[]):key==='inbox'?String(!!s.inbox):(s[key]||'');}
+  installAcademicEditor({...academicFormData(form),...(!s&&!recovered&&state.subject!=='Generic'?{subjects:[state.subject]}:{})});if(!s&&!recovered&&state.subject!=='Generic')form.elements.subjects.value=JSON.stringify([state.subject]);renderStructuredEditor('sources');renderImageRecognition();form.dataset.baseline=recovered?.baseline||formSnapshot(form);$('#editor-error').hidden=true;$('#editor-dialog').showModal();draftStatus('editor',recovered?'Recovered draft. Save when ready.':'One idea is enough. You can refine it later.');setTimeout(()=>$('#shard-title').focus(),0);
 }
 function renderLinkTargets(query='',selectedId=null){
   const select=$('#link-target'),previous=selectedId||select.value,words=query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
@@ -647,10 +665,11 @@ function openLink(id,linkId=null,recovered=null){
   form.dataset.baseline=recovered?.baseline||formSnapshot(form);$('#link-error').hidden=true;$('#link-dialog').showModal();draftStatus('connection',recovered?'Recovered draft. Save when ready.':'Changes are kept as a recoverable draft.');
 }
 function restoreDraft(kind){const draft=drafts[kind];if(!draft)return;if(document.querySelector('dialog[open]')){toast('Close the current dialog first.');return;}if(kind==='editor')openEditor(null,draft);else openLink(null,null,draft);}
-function extraFormDirty(){return ['board','board-item','section'].some(name=>$('#'+name+'-dialog').open&&$('#'+name+'-form').dataset.baseline!==formSnapshot($('#'+name+'-form')));}
+function extraFormDirty(){return ($('#import-edit-dialog').open&&$('#import-edit-form').dataset.baseline!==formSnapshot($('#import-edit-form')))||importReviewChanged||['board','board-item','section'].some(name=>$('#'+name+'-dialog').open&&$('#'+name+'-form').dataset.baseline!==formSnapshot($('#'+name+'-form')));}
 function closeDialog(id){
   if(id==='image-viewer-dialog'){closeImageViewer();return;}
-  if(id==='import-preview-dialog'&&!busy){$('#import-preview-dialog').close();clearImportPreview();return;}
+  if(id==='import-preview-dialog'&&!busy){if(importReviewChanged){confirmAction('Discard this import review?','Your selections and edits have not been saved to the atlas. Cancel to continue reviewing.','Discard review',()=>{$('#import-preview-dialog').close();clearImportPreview();},true);return;}$('#import-preview-dialog').close();clearImportPreview();return;}
+  if(id==='import-edit-dialog'&&!busy){const form=$('#import-edit-form');if(form.dataset.baseline!==formSnapshot(form)){confirmAction('Discard these incoming card edits?','The incoming card keeps its previous text and metadata.','Discard edits',()=>{$('#import-edit-dialog').close();},true);return;}$('#import-edit-dialog').close();return;}
   if(busy){toast('Saving your change…');return;}
   if(['board-dialog','board-item-dialog','section-dialog'].includes(id)){const form=$('#'+id.replace('-dialog','-form'));if(form.dataset.baseline!==formSnapshot(form)){confirmAction('Discard these unfinished changes?','The last saved canvas arrangement stays intact. You can continue editing by cancelling.','Discard changes',()=>{$('#'+id).close();},true);return;}}
   const kind=id==='editor-dialog'?'editor':id==='link-dialog'?'connection':null;
@@ -662,7 +681,7 @@ function confirmDelete(s){if(!s)return;confirmAction('Move this shard to trash?'
 function openTagRename(){const tags=allTags();if(!tags.length){toast('Add a topic to a shard first.');return;}$('#tag-form').reset();$('#rename-from').innerHTML=tags.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');if(state.tags.length)$('#rename-from').value=state.tags[0];$('#tag-error').hidden=true;$('#tag-dialog').showModal();}
 async function showHistory(id){
   historyShardId=id;$('#history-title').textContent=byId(id)?.title||'Saved versions';$('#history-content').innerHTML='<p class="muted">Opening saved versions…</p>';$('#history-dialog').showModal();
-  try{const result=await api('/api/shards/'+encodeURIComponent(id)+'/revisions');historyRecords=result.revisions||[];$('#history-content').innerHTML=historyRecords.length?historyRecords.map(r=>`<details class="revision-card"><summary><span>${dateTimeLabel(r.createdAt)}<small>${esc(r.reason||'Saved version')} · ${esc(r.snapshot?.title)}</small></span><span class="revision-expand">Preview</span></summary><div class="revision-body"><div class="markdown">${markdown(r.snapshot?.content)}</div><div class="revision-meta">${(r.snapshot?.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}<span>${esc(statuses[r.snapshot?.status]||'')}</span></div><button class="secondary" data-action="restore-revision" data-id="${esc(r.id)}">Restore this version</button></div></details>`).join(''):'<div class="empty-state"><h3>No earlier versions yet</h3><p>A saved version is kept whenever you change this shard.</p></div>';}catch(error){$('#history-content').innerHTML='<p class="form-error">'+esc(error.message)+'</p>';}
+  try{const result=await api('/api/shards/'+encodeURIComponent(id)+'/revisions');historyRecords=result.revisions||[];$('#history-content').innerHTML=historyRecords.length?historyRecords.map(r=>`<details class="revision-card"><summary><span>${dateTimeLabel(r.createdAt)}<small>${esc(r.reason||'Saved version')} · ${esc(r.snapshot?.title)}</small></span><span class="revision-expand">Preview</span></summary><div class="revision-body">${renderAcademicMetadata(r.snapshot||{})}<div class="markdown">${markdown(r.snapshot?.content)}</div><div class="revision-meta">${(r.snapshot?.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}<span>${esc(statuses[r.snapshot?.status]||'')}</span></div><button class="secondary" data-action="restore-revision" data-id="${esc(r.id)}">Restore this version</button></div></details>`).join(''):'<div class="empty-state"><h3>No earlier versions yet</h3><p>A saved version is kept whenever you change this shard.</p></div>';}catch(error){$('#history-content').innerHTML='<p class="form-error">'+esc(error.message)+'</p>';}
 }
 async function showRecovery(mode){
   recoveryMode=mode;$('#settings-dialog').close();$('#recovery-title').textContent=mode==='trash'?'Recently deleted':'Saved snapshots';$('#recovery-content').innerHTML='<p class="muted">Opening your saved items…</p>';if(!$('#recovery-dialog').open)$('#recovery-dialog').showModal();
@@ -707,6 +726,8 @@ async function uploadImage(file){
   });$('#shard-content').focus();toast('Image added to your explanation.');
 }
 async function runAction(action,button){
+  if(action.startsWith('academic-')&&academicAction(action,button))return;
+  if(await importReviewAction(action,button))return;
   if(action==='preview-import-shard'){selectImportShard(button.dataset.index);return;}
   if(action==='more-import-shards'){importListLimit+=100;renderImportReview();return;}
   if(action==='open-image'){openImageViewer(button.dataset.imageSrc,button.dataset.imageAlt,button);return;}
@@ -760,7 +781,7 @@ function clearImportPreview(){
   importPreviewRequest++;
   if([...importImageUrls.values()].includes(imageViewer.src))closeImageViewer();
   for(const url of importImageUrls.values())URL.revokeObjectURL(url);
-  importImageUrls.clear();importArchive=null;importPreview=null;importSelectedIndex=0;importListLimit=100;
+  importImageUrls.clear();importArchive=null;importPreview=null;importSelectedIndex=0;importListLimit=100;importIncluded=new Set();importExcludedLinks=new Set();importReuse=new Map();importReviewChanged=false;importEditIndex=null;
   $('#confirm-import').disabled=true;$('#import-preview-content').innerHTML='';
 }
 function prepareImportImages(){
@@ -772,8 +793,9 @@ function prepareImportImages(){
   }
 }
 function importShards(){return Array.isArray(importArchive?.shards)?importArchive.shards.filter(shard=>shard&&typeof shard==='object'&&!Array.isArray(shard)):[];}
-function importShardValue(shard){return {...shard,id:String(shard.id||''),title:String(shard.title||'Untitled shard'),content:String(shard.content||''),languageVersion:typeof shard.languageVersion==='string'?shard.languageVersion:'',tags:Array.isArray(shard.tags)?shard.tags.filter(tag=>typeof tag==='string'):[],sources:Array.isArray(shard.sources)?shard.sources.filter(source=>source&&typeof source==='object'):[],sourceUrl:typeof shard.sourceUrl==='string'?shard.sourceUrl:''};}
-function importShardLabel(shard){return byId(shard.id)?'Existing card kept':'New shard';}
+function importShardValue(shard){return {...shard,id:String(shard.id||''),title:String(shard.title||'Untitled shard'),content:String(shard.content||''),languageVersion:typeof shard.languageVersion==='string'?shard.languageVersion:'',tags:Array.isArray(shard.tags)?shard.tags.filter(tag=>typeof tag==='string'):[],sources:Array.isArray(shard.sources)?shard.sources.filter(source=>source&&typeof source==='object'):[],sourceUrl:typeof shard.sourceUrl==='string'?shard.sourceUrl:'',subjects:Array.isArray(shard.subjects)?shard.subjects.filter(value=>typeof value==='string'):[],assumptions:Array.isArray(shard.assumptions)?shard.assumptions.filter(value=>typeof value==='string'):[],courses:Array.isArray(shard.courses)?shard.courses.filter(value=>value&&typeof value==='object'&&!Array.isArray(value)):[],notation:Array.isArray(shard.notation)?shard.notation.filter(value=>value&&typeof value==='object'&&!Array.isArray(value)):[]};}
+function importShardLabel(shard){return importReuse.has(shard.id)?'Use saved card':byId(shard.id)?'Existing card kept':'New shard';}
+function reviewedImport(){const source=importExcludedLinks.size?{...importArchive,links:(importArchive.links||[]).filter((_,index)=>!importExcludedLinks.has(index))}:importArchive;return window.ShardImportReview.build(source,importIncluded,importReuse,state.data.shards.map(shard=>shard.id),state.data.links);}
 function importPreviewContext(){
   const shards=importShards().map(importShardValue);
   return {
@@ -782,28 +804,76 @@ function importPreviewContext(){
     imageSource:src=>{const id=src.slice('/assets/'.length);return (state.data.assets||[]).some(asset=>asset.id===id)?src:importImageUrls.get(id)||null;}
   };
 }
+function duplicateCandidate(shard){
+  const title=shard.title.trim().toLocaleLowerCase();
+  return state.data.shards.find(saved=>saved.id!==shard.id&&saved.title.trim().toLocaleLowerCase()===title);
+}
 function renderImportCards(){
   const shards=importShards();if(!shards.length)return '<p class="dialog-intro">This file contains no cards to preview. Other archive records are listed above.</p>';
-  const shard=importShardValue(shards[importSelectedIndex]||shards[0]),context=importPreviewContext();
-  const connections=(Array.isArray(importArchive.links)?importArchive.links:[]).filter(link=>link&&typeof link==='object'&&(link.fromId===shard.id||link.toId===shard.id));
+  const shard=importShardValue(shards[importSelectedIndex]||shards[0]),context=importPreviewContext(),candidate=duplicateCandidate(shard),reused=byId(importReuse.get(shard.id));
+  const connections=(Array.isArray(importArchive.links)?importArchive.links:[]).map((link,index)=>link&&typeof link==='object'?{...link,_reviewIndex:index}:link).filter(link=>link&&typeof link==='object'&&(link.fromId===shard.id||link.toId===shard.id));
   const inverse={depends_on:'is a dependency of',explains:'is explained by',contrasts_with:'contrasts with',example_of:'has an example in',related_to:'relates to',part_of:'contains',supports:'is supported by',contradicts:'contradicts',supersedes:'is superseded by',released_by:'released'};
-  return `<section class="import-card-review" aria-label="Card previews"><div class="import-review-heading"><h3>Preview your cards</h3><p>${shards.length} ${shards.length===1?'card':'cards'} · Select a card to read its full explanation.</p></div><div class="import-review-layout"><nav class="import-review-list" aria-label="Cards in this file">${shards.slice(0,importListLimit).map((raw,index)=>{const item=importShardValue(raw);return `<button type="button" class="import-review-item${index===importSelectedIndex?' selected':''}" data-action="preview-import-shard" data-index="${index}" aria-pressed="${index===importSelectedIndex}"><small>${esc(importShardLabel(item))} · ${esc(kinds[item.kind]||'Concept')}</small><h4>${esc(item.title)}</h4><div class="import-review-releases">${renderShardReleaseChips(item)}</div><p>${esc(excerpt(item.content).slice(0,100))}</p></button>`;}).join('')}${shards.length>importListLimit?`<button type="button" class="secondary" data-action="more-import-shards">Show more cards · ${shards.length-importListLimit} remaining</button>`:''}</nav><article id="import-card-preview" class="import-review-card"${shardThemeAttributes(shard)} aria-label="${esc('Preview: '+shard.title)}"><header class="import-card-header"><div class="import-card-topline"><small>${esc(kinds[shard.kind]||'Concept')} · ${esc(statuses[shard.status]||'Learning')}</small><span class="import-state">${esc(importShardLabel(shard))}</span></div><h3>${esc(shard.title)}</h3>${renderShardReleaseChips(shard)}${!shard.languageVersion?'':`<p class="muted">Release scope: ${esc(shard.languageVersion)}</p>`}<div class="tag-row">${shard.tags.map(tag=>`<span class="tag">${esc(tag)}</span>`).join('')}</div>${byId(shard.id)?'<p class="import-existing-note">This file’s version is shown below. It will not replace the card already in your atlas.</p>':''}</header><div class="import-card-body markdown">${markdown(shard.content,context)}</div>${connections.length?`<section class="import-card-connections"><h4>Connections in this file · ${connections.length}</h4><ul>${connections.map(link=>{const outgoing=link.fromId===shard.id,target=outgoing?link.toId:link.fromId,other=context.resolveWiki('id:'+target),relationship=(outgoing?relations:inverse)[link.type]||'relates to';return `<li><span>${esc(relationship)} </span>${other?context.renderWiki(other,other.title):`<span class="wiki-unresolved">${esc(target||'Missing card')}</span>`}${link.note?`<p>${esc(link.note)}</p>`:''}</li>`;}).join('')}</ul></section>`:''}<footer class="import-card-footer">${shard.sourceUrl?sourceAnchor(shard.sourceUrl,'Original source'):''}${renderSources(shard)}</footer></article></div></section>`;
+  const bodyLinks=[...String(shard.content).matchAll(/\[\[id:([^|\]]+)/g)].map(match=>match[1]);
+  const available=new Set([...state.data.shards.map(value=>value.id),...shards.filter((_,index)=>importIncluded.has(index)).map(value=>value.id)]);
+  const missingBodyLinks=bodyLinks.filter(id=>!available.has(id));
+  return `<section class="import-card-review" aria-label="Card previews"><div class="import-review-heading"><h3>Preview your cards</h3><p>${shards.length} ${shards.length===1?'card':'cards'} · ${importIncluded.size} selected. Read, edit, or skip each card.</p><div class="import-selection-actions"><button type="button" class="text-button" data-action="import-select-all">Select all</button><button type="button" class="text-button" data-action="import-select-none">Select none</button></div></div><div class="import-review-layout"><nav class="import-review-list" aria-label="Cards in this file">${shards.slice(0,importListLimit).map((raw,index)=>{const item=importShardValue(raw);return `<div class="import-selectable-row"><label class="import-include"><input type="checkbox" data-import-include="${index}" aria-label="${esc('Include '+item.title)}" ${importIncluded.has(index)?'checked':''}><span class="sr-only">Include card</span></label><button type="button" class="import-review-item${index===importSelectedIndex?' selected':''}${importIncluded.has(index)?'':' import-excluded'}" data-action="preview-import-shard" data-index="${index}" aria-pressed="${index===importSelectedIndex}"><small>${esc(importShardLabel(item))} · ${esc(kinds[item.kind]||'Concept')}</small><h4>${esc(item.title)}</h4><div class="import-review-releases">${renderShardReleaseChips(item)}</div><p>${esc(excerpt(item.content).slice(0,100))}</p></button></div>`;}).join('')}${shards.length>importListLimit?`<button type="button" class="secondary" data-action="more-import-shards">Show more cards · ${shards.length-importListLimit} remaining</button>`:''}</nav><article id="import-card-preview" class="import-review-card"${shardThemeAttributes(shard)} aria-label="${esc('Preview: '+shard.title)}"><header class="import-card-header"><div class="import-card-topline"><small>${esc(kinds[shard.kind]||'Concept')} · ${esc(statuses[shard.status]||'Learning')}</small><span class="import-state">${esc(importShardLabel(shard))}</span></div><h3>${esc(shard.title)}</h3>${renderShardReleaseChips(shard)}${!shard.languageVersion?'':`<p class="muted">Release scope: ${esc(shard.languageVersion)}</p>`}<div class="tag-row">${shard.tags.map(tag=>`<span class="tag">${esc(tag)}</span>`).join('')}</div>${byId(shard.id)?'<p class="import-existing-note">This file’s version is shown below. It will not replace the card already in your atlas.</p>':`<button type="button" class="secondary" data-action="edit-import-shard" ${reused?'disabled':''}>Edit incoming card</button>`}${reused?`<div class="import-duplicate-notice"><strong>Using “${esc(reused.title)}” from your atlas.</strong><p>Its saved explanation, course memberships, and notation stay intact. Connections will point to that card. Add course context by editing the saved card after import.</p><button type="button" class="text-button" data-action="import-keep-new">Keep as a new card instead</button></div>`:candidate&&!byId(shard.id)?`<div class="import-duplicate-notice"><strong>Possible duplicate: “${esc(candidate.title)}”</strong><p>A saved card has this title. Reuse it to keep its explanation and metadata, or keep this incoming card separately.</p><button type="button" class="secondary" data-action="import-reuse-card" data-id="${esc(candidate.id)}">Use saved card</button><details><summary>Read saved explanation</summary><div class="markdown">${markdown(candidate.content)}</div>${renderAcademicMetadata(candidate)}</details></div>`:''}${!importIncluded.has(importSelectedIndex)?'<p class="import-existing-note">This card is skipped in the current selection.</p>':''}${missingBodyLinks.length?`<p class="import-selection-warning">${missingBodyLinks.length} link${missingBodyLinks.length===1?'':'s'} in this explanation point to skipped cards. Include those cards or revise the explanation.</p>`:''}</header>${renderAcademicMetadata(shard)}<div class="import-card-body markdown">${markdown(shard.content,context)}</div>${connections.length?`<section class="import-card-connections"><h4>Connections in this file · ${connections.length}</h4><ul>${connections.map(link=>{const outgoing=link.fromId===shard.id,target=outgoing?link.toId:link.fromId,other=context.resolveWiki('id:'+target),relationship=(outgoing?relations:inverse)[link.type]||'relates to';return `<li><span>${esc(relationship)} </span>${other?context.renderWiki(other,other.title):`<span class="wiki-unresolved">${esc(target||'Missing card')}</span>`}${link.note?`<p>${esc(link.note)}</p>`:''}<label class="import-connection-include"><input type="checkbox" data-import-link-include="${link._reviewIndex}" ${importExcludedLinks.has(link._reviewIndex)?'':'checked'}> Include this connection</label>${state.data.links.some(saved=>saved.id===link.id)?'<small>Existing saved relationship kept.</small>':`<details class="import-connection-editor"><summary>Edit connection</summary><p>From ${esc(context.resolveWiki('id:'+link.fromId)?.title||link.fromId)} → ${esc(context.resolveWiki('id:'+link.toId)?.title||link.toId)}</p><label class="field">Relationship<select data-import-link-field="type" data-link-index="${link._reviewIndex}">${Object.entries(relations).filter(([type])=>coreRelations.includes(type)||type===link.type).map(([type,label])=>`<option value="${type}" ${type===link.type?'selected':''}>${esc(label)}</option>`).join('')}</select></label><label class="field">Why this connection matters<textarea rows="3" maxlength="10000" data-import-link-field="note" data-link-index="${link._reviewIndex}">${esc(link.note||'')}</textarea></label></details>`}</li>`;}).join('')}</ul></section>`:''}<footer class="import-card-footer">${shard.sourceUrl?sourceAnchor(shard.sourceUrl,'Original source'):''}${renderSources(shard)}</footer></article></div></section>`;
 }
 function renderImportReview(){
   const preview=importPreview;if(!preview)return;
-  const stats=preview.added||preview.counts||{};
-  $('#import-preview-content').innerHTML=`<p class="dialog-intro">Read the generated cards before saving. Save to atlas adds all new records in this file, including its photos and connections. Nothing is saved before you confirm. Existing cards are preserved.</p><div class="import-counts">${Object.entries(stats).filter(([,value])=>value>0).map(([key,value])=>`<div><strong>${esc(value)}</strong><span>${esc(key)}</span></div>`).join('')||'<p class="muted">No new records to add.</p>'}</div>${preview.skipped&&Object.values(preview.skipped).some(Boolean)?`<p class="muted">Already present: ${esc(Object.entries(preview.skipped).filter(([,value])=>value>0).map(([key,value])=>value+' '+key).join(', '))}</p>`:''}${['missing','duplicates','conflicts','warnings'].map(key=>(preview[key]||[]).length?`<details class="import-issues" open><summary>${esc(key)} · ${preview[key].length}</summary><ul>${preview[key].map(item=>`<li>${esc(typeof item==='string'?item:JSON.stringify(item))}</li>`).join('')}</ul></details>`:'').join('')}${renderImportCards()}${preview.coverage?`<details class="import-coverage"><summary>Archive summary</summary><pre>${esc(typeof preview.coverage==='string'?preview.coverage:JSON.stringify(preview.coverage,null,2))}</pre></details>`:''}`;
+  const stats=preview.added||preview.counts||{},plan=reviewedImport();
+  const scroll=$('.import-review-list')?.scrollTop||0;
+  $('#import-preview-content').innerHTML=`<p class="dialog-intro">Review the generated cards before saving. You can choose cards, edit incoming explanations and course context, or reuse a saved card. Existing cards are preserved.</p>${importExcludedLinks.size?`<p class="import-selection-summary">${importExcludedLinks.size} connection${importExcludedLinks.size===1?' is':'s are'} skipped by your selection.</p>`:''}${plan.partial?`<p class="import-selection-summary">Selected cards include their images and available connections.${plan.omittedLinks?` ${plan.omittedLinks} connection${plan.omittedLinks===1?' is':'s are'} omitted because cards were skipped or reused.`:''}${plan.omittedRecovery?' Saved canvases and Trash records are excluded from a partial import.':''}</p>`:''}<div class="import-counts">${Object.entries(stats).filter(([,value])=>value>0).map(([key,value])=>`<div><strong>${esc(value)}</strong><span>${esc(key)}</span></div>`).join('')||'<p class="muted">No new records to add.</p>'}</div>${preview.skipped&&Object.values(preview.skipped).some(Boolean)?`<p class="muted">Already present: ${esc(Object.entries(preview.skipped).filter(([,value])=>value>0).map(([key,value])=>value+' '+key).join(', '))}</p>`:''}${['missing','duplicates','conflicts','warnings'].map(key=>(preview[key]||[]).length?`<details class="import-issues" open><summary>${esc(key)} · ${preview[key].length}</summary><ul>${preview[key].map(item=>`<li>${esc(typeof item==='string'?item:JSON.stringify(item))}</li>`).join('')}</ul></details>`:'').join('')}${renderImportCards()}${preview.coverage?`<details class="import-coverage"><summary>Archive summary</summary><pre>${esc(typeof preview.coverage==='string'?preview.coverage:JSON.stringify(preview.coverage,null,2))}</pre></details>`:''}`;
+  if($('.import-review-list'))$('.import-review-list').scrollTop=scroll;
+  $('#confirm-import').disabled=preview.valid===false||!Object.values(stats).some(value=>value>0);
+  $('#confirm-import').textContent=plan.partial?'Save selected to atlas':'Save to atlas';
 }
 function selectImportShard(index){
   index=Number(index);if(!Number.isInteger(index)||index<0||index>=importShards().length)return;
   importSelectedIndex=index;importListLimit=Math.max(importListLimit,index+1);renderImportReview();
 }
+async function revalidateImport(){
+  if(!importArchive)return;const request=++importPreviewRequest;
+  $('#confirm-import').disabled=true;
+  try{const preview=await api('/api/import/preview','POST',{data:reviewedImport().data});if(request!==importPreviewRequest)return;importPreview=preview;prepareImportImages();renderImportReview();}
+  catch(error){if(request!==importPreviewRequest)return;importPreview={valid:false,warnings:[error.message]};renderImportReview();}
+}
 async function previewImport(data,name='Archive'){
   clearImportPreview();const request=importPreviewRequest;
   const preview=await api('/api/import/preview','POST',{data});if(request!==importPreviewRequest)return;
-  importArchive=data;importPreview=preview;prepareImportImages();
-  $('#settings-dialog').close();$('#import-preview-title').textContent=name;$('#confirm-import').disabled=preview.valid===false;
+  importArchive=data;importIncluded=new Set(importShards().map((_,index)=>index));importPreview=preview;prepareImportImages();
+  $('#settings-dialog').close();$('#import-preview-title').textContent=name;
   renderImportReview();if(!$('#import-preview-dialog').open)$('#import-preview-dialog').showModal();
+}
+function openImportEditor(){
+  const shard=importShards()[importSelectedIndex];if(!shard||byId(shard.id)||importReuse.has(shard.id))return;
+  importEditIndex=importSelectedIndex;const form=$('#import-edit-form');form.reset();
+  for(const key of ['title','content','sourceUrl','languageVersion'])form.elements[key].value=shard[key]||'';
+  form.elements.tags.value=(shard.tags||[]).join(', ');installAcademicEditor(shard,$('#import-academic-editor'));
+  form.dataset.baseline=formSnapshot(form);$('#import-edit-error').hidden=true;$('#import-edit-dialog').showModal();
+}
+async function importReviewAction(action,button){
+  if(action==='edit-import-shard'){openImportEditor();return true;}
+  if(!['import-select-all','import-select-none','import-reuse-card','import-keep-new'].includes(action))return false;
+  if(!importArchive)return true;
+  if(action==='import-select-all')importIncluded=new Set(importShards().map((_,index)=>index));
+  if(action==='import-select-none')importIncluded.clear();
+  const shard=importShards()[importSelectedIndex];
+  if(action==='import-reuse-card'&&shard&&byId(button.dataset.id)){importReuse.set(shard.id,button.dataset.id);importIncluded.add(importSelectedIndex);}
+  if(action==='import-keep-new'&&shard)importReuse.delete(shard.id);
+  importReviewChanged=true;await revalidateImport();return true;
+}
+function academicAction(action,button){
+  if(!action.startsWith('academic-'))return false;
+  if($('#import-preview-dialog').open){toast('Import selected cards to browse their course collections.');return true;}
+  if(action==='academic-new-shard'){
+    openEditor();if(!$('#editor-dialog').open||editingId||drafts.editor)return true;
+    const course=window.AcademicAtlas.getCourseCollections(state.data.shards).find(value=>value.key===state.courseKey);
+    if(course){const occurrence=course.occurrences.find(entry=>entry.occurrence.lecture===state.courseLecture)?.occurrence;const metadata={...academicFormData($('#editor-form')),courses:[{courseCode:course.courseCode,courseTitle:course.courseTitle,term:course.term,lecture:state.courseLecture,position:occurrence?.position||0}]};for(const key of academicFields)$('#editor-form').elements[key].value=JSON.stringify(metadata[key]);installAcademicEditor(metadata);$('#editor-form').dataset.baseline=formSnapshot($('#editor-form'));}
+  }else if(action==='academic-open-shard')selectShard(button.dataset.id);
+  else if(action==='academic-open-course'){state.courseKey=button.dataset.course;state.courseLecture='';state.courseQuery='';state.query='';state.tags=[];state.kind='all';state.status='all';$('#search').value='';changeView('courses');}
+  else if(action==='academic-course-all'){state.courseKey='';state.courseLecture='';state.courseQuery='';render();}
+  else if(action==='academic-open-lecture'){state.courseLecture=button.dataset.lecture;render();}
+  return true;
 }
 function renderUndoSummary(summary){if(!summary)return '';const removed=summary.removed||{},skipped=summary.skipped||[];return `<div class="import-undo-summary"><p><strong>Removed:</strong> ${esc(Object.entries(removed).map(([kind,count])=>count+' '+kind).join(', ')||'No records')}</p>${skipped.length?`<details open><summary>${skipped.length} records preserved</summary><ul>${skipped.map(item=>`<li><strong>${esc(item.kind)} · ${esc(byId(item.id)?.title||state.data.boards?.find(b=>b.id===item.id)?.title||item.id)}</strong><span>${esc(item.reason||'Retained to preserve your knowledge')}</span></li>`).join('')}</ul></details>`:'<p>No imported records needed to be preserved.</p>'}</div>`;}
 async function showImports(){const result=await api('/api/imports');recoveryMode='imports';recoveryRecords=result.imports||[];$('#settings-dialog').close();$('#recovery-title').textContent='Import history';$('#recovery-content').innerHTML=recoveryRecords.map(receipt=>`<article class="import-receipt"><div><h3>${esc(receipt.title||receipt.sourceTitle||'Imported archive')}</h3><small>${dateTimeLabel(receipt.createdAt)} · ${esc(receipt.id)}</small></div><p>${esc(Object.entries(receipt.added||receipt.summary?.added||{}).map(([kind,count])=>count+' '+kind).join(', '))}</p>${receipt.undoneAt?'<span class="muted">Import undone</span>'+renderUndoSummary(receipt.undoSummary):`<button class="secondary" data-action="undo-import" data-id="${esc(receipt.id)}">Undo import</button>`}</article>`).join('')||'<p class="dialog-intro">Your future imports will appear here, with a receipt and an undo option.</p>';$('#recovery-dialog').showModal();}
@@ -877,7 +947,17 @@ async function legacyBoardAction(action,button){const id=button?.dataset.id,boar
   else if(action==='fit-board')fitBoard();
   else if(action==='find-board-match'&&board){const item=board.items.find(i=>byId(i.shardId)&&boardMatches(byId(i.shardId)));if(item)jumpToBoardItem(item);else toast('No matching note on this canvas.');}
   else if(action==='import-history')await showImports();
-  else if(action==='confirm-import'){if(!importArchive||importPreview?.valid===false)return true;await withBusy(async()=>{const result=await writeRequest('/api/import','POST',{data:importArchive});state.data=mergeBoardDrafts(result);$('#import-preview-dialog').close();clearImportPreview();state.view='library';render();toast(`Imported ${result.importSummary?.added?.shards||0} notes. Saved canvas data remains in your archive. A receipt is available in Backup & export.`);});}
+  else if(action==='confirm-import'){
+    if(!importArchive||importPreview?.valid===false||$('#confirm-import').disabled)return true;
+    await withBusy(async()=>{
+      const previous=JSON.stringify([importPreview.added,importPreview.skipped,importPreview.conflicts]);
+      state.data=mergeBoardDrafts(await api('/api/state'));
+      const data=reviewedImport().data;
+      const latest=await api('/api/import/preview','POST',{data});importPreview=latest;
+      if(!latest.valid||previous!==JSON.stringify([latest.added,latest.skipped,latest.conflicts])){renderImportReview();toast('Your atlas changed during review. Check the refreshed preview before saving.');return;}
+      const result=await writeRequest('/api/import','POST',{data});state.data=mergeBoardDrafts(result);$('#import-preview-dialog').close();clearImportPreview();state.view='library';clearFilters();render();toast(`Imported ${result.importSummary?.added?.shards||0} notes. A receipt and undo option are available in Backup & export.`);
+    });
+  }
   else if(action==='undo-import')confirmAction('Undo this import?','Unchanged records added by this import will be removed. Edited records and existing knowledge are preserved. A backup is saved first.','Undo import',async()=>{const result=await mutate('/api/imports/'+encodeURIComponent(id)+'/undo','POST',{});await showImports();toast(`Import undone.${result.undoSummary?.skipped?.length?' '+result.undoSummary.skipped.length+' records were preserved. See their reasons in import history.':''}`);},true);
   else return false;return true;
 }
@@ -912,7 +992,14 @@ $('#image-viewer-viewport').addEventListener('wheel',event=>{
 },{passive:false});
 window.addEventListener('resize',()=>{if($('#image-viewer-dialog').open&&imageViewer.width){if(imageViewer.mode==='fit')fitImageViewer();else setImageViewerScale(imageViewer.scale);}});
 $('#topic-search').addEventListener('keydown',event=>{if(event.isComposing)return;if(event.key==='Escape'){event.preventDefault();event.stopPropagation();clearTopicSearch();}else if(event.key==='Enter'){event.preventDefault();event.stopPropagation();if(!busy)selectSearchedTopic();}});
+document.addEventListener('input',event=>{
+  if(event.target.hasAttribute?.('data-academic-course-search')){state.courseQuery=event.target.value;const start=event.target.selectionStart;render();const input=$('[data-academic-course-search]');input?.focus();if(input&&start!==null)input.setSelectionRange(start,start);}
+});
 document.addEventListener('change',event=>{
+  if(event.target.dataset?.importLinkInclude!==undefined){const index=Number(event.target.dataset.importLinkInclude);if(event.target.checked)importExcludedLinks.delete(index);else importExcludedLinks.add(index);importReviewChanged=true;revalidateImport().catch(error=>toast(error.message));return;}
+  if(event.target.dataset?.importLinkField){const link=importArchive?.links?.[Number(event.target.dataset.linkIndex)],key=event.target.dataset.importLinkField;if(link&&!state.data.links.some(saved=>saved.id===link.id)&&['type','note'].includes(key)){link[key]=event.target.value;importReviewChanged=true;revalidateImport().catch(error=>toast(error.message));}return;}
+  if(event.target.id==='subject-view'){state.subject=event.target.value;state.courseLecture='';render();return;}
+  if(event.target.dataset?.importInclude!==undefined){const index=Number(event.target.dataset.importInclude);if(event.target.checked)importIncluded.add(index);else importIncluded.delete(index);importReviewChanged=true;revalidateImport().catch(error=>toast(error.message));return;}
   if(event.target.id==='atlas-organizational'){state.atlasShowOrganizational=event.target.checked;state.atlasLimit=12;render();return;}
   if(event.target.id==='atlas-relation'){state.atlasRelation=event.target.value;state.atlasInspectId=null;render();return;}
   if(event.target.dataset?.structured){syncStructuredEditor(event.target.dataset.structured);scheduleDraft('editor');}
@@ -923,7 +1010,7 @@ $('#link-search').addEventListener('input',event=>{renderLinkTargets(event.targe
 $('#shard-content').addEventListener('paste',async event=>{const image=[...(event.clipboardData?.items||[])].find(item=>item.kind==='file'&&item.type.startsWith('image/'));if(!image)return;event.preventDefault();if(busy)return;try{await uploadImage(image.getAsFile());}catch(error){toast(error.message);}});
 $('#image-file').addEventListener('change',async event=>{try{await uploadImage(event.target.files[0]);}catch(error){toast(error.message);}finally{event.target.value='';}});
 window.addEventListener('beforeunload',event=>{if(editorDirty()||linkDirty()||extraFormDirty()||boardDirty||busy||pendingWrites){for(const kind of draftKinds)if(dirtyKind(kind)){drafts[kind]=snapshotDraft(kind);writeLocalDrafts();}event.preventDefault();event.returnValue='';}});
-window.shardAtlasDesktop={status:()=>({dirty:editorDirty()||linkDirty()||extraFormDirty()||boardDirty,saving:busy||pendingWrites>0,draftSaved:!extraFormDirty()&&!boardDirty&&draftKinds.every(kind=>!dirtyKind(kind)||persistedDrafts[kind]===formSnapshot(draftForm(kind)))}),filePickerType:()=>pendingFilePickerType,command:name=>{if(busy){toast('Saving your change…');return;}if(document.querySelector('dialog[open]')){toast('Finish or close the current dialog first.');return;}if(name==='search'){$('#search').focus();$('#search').select();}else if(name==='new')openEditor();else if(['library','graph','timeline','atlas','boards'].includes(name))changeView(name);else if(name==='settings')$('#settings-dialog').showModal();}};
+window.shardAtlasDesktop={status:()=>({dirty:editorDirty()||linkDirty()||extraFormDirty()||boardDirty,saving:busy||pendingWrites>0,draftSaved:!extraFormDirty()&&!boardDirty&&draftKinds.every(kind=>!dirtyKind(kind)||persistedDrafts[kind]===formSnapshot(draftForm(kind)))}),filePickerType:()=>pendingFilePickerType,command:name=>{if(busy){toast('Saving your change…');return;}if(document.querySelector('dialog[open]')){toast('Finish or close the current dialog first.');return;}if(name==='search'){$('#search').focus();$('#search').select();}else if(name==='new')openEditor();else if(['library','graph','timeline','atlas','boards','courses'].includes(name))changeView(name);else if(name==='settings')$('#settings-dialog').showModal();}};
 async function clearSavedDraft(kind){
   drafts[kind]=snapshotDraft(kind);writeLocalDrafts();
   try{await deleteDraft(kind);return true;}catch(error){
@@ -933,9 +1020,19 @@ async function clearSavedDraft(kind){
 }
 $('#editor-form').addEventListener('submit',async event=>{
   event.preventDefault();if(busy)return;const form=event.target,values=formValues(form),original=byId(editingId),wasNew=!editingId;values.tags=original&&values.tags===original.tags.join(', ')?original.tags:[...new Set(values.tags.split(',').map(t=>t.trim()).filter(Boolean))];values.entities=original&&values.entities===(original.entities||[]).join(', ')?original.entities:[...new Set(values.entities.split(',').map(v=>v.trim()).filter(Boolean))];values.inbox=values.inbox==='true';try{values.sources=JSON.parse(values.sources||'[]');values.facts=JSON.parse(values.facts||'[]');}catch{toast('A source or fact could not be read. Reopen the editor.');return;}values.content=stabilizeWikiLinks(values.content);$('#editor-error').hidden=true;
-  try{await withBusy(async()=>{
+  try{Object.assign(values,window.AcademicAtlas.readEditor($('#academic-editor')));await withBusy(async()=>{
     clearTimeout(draftTimers.editor);const oldIds=new Set(state.data.shards.map(s=>s.id)),result=await writeRequest('/api/shards'+(editingId?'/'+encodeURIComponent(editingId):''),editingId?'PUT':'POST',{...original,...values});state.data=mergeBoardDrafts(result);editingId=editingId||result.shards.find(s=>!oldIds.has(s.id))?.id;state.selectedId=editingId;state.view='library';clearFilters();form.dataset.baseline=formSnapshot(form);const cleaned=await clearSavedDraft('editor');$('#editor-dialog').close();render();toast(cleaned?(wasNew?'A new idea, saved.':'Your explanation is up to date.'):'Your shard was saved. An older draft still needs to be discarded.');
   });}catch(error){$('#editor-error').textContent=error.message;$('#editor-error').hidden=false;}
+});
+$('#import-edit-dialog').addEventListener('cancel',event=>{event.preventDefault();closeDialog('import-edit-dialog');});
+$('#import-edit-form').addEventListener('submit',async event=>{
+  event.preventDefault();if(busy||importEditIndex===null)return;
+  const form=event.target,shard=importShards()[importEditIndex];if(!shard)return;
+  try{
+    const values=formValues(form),metadata=window.AcademicAtlas.readEditor($('#import-academic-editor'));
+    const changes={title:values.title,content:values.content,tags:[...new Set(values.tags.split(',').map(value=>value.trim()).filter(Boolean))],sourceUrl:values.sourceUrl,languageVersion:values.languageVersion,...metadata};
+    Object.assign(shard,changes);importReviewChanged=true;form.dataset.baseline=formSnapshot(form);$('#import-edit-dialog').close();await revalidateImport();
+  }catch(error){$('#import-edit-error').textContent=error.message;$('#import-edit-error').hidden=false;}
 });
 $('#link-form').addEventListener('submit',async event=>{
   event.preventDefault();if(busy)return;const form=event.target,values=formValues(form),wasNew=!editingLinkId;values.fromId=linkingId;$('#link-error').hidden=true;

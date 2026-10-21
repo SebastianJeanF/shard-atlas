@@ -27,7 +27,8 @@ PORTS = range(48731, 48761)
 MAX_BATCH_BYTES = 8 * 1024 * 1024
 MAX_RESPONSE_BYTES = 260 * 1024 * 1024
 SHARD_FIELDS = {"id", "title", "content", "tags", "kind", "status", "sourceUrl", "languageVersion", "eventDate",
-                "evidenceStatus", "sources", "publicationDate", "verifiedDate", "eventType", "entities", "entityType", "inbox", "facts"}
+                "evidenceStatus", "sources", "publicationDate", "verifiedDate", "eventType", "entities", "entityType", "inbox", "facts",
+                "subjects", "courses", "notation", "assumptions"}
 LINK_FIELDS = {"id", "fromId", "toId", "type", "note"}
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$")
 
@@ -265,14 +266,19 @@ class AtlasClient:
         matches = []
         for shard in state["shards"]:
             title, content, tags = shard["title"], shard["content"], shard.get("tags", [])
-            haystack = "\n".join([title, content, *tags]).casefold()
+            academic = [*shard.get("subjects", []), *shard.get("assumptions", [])]
+            academic.extend(value for course in shard.get("courses", []) for field, value in course.items() if isinstance(value, str))
+            academic.extend(value for entry in shard.get("notation", []) for value in entry.values())
+            haystack = "\n".join([title, content, *tags, *academic]).casefold()
             if terms and not all(term in haystack for term in terms):
                 continue
             score = sum(4 * (term in title.casefold()) + 2 * any(term in tag.casefold() for tag in tags) for term in terms)
             offset = min((content.casefold().find(term) for term in terms if term in content.casefold()), default=0)
             start = max(0, offset - 70)
             excerpt = ("…" if start else "") + content[start:start + 260] + ("…" if len(content) > start + 260 else "")
-            matches.append((score, shard.get("updatedAt", ""), {"id": shard["id"], "title": title, "tags": tags, "kind": shard.get("kind"), "status": shard.get("status"), "excerpt": excerpt}))
+            matches.append((score, shard.get("updatedAt", ""), {"id": shard["id"], "title": title, "tags": tags,
+                "subjects": shard.get("subjects", []), "courses": shard.get("courses", []),
+                "kind": shard.get("kind"), "status": shard.get("status"), "excerpt": excerpt}))
         matches.sort(key=lambda item: (item[0], item[1]), reverse=True)
         return {"query": query, "total": len(matches), "matches": [item[2] for item in matches[:limit]],
                 "availableTags": sorted({tag for shard in state["shards"] for tag in shard.get("tags", [])}, key=str.casefold)}
@@ -291,6 +297,7 @@ class AtlasClient:
     def add(self, batch):
         batch = validate_batch(batch)
         from server import validate_knowledge
+        knowledge_defaults = validate_knowledge({})
         self.connect()
         receipt = request_json(self.base_url, "/api/contributions", batch, timeout=60)
         if not isinstance(receipt, dict) or receipt.get("requestId") != batch["requestId"] or not isinstance(receipt.get("shards"), list) or not isinstance(receipt.get("links"), list):
@@ -331,7 +338,8 @@ class AtlasClient:
                 for field, default in (("kind", "concept"), ("status", "learning"), ("sourceUrl", ""),
                                        ("languageVersion", ""), ("eventDate", "")):
                     matches = matches and saved.get(field, default) == expected.get(field, default)
-                matches = matches and saved.get("sources", []) == validate_knowledge(expected)["sources"]
+                knowledge = validate_knowledge(expected)
+                matches = matches and all(saved.get(field, knowledge_defaults[field]) == value for field, value in knowledge.items())
             if not matches:
                 changed_shards.append(saved_id)
         for entry in receipt["links"]:

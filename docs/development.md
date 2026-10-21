@@ -54,6 +54,8 @@ The server and native builder both accept `--backup-dir PATH`. The native app de
 | --- | --- |
 | `server.py` | SQLite storage, validation, local HTTP routes, exports, recovery, and additive contributions |
 | `static/app.js` | Interface behavior, note rendering, automatic topic map, connection map, and release reference |
+| `static/academic.js`, `static/academic.css` | Subject focus, course occurrences, notation, assumptions, and their interface styles |
+| `static/import-review.js` | Incoming-card selection, editing, reuse, dependency handling, and import revalidation |
 | `static/styles.css` | Layout and visual styles |
 | `desktop/ShardAtlas.swift` | AppKit window, WKWebView, menus, clipboard, file dialogs, and service lifecycle |
 | `desktop/ImageText.swift` | Local macOS image text recognition |
@@ -78,6 +80,12 @@ Collection writes belong to the storage service. Use its validated routes or con
 
 Topic map is generated from saved topics and relationships. Keep layout deterministic, preserve all topic memberships, and distinguish shared-topic overlap from typed conceptual relationships. Its expansion controls change the view rather than the collection. The standalone Connections page and manual Canvas navigation are retired. Keep the Library's compact relationship preview and Topic map's focused relationship explorer. Legacy board data and archive routes remain available for recovery.
 
+Academic context uses optional per-shard `subjects`, `courses`, `notation`, and `assumptions` arrays. Keep a concept's stable ID shared across subject views and course occurrences. Courses record where a concept appears, rather than owning a separate copy of it. Symbol definitions are scoped metadata, not a global symbol table. Preserve these fields through validation, revisions, Trash, contribution tools, and archives, with empty-array defaults for older notes. See the [contribution format](../static/ai-instructions.md#batch-and-archive-format) for the contract.
+
+Import review automatically revalidates after selection or editing. Build the resulting archive with its selected cards, valid connection endpoints, and required assets. Reusing a saved card redirects typed connections and explicit inline ID links without modifying that card's explanation or academic metadata. Partial imports retain selected revisions and referenced images, and exclude saved canvases and Trash recovery records. Full selections preserve the complete legacy archive. Preserve the existing atomic import, safety snapshot, stable-ID conflict handling, receipts, and undo behavior.
+
+Modified import reviews ask before discard but are not durable drafts outside the current session. Ordinary editor drafts include academic metadata. Subject focus applies to shared collection views and is disabled in C++ timeline. The timeline retains C++ and legacy unclassified notes while excluding explicitly academic non-C++ notes. Native **View → Courses** uses Command-2.
+
 ### Local service boundary
 
 The service binds to `127.0.0.1`. It is designed for a single user's desktop and has no account system or authentication boundary between local processes. **Do not forward its port, bind it to a LAN address, or treat it as a hosted multiuser application.**
@@ -91,6 +99,8 @@ From the repository root:
 ```sh
 python3 -m unittest discover -s tests -v
 node tests/test_frontend.mjs
+node tests/test_academic_frontend.mjs
+node tests/test_import_review.mjs
 node --check static/app.js
 ```
 

@@ -1,5 +1,21 @@
 @charset "UTF-8";
 
+.subject-focus { display: grid; gap: 6px; margin: 0 6px 18px; color: var(--muted); font-size: 11px; font-weight: 600; }
+.subject-focus select { min-width: 0; width: 100%; padding: 8px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 7px; }
+.subject-focus small { font-size: 10px; font-weight: 400; line-height: 1.4; }
+.import-selectable-row { display: flex; gap: 5px; align-items: start; min-width: 0; }
+.import-selectable-row .import-review-item { flex: 1; min-width: 0; }
+.import-include { padding: 17px 2px; cursor: pointer; }
+.import-include input { width: 17px; height: 17px; accent-color: var(--green); }
+.import-excluded { opacity: .6; }
+.import-selection-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.import-selection-summary,.import-duplicate-notice,.import-selection-warning { padding: 12px 15px; margin: 14px 0; border: 1px solid var(--line); border-radius: 8px; background: var(--green-soft); font-size: 12px; overflow-wrap: anywhere; }
+.import-duplicate-notice { background: var(--lavender); }
+.import-duplicate-notice details { margin-top: 12px; }
+.import-selection-warning { background: var(--peach); }
+.import-review-card .academic-metadata { margin: 18px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
 :root {
   color-scheme: light;
   --paper: #f6f5f0;

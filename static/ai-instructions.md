@@ -6,7 +6,7 @@
 
 **A chat with access to this Mac:** use the Shard Atlas tools to search, read, and add knowledge. The local integration can start the storage service when the app window is closed. It keeps the collection on this Mac. Start a new chat after installing the integration so its tools and instructions can load.
 
-**A chat without access to this Mac:** create a downloadable Shard Atlas JSON archive and tell the user to choose **Use with AI → Preview a file** or **Backup & export → Choose JSON**. The user can inspect the rendered cards, embedded photos, and connections before choosing **Save to atlas**. Say that the file is ready to preview and import. Do not claim it was saved in the app. If an export or relevant existing notes were supplied, use those to avoid duplicates and connect to existing IDs. Without those notes, do not invent existing IDs or pretend to have checked the collection.
+**A chat without access to this Mac:** create a downloadable Shard Atlas JSON archive and tell the user to choose **Use with AI → Preview a file** or **Backup & export → Choose JSON**. The user can inspect rendered cards, embedded photos, and connections, select cards, and edit proposed details with **Edit incoming card → Apply to review**. Changes automatically refresh validation. **Use saved card** reuses an existing note without changing its explanation or academic metadata. Adding course context to that saved card requires an explicit edit afterward. The final action is **Save selected to atlas** for a selection or **Save to atlas** for the full archive. Say that the file is ready to preview and import. Do not claim it was saved in the app. If an export or relevant existing notes were supplied, use those to avoid duplicates and connect to existing IDs. Without those notes, do not invent existing IDs or pretend to have checked the collection.
 
 ## Prepare useful knowledge
 
@@ -35,6 +35,16 @@ Keep build tools such as CMake independent of C++ release years and use the `Too
 **Relevant cppreference links are required for C++ shards.** Every new or substantively revised shard about a C++ language or standard-library concept must include at least one descriptive, direct link in its body to the relevant concept or API article on `https://en.cppreference.com` when one exists. This applies even when the shard cites no other documentation. Verify that each destination exists and explains the concept being discussed. Preserve the original references as well. If no relevant cppreference article exists, explicitly explain that in the shard and use the appropriate primary documentation instead. Never invent a URL, claim an unchecked link was verified, or add an unrelated article to satisfy this rule. Report an inability to verify a required link as an unresolved limitation before saving. For mixed-language material, label a C++-specific link as a counterpart rather than implying that every example is a C++ API. Tooling and non-C++ material should use their own relevant documentation.
 
 Add connections when the relationship helps explain the knowledge. Supply a concise reason. Direction matters: `fromId` is the note making the relationship and `toId` is its target. Use `related_to` when a stronger relationship is unsupported. Do not guess prerequisite direction from proximity or a diagram arrow.
+
+## Preserve academic context
+
+**Capture a reusable concept once, with its course occurrences attached.** Use `subjects` for broad memberships such as `C++`, `CS`, `Mathematics`, or `ML`, and keep specific technical topics in `tags`. An idea can have several subjects. Generic view includes the shared collection. Do not create duplicate shards merely because a concept appears in several courses or lectures, and do not merge or revise existing notes without authorization.
+
+Use `courses` to record each occurrence's `courseCode`, optional `courseTitle`, `term`, `lecture`, numeric `position`, `sourceUrl`, `sourceLocation`, and `context`. Preserve the course's notation, assumptions, and framing in its context. Use an actual page, slide, section, or timestamp for `sourceLocation` when verified. Leave unknown details empty. A link alone does not establish that its contents or a claimed location were checked.
+
+Use `notation` for symbol definitions with a required `symbol` and `meaning`. Optional `shape`, `role`, and `scope` explain whether the quantity is scalar or vector, an input or output, fixed or varying, and current, next, optimal, or final, as applicable. Scope each definition to the note, course occurrence, or formulation where it is valid. Do not equate symbols across courses merely because they look alike. Use `assumptions` for the conditions needed for the note's claims. Keep necessary explanations and qualifications in the body as well.
+
+Capture relies on the AI reading the supplied material and preparing a reviewed batch or portable JSON file. The app does not automatically ingest PDFs, extract concepts, or retrieve source-link contents. Preserve source references and distinguish checked source facts from interpretation and unresolved claims.
 
 ## Use the local tools
 
@@ -78,6 +88,10 @@ An additive batch has this shape. This sample illustrates the format. Replace it
       "tags": ["C++", "Types"],
       "kind": "concept",
       "status": "learning",
+      "subjects": [],
+      "courses": [],
+      "notation": [],
+      "assumptions": [],
       "sourceUrl": "",
       "languageVersion": "",
       "eventDate": ""
@@ -95,17 +109,25 @@ An additive batch has this shape. This sample illustrates the format. Replace it
 | `tags` | Up to 50 distinct topic strings, each at most 80 characters. |
 | `kind` | `concept`, `fact`, `example`, `mistake`, or `idea`. Legacy archives can also retain `event`. |
 | `status` | `learning`, `solid`, or `verify`. |
+| `subjects` | Up to 20 distinct nonempty subject strings, each at most 80 characters. Optional, defaults to `[]`. |
+| `courses` | Up to 100 course occurrences. Each requires `courseCode` and accepts the optional fields described below. Defaults to `[]`. |
+| `notation` | Up to 100 symbol definitions. Each requires `symbol` and `meaning`, with optional `shape`, `role`, and `scope`. Defaults to `[]`. |
+| `assumptions` | Up to 100 distinct nonempty condition strings, each at most 2,000 characters. Optional, defaults to `[]`. |
 | `sourceUrl` | An actual HTTP/HTTPS source URL, or empty. |
 | `languageVersion` | Verified release(s) or scope, at most 100 characters. For C++ shards, assign supported releases or leave empty with an explicit reason in the body. |
 | `eventDate` | A source-supported `YYYY`, `YYYY-MM`, or `YYYY-MM-DD` occurrence date, or empty. Preserve date precision. Capture time is supplied separately. |
 
 The optional `sources` array preserves several references. Each object can include `url`, `title`, `publishedDate`, `accessedDate`, and `note`. Dates and caveats should come from the source. One main reference can also use `sourceUrl`.
 
+A course occurrence accepts only `courseCode`, `courseTitle`, `term`, `lecture`, `position`, `sourceUrl`, `sourceLocation`, and `context`. `courseCode` is required. Other text fields default to empty strings. `position` defaults to `0` and must be a finite number from `0` through `100000`. Use several occurrences on the same shard when it appears in several courses or lectures. A notation entry accepts only `symbol`, `meaning`, `shape`, `role`, and `scope`. The first two are required and the remaining fields default to empty strings. These academic fields work in additive batches and portable archives. Older notes without them remain valid.
+
 Each link uses `fromId`, `toId`, `type`, and an optional `note` explaining the connection. A stable link `id` is optional in the local batch. Use `depends_on`, `explains`, `contrasts_with`, `example_of`, `related_to`, or `part_of`. Endpoints must refer to notes in the batch or verified existing notes. Self-links are not allowed. Explain relationships rather than guessing them from a diagram's layout.
 
 Legacy archive fields remain readable for recovery. They do not require creating company pages, news events, evidence dashboards, or inbox records. Use the core fields above for new technical notes.
 
 For a portable import file, use `schemaVersion: 1`, `shards`, `links`, and `reviews: []`. Omit `requestId`. Supply stable IDs for both shards and links. The app supplies missing capture timestamps and defaults. The helper's archive operation converts a batch into this format without saving it to the app. A portable import preserves existing IDs and does not overwrite existing notes. An import file is a handoff, not a live synchronization connection.
+
+Selecting only part of an archive retains selected notes' revisions and referenced images, but excludes saved canvas and Trash recovery records. A full selection preserves the complete legacy archive. Reusing a saved card redirects typed connections and explicit inline ID links while preserving that card's saved explanation, courses, and notation. Review edits remain temporary within the current session, rather than recoverable editor drafts.
 
 Images require complete archive assets and local `/assets/<id>` references. Do not embed local filesystem paths or remote image markup that the app cannot display. Preserve images from a supplied complete archive when possible. If an image cannot be transferred, report that limitation rather than claiming it was imported.
 
