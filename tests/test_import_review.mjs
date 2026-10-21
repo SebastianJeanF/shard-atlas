@@ -61,4 +61,8 @@ assert.equal(richShard.walkthroughs[0].steps[0].explanation,'Use [[id:saved]]; k
 assert.equal(richResult.data.revisions[0].snapshot.comparisons[0].alternatives[0].shardId,'saved');
 assert.deepEqual(Array.from(richResult.data.assets,asset=>asset.id),['a-photo','perspective','history','old-perspective']);
 assert.equal(JSON.stringify(rich),richBefore,'Nested selection preserves original archive and history');
+const withExperiment={...archive,shards:archive.shards.map(shard=>shard.id==='a'?{...shard,experiments:[{id:'b',type:'value-iteration',description:'![setup](/assets/experiment-image)',config:{states:[{id:'b',label:'Model state'}],actions:[{id:'b'}],transitions:[{stateId:'b',actionId:'b',outcomes:[{nextStateId:'b',probability:1,reward:2}]}]}}]}:shard),assets:[...archive.assets,{id:'experiment-image'}]};
+const selectedExperiment=build(withExperiment,new Set([0,1]),new Map([['b','saved']]),['saved']);
+assert.equal(JSON.stringify(selectedExperiment.data.shards[0].experiments),JSON.stringify(withExperiment.shards[0].experiments),'Model IDs and saved numerical settings are independent of concept alias reuse');
+assert.ok(selectedExperiment.data.assets.some(asset=>asset.id==='experiment-image'),'Experiment source material remains portable in partial imports');
 console.log('Import selection checks passed.');

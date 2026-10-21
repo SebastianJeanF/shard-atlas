@@ -28,7 +28,7 @@ MAX_BATCH_BYTES = 8 * 1024 * 1024
 MAX_RESPONSE_BYTES = 260 * 1024 * 1024
 SHARD_FIELDS = {"id", "title", "content", "tags", "kind", "status", "sourceUrl", "languageVersion", "eventDate",
                 "evidenceStatus", "sources", "publicationDate", "verifiedDate", "eventType", "entities", "entityType", "inbox", "facts",
-                "subjects", "courses", "notation", "assumptions", "perspectives", "walkthroughs", "comparisons", "learningLog", "verification"}
+                "subjects", "courses", "notation", "assumptions", "perspectives", "walkthroughs", "comparisons", "learningLog", "verification", "experiments"}
 LINK_FIELDS = {"id", "fromId", "toId", "type", "note", "scope", "evidence", "sourceUrl", "sourceLocation"}
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$")
 
@@ -84,7 +84,7 @@ def valid_health(health, expected_db=None):
         return False
     try:
         version = tuple(int(piece) for piece in health["backendVersion"].split("."))
-        if len(version) != 3 or version[0] not in (2, 3) or version < (2, 6, 0):
+        if len(version) != 3 or version[0] not in (2, 3) or version < (2, 7, 0):
             return False
         return bool(health.get("dbPath")) and (expected_db is None or Path(health["dbPath"]).resolve() == Path(expected_db).resolve())
     except (KeyError, ValueError, TypeError, OSError):

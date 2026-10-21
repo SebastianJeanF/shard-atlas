@@ -56,6 +56,7 @@ The server and native builder both accept `--backup-dir PATH`. The native app de
 | `static/app.js` | Interface behavior, note rendering, automatic topic map, connection map, and release reference |
 | `static/academic.js`, `static/academic.css` | Subject focus, course occurrences, notation, assumptions, and their interface styles |
 | `static/learning.js`, `static/learning.css` | Structured perspectives, walkthroughs, method comparisons, learning history, and independent content-verification records |
+| `static/experiments.js`, `static/experiments.css` | Deterministic educational experiment engines, configuration editors, plots, comparisons, and the Experiments view |
 | `static/import-review.js` | Incoming-card selection, editing, reuse, dependency handling, and import revalidation |
 | `static/styles.css` | Layout and visual styles |
 | `desktop/ShardAtlas.swift` | AppKit window, WKWebView, menus, clipboard, file dialogs, and service lifecycle |
@@ -87,11 +88,17 @@ Explanation metadata adds `perspectives`, `walkthroughs`, `comparisons`, and `le
 
 Content verification is independent of personal `status`. The stored personal value `verify` remains compatible with older data and is labeled **Needs clarification**. `verification.status` is `unverified`, `source-checked`, or `needs-correction`. Source-checked records require a note and a source URL or location. They record a manual assertion, not an automated source audit. Learning-log history contains explicitly recorded entries and optional partial ISO dates, without inferred chronology. Technical method comparisons belong to a shard and do not restore retired company or entity interfaces.
 
+Optional per-shard `experiments` arrays default to empty and allow at most ten entries. `algorithmVersion: 1` identifies the fixed numerical semantics for `gradient-descent` and `value-iteration`, with a typed `config` and optional complete same-type `comparisonConfig`. Persist configurations through normal editor drafts, revisions, Trash, archives, contributions, readback, and readable Markdown. Recompute results rather than storing a run as a verification or mastery claim. Both engines are deterministic and require no random seed. Unknown types or algorithm versions fail validation rather than executing supplied code.
+
+Runtime experiment controls are temporary previews. Saving an existing configuration uses atomic `PUT /api/shards/{shardId}/experiments/{experimentId}` with `{experiment}`. It updates only an existing matching experiment ID and preserves current unrelated shard fields and experiments. Missing targets return 404. Adding a lab setup opens the normal new-shard editor, where ordinary draft recovery applies. Import and historical experiment previews are read-only for saved configuration writes. Native **View → Experiments** uses Command-5.
+
+Gradient descent uses a positive-definite two-dimensional quadratic, fixed full-gradient updates, and gradient-norm stopping. Its numerical guard reports a numeric-limit outcome, without claiming a proof of divergence. Value iteration uses synchronous Bellman updates, probability-weighted transition rewards, zero terminal future values, available actions only, declared-order tie breaking, and a policy greedy with respect to each displayed value vector. The current Bellman residual determines stopping. Its conservative value-error bound is `residual / (1 - beta)`, with `beta = discount * max(1, largest transition-row mass)`, to account for accepted probability rounding without normalization. Exactly normalized rows give the standard `residual / (1 - discount)` bound. Keep iteration caps distinct from convergence and include iteration zero in both result sequences.
+
 Links also round-trip optional `scope`, `evidence`, `sourceUrl`, and `sourceLocation` strings, defaulting to empty strings for older records. Preserve these fields in edits, drafts, duplicate checks, Trash recovery, imports, exports, contributions, and receipts. The core relationship editor includes `supports` and `contradicts` alongside the existing technical relationship types.
 
 Import review automatically revalidates after selection or editing. Build the resulting archive with its selected cards, valid connection endpoints, and required assets. Reusing a saved card redirects typed connections and explicit inline ID links without modifying that card's explanation or academic metadata. Partial imports retain selected revisions and referenced images, and exclude saved canvases and Trash recovery records. Full selections preserve the complete legacy archive. Preserve the existing atomic import, safety snapshot, stable-ID conflict handling, receipts, and undo behavior.
 
-Modified import reviews ask before discard but are not durable drafts outside the current session. Ordinary editor drafts include academic metadata. Subject focus applies to shared collection views and is disabled in C++ timeline. The timeline retains C++ and legacy unclassified notes while excluding explicitly academic non-C++ notes. Native **View → Courses** uses Command-2.
+Modified import reviews ask before discard but are not durable drafts outside the current session. Ordinary editor drafts include academic metadata. Subject focus applies to shared collection views and is disabled in C++ timeline and the Experiments lab. The timeline retains C++ and legacy unclassified notes while excluding explicitly academic non-C++ notes. Native **View → Courses** uses Command-2.
 
 ### Local service boundary
 
@@ -108,6 +115,7 @@ python3 -m unittest discover -s tests -v
 node tests/test_frontend.mjs
 node tests/test_academic_frontend.mjs
 node tests/test_learning_frontend.mjs
+node tests/test_experiment_engine.mjs
 node tests/test_import_review.mjs
 node --check static/app.js
 ```

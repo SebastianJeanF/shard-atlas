@@ -334,7 +334,8 @@ class LearningTests(unittest.TestCase):
         health = self.store.health()
         self.assertFalse(valid_health({**health, "backendVersion": "2.5.0"}, self.path))
         self.assertFalse(valid_health({**health, "backendVersion": "2.2.0"}, self.path))
-        self.assertTrue(valid_health({**health, "backendVersion": "2.6.0"}, self.path))
+        self.assertFalse(valid_health({**health, "backendVersion": "2.6.0"}, self.path))
+        self.assertTrue(valid_health({**health, "backendVersion": "2.7.0"}, self.path))
         self.assertTrue(valid_health({**health, "backendVersion": "3.0.0"}, self.path))
 
 

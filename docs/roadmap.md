@@ -24,9 +24,11 @@ Shard Atlas is expanding its existing technical collection to connect computer s
 
 Open **Edit shard → Learning & explanation** to use the structured editor. Content verification remains independent of personal Understanding, whose clarification state is labeled **Needs clarification**.
 
-## Phase 3: later
+## Phase 3: complete
 
-Small reproducible interactive experiments will let users vary inputs and inspect outcomes while preserving the setup needed to repeat them.
+Small reproducible experiments cover quadratic gradient descent and finite-MDP value iteration, with editable configurations, individual updates, plots, numeric tables, and A/B comparisons. Saved setups retain their algorithm version and can be attached to shared concepts.
+
+The initial gradient-descent and value-iteration models are implemented and verified. Additional experiment types remain optional future work. These are finite educational models, with no arbitrary-function execution or external ML training environment.
 
 ## Initial content rollout
 

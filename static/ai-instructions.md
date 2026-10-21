@@ -58,6 +58,38 @@ Use `learningLog` only for questions, misconceptions, resolutions, and history a
 
 **Content verification and personal understanding are independent.** `verification.status` is `unverified`, `source-checked`, or `needs-correction`. This is a manually recorded source check, not an app guarantee. Record `source-checked` only when an actual check is supported and described in `note`, with `sourceUrl` or `sourceLocation` identifying the material. `checkedAt` is an optional partial ISO date. Leave unknown fields empty, and use `unverified` for unchecked material or `needs-correction` for an identified content problem. A check must not change personal `status` or manufacture learning history.
 
+## Preserve reproducible experiment setups
+
+Use optional `experiments` for the supported small educational models, rather than executable code. Each entry requires a stable `id`, `type` (`gradient-descent` or `value-iteration`), nonempty `title`, `algorithmVersion: 1`, and a complete typed `config`. Optional `description`, `sourceUrl`, and `sourceLocation` default to empty strings. `comparisonConfig` defaults to `null`, or contains a complete configuration of the same model type. Keep the original source attribution and version. Unknown experiment types or versions are rejected.
+
+Gradient-descent settings are `a`, `b`, `c`, `startX`, `startY`, `learningRate`, `maxIterations`, and `tolerance`. They define the fixed positive-definite quadratic `(a*x*x + 2*b*x*y + c*y*y) / 2`, with minimum at the origin. `a` and `c` range from `0.001` to `1000`, `b` from `-1000` to `1000`, and `a*c - b*b` must exceed `1e-9`. Starting coordinates range from `-100` to `100`, and the positive learning rate is at most `10`. Iteration limits are integers from `1` to `500`, and tolerance ranges from `1e-12` to `1`. All numbers must be finite. The all-start convergence range is a property of this quadratic, not a general ML-training guarantee. A numeric-limit stop is not proof of mathematical divergence.
+
+Value-iteration settings are `states`, `actions`, `transitions`, `discount`, `maxIterations`, and `tolerance`. A state has unique stable `id`, nonempty `label`, Boolean `terminal`, and finite `initialValue` from `-10000` to `10000`. Terminal initial values must be zero. An action has unique stable `id` and nonempty `label`. A transition row identifies `stateId`, `actionId`, and `outcomes`, each with `nextStateId`, `probability`, and `reward`. Keep at most twelve states, four actions, forty-eight unique state-action rows, and twelve outcomes per row. Every nonterminal state needs an available action, and terminal states have no rows. Probabilities range from zero to one and each row must sum to one within `1e-9`, without silent normalization. Rewards range from `-10000` to `10000`, discount from `0` to `0.999`, iteration limits from `1` to `500`, and tolerance from `1e-12` to `1`. State and action labels are at most 120 characters. All referenced IDs must exist. Repeated next-state outcomes may represent different stochastic rewards.
+
+Both engines compute deterministic updates with no random sampling, so no seed is required. Preserve synchronous Bellman updates, probability-weighted transition rewards, terminal future value zero, and greedy policies for the currently displayed values. The conservative value-error bound is `residual / (1 - beta)`, where `beta = discount * max(1, largest transition-row probability sum)`, accounting for accepted rounding without normalization. Exactly normalized rows give the standard `residual / (1 - discount)` bound. Distinguish this bound from exact error or a policy guarantee. Runs do not verify the surrounding explanation or prove personal mastery. Runtime settings are previews until **Save configuration** or a normal shard save. Lab **Add to new shard** opens a recoverable editor draft. Import and historical previews cannot overwrite saved setups.
+
+This is one experiment object for a shard's `experiments` array, not a complete archive:
+
+```json
+{
+  "id": "format-quadratic-experiment",
+  "type": "gradient-descent",
+  "title": "Two-dimensional quadratic",
+  "algorithmVersion": 1,
+  "config": {
+    "a": 4,
+    "b": 0,
+    "c": 1,
+    "startX": 3,
+    "startY": 2,
+    "learningRate": 0.2,
+    "maxIterations": 100,
+    "tolerance": 1e-8
+  },
+  "comparisonConfig": null
+}
+```
+
 ## Use the local tools
 
 The configured local server is named `shard_atlas`. Its tools are:
@@ -130,6 +162,7 @@ An additive batch has this shape. This sample illustrates the format. Replace it
 | `comparisons` | Up to 20 technical comparisons, each with 2–10 alternatives. An alternative's assumptions, strengths, and limitations lists each allow up to 30 entries. Defaults to `[]`. |
 | `learningLog` | Up to 100 questions or misconceptions, each with up to 100 recorded history entries. Defaults to `[]`. |
 | `verification` | Manual content-check record. Defaults to `unverified` with empty note, source URL/location, and checked date. |
+| `experiments` | Up to 10 typed, versioned educational experiment setups. Defaults to `[]`. |
 | `sourceUrl` | An actual HTTP/HTTPS source URL, or empty. |
 | `languageVersion` | Verified release(s) or scope, at most 100 characters. For C++ shards, assign supported releases or leave empty with an explicit reason in the body. |
 | `eventDate` | A source-supported `YYYY`, `YYYY-MM`, or `YYYY-MM-DD` occurrence date, or empty. Preserve date precision. Capture time is supplied separately. |

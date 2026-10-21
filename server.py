@@ -30,7 +30,7 @@ from urllib.parse import unquote, urlsplit
 
 SCHEMA_VERSION = 1
 DATABASE_VERSION = 4
-BACKEND_VERSION = "2.6.0"  # Keep the additive API compatible with already-running contribution clients.
+BACKEND_VERSION = "2.7.0"  # Keep the additive API compatible with already-running contribution clients.
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DB = Path.home() / "Library/Application Support/Shard Atlas/shards.sqlite3"
 KINDS = {"concept", "fact", "example", "mistake", "event", "idea"}
@@ -43,7 +43,8 @@ VERIFICATION_DEFAULTS = {"status": "unverified", "note": "", "sourceUrl": "", "s
 LINK_KNOWLEDGE_DEFAULTS = {"scope": "", "evidence": "", "sourceUrl": "", "sourceLocation": ""}
 KNOWLEDGE_DEFAULTS = {"evidenceStatus": "unverified", "sources": [], "publicationDate": "", "verifiedDate": "", "eventType": "", "entities": [], "entityType": "", "inbox": False, "facts": [],
                       "subjects": [], "courses": [], "notation": [], "assumptions": [],
-                      "perspectives": [], "walkthroughs": [], "comparisons": [], "learningLog": [], "verification": VERIFICATION_DEFAULTS}
+                      "perspectives": [], "walkthroughs": [], "comparisons": [], "learningLog": [], "verification": VERIFICATION_DEFAULTS,
+                      "experiments": []}
 REVIEW_DAYS = {"again": 1, "hard": 3, "good": 7, "easy": 14}
 MAX_BODY_BYTES = 260 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
@@ -53,6 +54,7 @@ MAX_IMPORT_RECORDS = 100_000
 MAX_CONTRIBUTION_BYTES = 8 * 1024 * 1024
 MAX_CONTRIBUTION_RECEIPTS = 10_000
 MAX_CONTRIBUTION_RECEIPT_BYTES = 8 * 1024 * 1024
+MAX_DRAFT_BYTES = 8 * 1024 * 1024
 CONTRIBUTION_PREFIX = "contribution:"
 ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$")
 MUTABLE_SHARD_FIELDS = {
@@ -205,6 +207,7 @@ def validate_knowledge(data):
         result[field] = records
     result.update(validate_academic(data))
     result.update(validate_learning(data))
+    result["experiments"] = validate_experiments(data.get("experiments", []))
     return result
 
 
@@ -351,6 +354,122 @@ def validate_link_knowledge(data):
             "sourceLocation": text_field(data.get("sourceLocation", ""), "relationship source location", 240)}
 
 
+def validate_experiment(data):
+    """Validate fixed, reproducible experiment settings; supplied code is never evaluated."""
+    def fields(item, allowed, label):
+        if not isinstance(item, dict) or set(item) - set(allowed):
+            raise AppError(f"{label} must contain only its supported fields.")
+
+    def number(value, label, minimum, maximum, *, open_minimum=False):
+        if (type(value) not in (int, float) or not minimum <= value <= maximum
+                or (open_minimum and value == minimum) or not math.isfinite(value)):
+            interval = f"{'greater than' if open_minimum else 'at least'} {minimum} and at most {maximum}"
+            raise AppError(f"{label} must be a finite number {interval}.")
+        return value
+
+    def iteration_count(value, label):
+        if type(value) is not int or not 1 <= value <= 500:
+            raise AppError(f"{label} must be an integer from 1 to 500.")
+        return value
+
+    def records(value, label, minimum, maximum):
+        if not isinstance(value, list) or not minimum <= len(value) <= maximum or any(not isinstance(item, dict) for item in value):
+            raise AppError(f"{label} must contain between {minimum} and {maximum} objects.")
+        return value
+
+    def gradient_config(config, label):
+        fields(config, ("a", "b", "c", "startX", "startY", "learningRate", "maxIterations", "tolerance"), label)
+        result = {"a": number(config.get("a"), label + ": a", .001, 1000),
+                  "b": number(config.get("b"), label + ": b", -1000, 1000),
+                  "c": number(config.get("c"), label + ": c", .001, 1000),
+                  "startX": number(config.get("startX"), label + ": startX", -100, 100),
+                  "startY": number(config.get("startY"), label + ": startY", -100, 100),
+                  "learningRate": number(config.get("learningRate"), label + ": learningRate", 0, 10, open_minimum=True),
+                  "maxIterations": iteration_count(config.get("maxIterations"), label + ": maxIterations"),
+                  "tolerance": number(config.get("tolerance"), label + ": tolerance", 1e-12, 1)}
+        if result["a"] * result["c"] - result["b"] ** 2 <= 1e-9:
+            raise AppError(label + ": a*c - b*b must be greater than 1e-9 (a positive-definite quadratic).")
+        return result
+
+    def value_config(config, label):
+        fields(config, ("states", "actions", "transitions", "discount", "maxIterations", "tolerance"), label)
+        states, actions, transitions = [], [], []
+        for index, item in enumerate(records(config.get("states"), label + ": states", 1, 12), 1):
+            location = f"{label}: state {index}"
+            fields(item, ("id", "label", "terminal", "initialValue"), location)
+            terminal = item.get("terminal")
+            if type(terminal) is not bool:
+                raise AppError(location + ": terminal must be true or false.")
+            initial = number(item.get("initialValue"), location + ": initialValue", -10_000, 10_000)
+            if terminal and initial != 0:
+                raise AppError(location + ": a terminal state's initial value must be zero.")
+            states.append({"id": record_id(item.get("id"), "state id"), "label": text_field(item.get("label", ""), location + " label", 120, required=True),
+                           "terminal": terminal, "initialValue": initial})
+        for index, item in enumerate(records(config.get("actions"), label + ": actions", 1, 4), 1):
+            fields(item, ("id", "label"), f"{label}: action {index}")
+            actions.append({"id": record_id(item.get("id"), "action id"), "label": text_field(item.get("label", ""), "action label", 120, required=True)})
+        state_ids, action_ids = {item["id"] for item in states}, {item["id"] for item in actions}
+        if len(state_ids) != len(states) or len(action_ids) != len(actions):
+            raise AppError(label + ": state IDs and action IDs must each be unique.")
+        terminals = {item["id"] for item in states if item["terminal"]}
+        pairs, available = set(), set()
+        for index, item in enumerate(records(config.get("transitions"), label + ": transition rows", 0, 48), 1):
+            location = f"{label}: transition row {index}"
+            fields(item, ("stateId", "actionId", "outcomes"), location)
+            state_id, action_id = record_id(item.get("stateId"), "transition stateId"), record_id(item.get("actionId"), "transition actionId")
+            if state_id not in state_ids or action_id not in action_ids:
+                raise AppError(location + ": stateId and actionId must reference declared states and actions.")
+            if state_id in terminals:
+                raise AppError(location + ": terminal states cannot have transition rows.")
+            if (state_id, action_id) in pairs:
+                raise AppError(location + ": duplicate state/action pair.")
+            pairs.add((state_id, action_id))
+            available.add(state_id)
+            outcomes = []
+            for outcome_index, outcome in enumerate(records(item.get("outcomes"), location + " outcomes", 1, 12), 1):
+                fields(outcome, ("nextStateId", "probability", "reward"), location + f" outcome {outcome_index}")
+                next_state = record_id(outcome.get("nextStateId"), "outcome nextStateId")
+                if next_state not in state_ids:
+                    raise AppError(location + f" outcome {outcome_index}: nextStateId must reference a declared state.")
+                outcomes.append({"nextStateId": next_state,
+                    "probability": number(outcome.get("probability"), location + f" outcome {outcome_index} probability", 0, 1),
+                    "reward": number(outcome.get("reward"), location + f" outcome {outcome_index} reward", -10_000, 10_000)})
+            if abs(math.fsum(outcome["probability"] for outcome in outcomes) - 1) > 1e-9:
+                raise AppError(location + ": outcome probabilities must sum to one within 1e-9; they are never normalized automatically.")
+            transitions.append({"stateId": state_id, "actionId": action_id, "outcomes": outcomes})
+        if state_ids - terminals - available:
+            raise AppError(label + ": every nonterminal state needs at least one available action.")
+        return {"states": states, "actions": actions, "transitions": transitions,
+                "discount": number(config.get("discount"), label + ": discount", 0, .999),
+                "maxIterations": iteration_count(config.get("maxIterations"), label + ": maxIterations"),
+                "tolerance": number(config.get("tolerance"), label + ": tolerance", 1e-12, 1)}
+
+    fields(data, ("id", "type", "title", "description", "sourceUrl", "sourceLocation", "algorithmVersion", "config", "comparisonConfig"), "Experiment")
+    kind = data.get("type")
+    if not isinstance(kind, str) or kind not in ("gradient-descent", "value-iteration"):
+        raise AppError("Experiment type must be gradient-descent or value-iteration.")
+    if type(data.get("algorithmVersion")) is not int or data["algorithmVersion"] != 1:
+        raise AppError("This app supports experiment algorithmVersion 1 only.")
+    validator = gradient_config if kind == "gradient-descent" else value_config
+    comparison = data.get("comparisonConfig")
+    return {"id": record_id(data.get("id"), "experiment id"), "type": kind,
+            "title": text_field(data.get("title", ""), "experiment title", 240, required=True),
+            "description": text_field(data.get("description", ""), "experiment description", 5000),
+            "sourceUrl": source_url(data.get("sourceUrl", ""), "experiment source URL"),
+            "sourceLocation": text_field(data.get("sourceLocation", ""), "experiment source location", 240),
+            "algorithmVersion": 1, "config": validator(data.get("config"), "Experiment configuration"),
+            "comparisonConfig": None if comparison is None else validator(comparison, "Comparison configuration")}
+
+
+def validate_experiments(data):
+    if not isinstance(data, list) or len(data) > 10:
+        raise AppError("experiments must be a list of at most 10 experiments.")
+    result = [validate_experiment(item) for item in data]
+    if len({item["id"] for item in result}) != len(result):
+        raise AppError("Experiment IDs must be unique within a shard.")
+    return result
+
+
 def learning_text(shard):
     """Collect explanation strings for reference checks, without trusting their contents."""
     def strings(value):
@@ -362,7 +481,7 @@ def learning_text(shard):
         elif isinstance(value, dict):
             for item in value.values():
                 yield from strings(item)
-    return "\n".join(strings({key: shard.get(key) for key in ("content", "perspectives", "walkthroughs", "comparisons", "learningLog", "verification")}))
+    return "\n".join(strings({key: shard.get(key) for key in ("content", "perspectives", "walkthroughs", "comparisons", "learningLog", "verification", "experiments")}))
 
 
 def learning_references(shard):
@@ -864,6 +983,36 @@ class Store:
             connection.execute("DELETE FROM drafts WHERE kind='editor'")
             return self._state(connection)
 
+    def update_experiment(self, shard_id, experiment_id, data):
+        record_id(shard_id)
+        record_id(experiment_id, "experiment id")
+        if not isinstance(data, dict) or set(data) != {"experiment"}:
+            raise AppError("An experiment update contains only an experiment object.")
+        experiment = validate_experiment(data["experiment"])
+        if experiment["id"] != experiment_id:
+            raise AppError("The experiment ID must match the experiment being updated.")
+        with self.changing() as connection:
+            # Separate app windows and helper services may use independent Store
+            # locks. Acquire the SQLite write lock before reading the latest row.
+            connection.execute("BEGIN IMMEDIATE")
+            current = next((item for item in self._state(connection)["shards"] if item["id"] == shard_id), None)
+            if current is None:
+                raise AppError("Shard not found.", 404)
+            index = next((index for index, item in enumerate(current["experiments"]) if item["id"] == experiment_id), None)
+            if index is None:
+                raise AppError("Experiment not found. Reopen the shard before saving this configuration.", 404)
+            experiments = list(current["experiments"])
+            experiments[index] = experiment
+            shard = validate_shard({"experiments": experiments}, current=current)
+            snapshots = connection.execute("SELECT snapshot FROM revisions WHERE shard_id=?", (shard_id,)).fetchall()
+            if not any(all(snapshot[field] == current[field] for field in MUTABLE_SHARD_FIELDS)
+                       for snapshot in (validate_shard(json.loads(row[0]), imported=True) for row in snapshots)):
+                self._record_revision(connection, current, "before experiment update")
+            connection.execute("UPDATE shards SET updated_at=?,knowledge=? WHERE id=?", (
+                shard["updatedAt"], json.dumps(validate_knowledge(shard), ensure_ascii=False), shard_id))
+            self._record_revision(connection, shard, "experiment configuration updated")
+            return self._state(connection)
+
     def delete_shard(self, shard_id):
         record_id(shard_id)
         with self.lock:
@@ -1060,8 +1209,8 @@ class Store:
         if not isinstance(draft, dict):
             raise AppError("Draft must be an object.")
         encoded = json.dumps(draft, ensure_ascii=False, allow_nan=False)
-        if len(encoded.encode("utf-8")) > 250_000:
-            raise AppError("Draft is too large.", 413)
+        if len(encoded.encode("utf-8")) > MAX_DRAFT_BYTES:
+            raise AppError("Draft is too large (maximum 8 MB).", 413)
         with self.lock, self.connect() as connection:
             connection.execute("INSERT OR REPLACE INTO drafts VALUES(?,?)", (kind, encoded))
         return {"ok": True}
@@ -1915,6 +2064,17 @@ class Store:
                         for history in entry["history"]:
                             lines.append("- " + (history["date"] + ": " if history["date"] else "") + readable(history["note"]))
                         append_source(entry)
+                if shard["experiments"]:
+                    lines.extend(["", "## Reproducible experiments", "", "These are saved configurations, not computed results or mathematical guarantees.", ""])
+                    for experiment in shard["experiments"]:
+                        lines.extend(["### " + experiment["title"], "", "Experiment ID: " + experiment["id"],
+                                      "Type: " + experiment["type"], "Algorithm version: " + str(experiment["algorithmVersion"]), ""])
+                        if experiment["description"]:
+                            lines.extend([readable(experiment["description"]), ""])
+                        lines.extend(["Configuration A:", "```json", json.dumps(experiment["config"], ensure_ascii=False, indent=2), "```", ""])
+                        if experiment["comparisonConfig"] is not None:
+                            lines.extend(["Configuration B:", "```json", json.dumps(experiment["comparisonConfig"], ensure_ascii=False, indent=2), "```", ""])
+                        append_source(experiment)
                 if shard["sources"]:
                     lines.extend(["", "## Sources", ""])
                     for source in shard["sources"]:
@@ -2139,6 +2299,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, store.update_link(path.removeprefix("/api/links/"), self._json_body()))
             if self.command == "PUT" and path.startswith("/api/drafts/"):
                 return self._send(200, store.save_draft(path.removeprefix("/api/drafts/"), self._json_body()))
+            if self.command == "PUT" and (experiment_path := re.fullmatch(r"/api/shards/([^/]+)/experiments/([^/]+)", path)):
+                return self._send(200, store.update_experiment(experiment_path[1], experiment_path[2], self._json_body()))
             if self.command == "PUT" and path.startswith("/api/shards/"):
                 return self._send(200, store.update_shard(path.removeprefix("/api/shards/"), self._json_body()))
             if self.command == "PUT" and path.startswith("/api/boards/"):

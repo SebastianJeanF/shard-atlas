@@ -1,6 +1,6 @@
 # Using Shard Atlas
 
-Shard Atlas stores explanations and the relationships between them. A *shard* is a note about one technical idea. The Library, Courses, Topic map, and C++ timeline offer different ways to explore your notes.
+Shard Atlas stores explanations and the relationships between them. A *shard* is a note about one technical idea. The Library, Courses, Topic map, Experiments, and C++ timeline offer different ways to explore your notes.
 
 [Back to the project](../README.md) · [Build and development](development.md) · [AI contribution guide](../static/ai-instructions.md)
 
@@ -67,6 +67,26 @@ Choose **Edit shard → Learning & explanation** to add structured material besi
 Use **Questions & misconceptions** to record a question or the original misconception, mark it open or resolved, and explain its resolution. A resolved entry requires a resolution. Optional dated history entries preserve what the user actually recorded. The app does not infer a learning timeline or invent earlier misunderstandings.
 
 **Content verification** has its own states: **Unverified**, **Source checked**, and **Needs correction**. These are manual records. **Source checked** requires a verification note and a source link or source location identifying what was checked. A checked date is optional. This records a source comparison, without automatically certifying every claim or changing personal Understanding. Use **Needs correction** for a content problem and **Needs clarification** when your understanding needs attention.
+
+## Run a reproducible experiment
+
+Open **Experiments** to run the built-in **Quadratic gradient descent** or **Finite MDP value iteration** model immediately. In the desktop app, choose **View → Experiments** or press Command-5. Adjust the settings, choose **Run simulation** or **One update**, and inspect the plots, tables, and previous or next iteration. Enable **Compare with configuration B** to run two configurations with comparable axes. These are small educational models, with no arbitrary function execution, external training environment, or random sampling.
+
+**Runtime settings are previews until explicitly saved.** **Save configuration** updates the selected experiment on its saved shard while preserving the shard's other content and experiments. In the lab, **Add to new shard** opens the normal editor with the setup attached as a recoverable draft. Save that shard to retain it. You can also open **Interactive experiments** in a new or existing shard's normal editor. **Copy setup** transfers the configuration, rather than claiming a completed save. Runtime previews themselves are not recoverable editor drafts.
+
+Saved experiments contain the algorithm version and complete numerical configuration, with an optional comparison configuration. The app recomputes the results from that setup. These two models are deterministic, so a random seed is unnecessary. Import and saved-version previews can run experiments but cannot overwrite their saved configurations. A simulation result does not change personal Understanding or content verification.
+
+### Quadratic gradient descent
+
+The two varying scalar coordinates are `x` and `y`. Fixed input coefficients `a`, `b`, and `c` define the positive-definite quadratic objective `f(x,y) = (a*x*x + 2*b*x*y + c*y*y) / 2`, whose scalar minimum is zero at the origin. Each update subtracts the fixed learning rate times the full gradient. Iteration zero records the starting point. Convergence uses the gradient norm and the chosen tolerance.
+
+For this quadratic, a positive fixed learning rate `alpha` converges from every starting point exactly when `alpha < 2 / lambdaMax`, where `lambdaMax` is the fixed largest eigenvalue of its Hessian. Outside that range, convergence can still occur from particular starting points. A numeric-limit stop protects the simulation from oversized or nonfinite values. It is not a proof of mathematical divergence. The model specializes the [gradient-descent method in Boyd and Vandenberghe](https://web.stanford.edu/~boyd/cvxbook/) using the [quadratic spectral recurrence in these official course notes](https://www.math.utah.edu/~bwang/mathds/Lecture5.pdf).
+
+### Finite MDP value iteration
+
+Edit states, available actions, transition probabilities and rewards, initial values, discount, and stopping settings. Each transition row's probabilities must sum to one within the stated numerical tolerance. Updates are synchronous: every next value uses the same current value vector. Rewards are received on transitions and probability-weighted. Terminal states have zero future value. Unavailable actions are omitted, and exact action ties use the declared action order. The displayed policy is greedy with respect to the currently displayed values. These conventions follow the [official value-iteration and policy-extraction reference](https://inst.eecs.berkeley.edu/~cs188/textbook/mdp/value-iteration.html).
+
+The Bellman residual measures the largest absolute difference between the current values and their next optimality update. For exactly normalized probabilities, `residual / (1 - discount)` bounds the largest value error. To account conservatively for accepted probability rounding, the app uses `residual / (1 - beta)`, where `beta` is the discount times the larger of one and the largest transition-row probability sum. Probabilities are not silently normalized. This is a bound, rather than an observed exact error or a policy-error bound. The simulation stops as converged only when the residual meets the chosen tolerance. Reaching the iteration cap is a separate outcome.
 
 ## Explore the Topic map
 

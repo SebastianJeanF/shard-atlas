@@ -18,7 +18,7 @@
     return mapped;
   }
   function textContent(shard) {
-    return [shard?.content || '',...learningFields.map(key => JSON.stringify(shard?.[key] ?? ''))].join('\n');
+    return [shard?.content || '',...[...learningFields,'experiments'].map(key => JSON.stringify(shard?.[key] ?? ''))].join('\n');
   }
   function build(archive, selected, reuse = new Map(), savedIds = [], savedLinks = []) {
     const incoming = objects(archive?.shards);

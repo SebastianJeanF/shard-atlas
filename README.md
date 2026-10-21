@@ -16,6 +16,7 @@ Write an explanation, keep its examples and sources beside it, and connect it to
 - **Follow an idea across subjects and courses.** Use Generic, C++, Computer science, Mathematics, or Machine learning views of the same collection. Keep a concept's course and lecture occurrences, source locations, notation, and assumptions beside its explanation.
 - **Develop an explanation in layers.** Add structured perspectives, stepwise derivations or algorithm traces, and comparisons of technical methods within the same concept.
 - **Keep questions and checks distinct.** Record questions, misconceptions, and their history. A manual content-verification record stays separate from your personal understanding.
+- **Explore a small reproducible model.** Run quadratic gradient descent or finite-MDP value iteration, inspect individual updates, compare configurations, and save the setup beside a concept.
 - **Keep your bearings.** Search notes or find topics by typing, then filter by topic, kind, or understanding. Topics grow freely with your notes. Explore the separate, sourced C++ release reference from C++98 through the C++26 working draft.
 - **Give each release a familiar place.** An optional Wizard101 inspired timeline pairs C++ releases with illustrated worlds, distinct emblems, coordinated column colors, source-linked context, and small programming examples. Grouped releases show every mapped world. Switch to Plain for the original timeline presentation. The public source includes original artwork, with support for a separate local game-icon pack.
 

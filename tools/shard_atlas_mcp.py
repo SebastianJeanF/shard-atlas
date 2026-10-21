@@ -93,6 +93,44 @@ SHARD_SCHEMA["properties"].update({
         "properties": {"status": {"type": "string", "enum": ["unverified", "source-checked", "needs-correction"]},
             "note": text_schema(5000), **SOURCE_FIELDS, "checkedAt": text_schema(10)}},
 })
+GRADIENT_CONFIG_SCHEMA = {"type": "object", "additionalProperties": False,
+    "required": ["a", "b", "c", "startX", "startY", "learningRate", "maxIterations", "tolerance"],
+    "description": "Fixed full-gradient descent on 0.5*(a*x*x+2*b*x*y+c*y*y). a*c-b*b must exceed 1e-9. Settings are data, never executable code.",
+    "properties": {"a": {"type": "number", "minimum": .001, "maximum": 1000},
+        "b": {"type": "number", "minimum": -1000, "maximum": 1000}, "c": {"type": "number", "minimum": .001, "maximum": 1000},
+        "startX": {"type": "number", "minimum": -100, "maximum": 100}, "startY": {"type": "number", "minimum": -100, "maximum": 100},
+        "learningRate": {"type": "number", "exclusiveMinimum": 0, "maximum": 10},
+        "maxIterations": {"type": "integer", "minimum": 1, "maximum": 500}, "tolerance": {"type": "number", "minimum": 1e-12, "maximum": 1}}}
+VALUE_CONFIG_SCHEMA = {"type": "object", "additionalProperties": False,
+    "required": ["states", "actions", "transitions", "discount", "maxIterations", "tolerance"],
+    "description": "Finite MDP with synchronous value iteration. State/action IDs are local experiment identifiers, not shard links. Terminal states have zero initial value and no transition rows. Each nonterminal state has an available action; each row's probabilities sum to one within 1e-9 without normalization.",
+    "properties": {
+        "states": {"type": "array", "minItems": 1, "maxItems": 12, "items": {"type": "object", "additionalProperties": False,
+            "required": ["id", "label", "terminal", "initialValue"], "properties": {"id": ID_SCHEMA, "label": text_schema(120, required=True),
+                "terminal": {"type": "boolean"}, "initialValue": {"type": "number", "minimum": -10000, "maximum": 10000}}}},
+        "actions": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"type": "object", "additionalProperties": False,
+            "required": ["id", "label"], "properties": {"id": ID_SCHEMA, "label": text_schema(120, required=True)}}},
+        "transitions": {"type": "array", "maxItems": 48, "items": {"type": "object", "additionalProperties": False,
+            "required": ["stateId", "actionId", "outcomes"], "properties": {"stateId": ID_SCHEMA, "actionId": ID_SCHEMA,
+                "outcomes": {"type": "array", "minItems": 1, "maxItems": 12, "items": {"type": "object", "additionalProperties": False,
+                    "required": ["nextStateId", "probability", "reward"], "properties": {"nextStateId": ID_SCHEMA,
+                        "probability": {"type": "number", "minimum": 0, "maximum": 1}, "reward": {"type": "number", "minimum": -10000, "maximum": 10000}}}}}}},
+        "discount": {"type": "number", "minimum": 0, "maximum": .999},
+        "maxIterations": {"type": "integer", "minimum": 1, "maximum": 500}, "tolerance": {"type": "number", "minimum": 1e-12, "maximum": 1}}}
+
+
+def experiment_schema(kind, config):
+    return {"type": "object", "additionalProperties": False,
+        "required": ["id", "type", "title", "algorithmVersion", "config"], "properties": {
+            "id": ID_SCHEMA, "type": {"type": "string", "enum": [kind]}, "title": text_schema(240, required=True),
+            "description": text_schema(5000), **SOURCE_FIELDS,
+            "algorithmVersion": {"type": "integer", "enum": [1]}, "config": config,
+            "comparisonConfig": {"anyOf": [{"type": "null"}, config]}}}
+
+
+EXPERIMENT_SCHEMA = {"oneOf": [experiment_schema("gradient-descent", GRADIENT_CONFIG_SCHEMA), experiment_schema("value-iteration", VALUE_CONFIG_SCHEMA)]}
+SHARD_SCHEMA["properties"]["experiments"] = {"type": "array", "maxItems": 10, "items": EXPERIMENT_SCHEMA,
+    "description": "Optional saved, reproducible numerical experiments. Use the fixed supported configurations and algorithmVersion 1. Never insert code or infer the user's understanding or content verification from a run."}
 LINK_SCHEMA = {
     "type": "object", "additionalProperties": False, "required": ["fromId", "toId", "type"],
     "properties": {
