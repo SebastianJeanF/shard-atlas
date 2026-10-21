@@ -45,4 +45,20 @@ assert.equal(rewritten.data.revisions[0].snapshot.content,'Earlier [[id:saved|B]
 assert.equal(withReferences.revisions[0].snapshot.content,'Earlier [[id:b|B]].','Alias resolution preserves the source archive');
 const existingEdge=build(archive,new Set([0,1]),new Map([['b','saved']]),['saved'],[{fromId:'a',toId:'saved',type:'depends_on'}]);
 assert.equal(existingEdge.data.links.some(link=>link.type==='depends_on'),false,'Alias reuse cannot duplicate an existing relationship');
+const rich={...archive,shards:archive.shards.map(shard=>shard.id==='a'?{...shard,
+  perspectives:[{title:'Intuition',content:'Compare [[id:b|B]]. ![perspective](/assets/perspective)'}],
+  walkthroughs:[{title:'Trace',steps:[{explanation:'Use [[id:b]]; keep `[[id:b]]` literal.'}]}],
+  comparisons:[{title:'Methods',alternatives:[{name:'B',shardId:'b',summary:'[[id:b]]'},{name:'A',shardId:'a'}]}],
+  learningLog:[{prompt:'Why [[id:b]]?',history:[{note:'Image ![history](/assets/history)'}]}]}:shard),
+  revisions:[{id:'ra',shardId:'a',snapshot:{content:'Old',perspectives:[{content:'Old [[id:b]]. ![old](/assets/old-perspective)'}],comparisons:[{alternatives:[{shardId:'b'}]}]}}],
+  assets:[...archive.assets,{id:'perspective'},{id:'history'},{id:'old-perspective'}]};
+const richBefore=JSON.stringify(rich);
+const richResult=build(rich,new Set([0,1]),new Map([['b','saved']]),['saved']);
+const richShard=richResult.data.shards[0];
+assert.match(richShard.perspectives[0].content,/\[\[id:saved\|B\]\]/);
+assert.equal(richShard.comparisons[0].alternatives[0].shardId,'saved');
+assert.equal(richShard.walkthroughs[0].steps[0].explanation,'Use [[id:saved]]; keep `[[id:b]]` literal.');
+assert.equal(richResult.data.revisions[0].snapshot.comparisons[0].alternatives[0].shardId,'saved');
+assert.deepEqual(Array.from(richResult.data.assets,asset=>asset.id),['a-photo','perspective','history','old-perspective']);
+assert.equal(JSON.stringify(rich),richBefore,'Nested selection preserves original archive and history');
 console.log('Import selection checks passed.');

@@ -55,6 +55,7 @@ The server and native builder both accept `--backup-dir PATH`. The native app de
 | `server.py` | SQLite storage, validation, local HTTP routes, exports, recovery, and additive contributions |
 | `static/app.js` | Interface behavior, note rendering, automatic topic map, connection map, and release reference |
 | `static/academic.js`, `static/academic.css` | Subject focus, course occurrences, notation, assumptions, and their interface styles |
+| `static/learning.js`, `static/learning.css` | Structured perspectives, walkthroughs, method comparisons, learning history, and independent content-verification records |
 | `static/import-review.js` | Incoming-card selection, editing, reuse, dependency handling, and import revalidation |
 | `static/styles.css` | Layout and visual styles |
 | `desktop/ShardAtlas.swift` | AppKit window, WKWebView, menus, clipboard, file dialogs, and service lifecycle |
@@ -82,6 +83,12 @@ Topic map is generated from saved topics and relationships. Keep layout determin
 
 Academic context uses optional per-shard `subjects`, `courses`, `notation`, and `assumptions` arrays. Keep a concept's stable ID shared across subject views and course occurrences. Courses record where a concept appears, rather than owning a separate copy of it. Symbol definitions are scoped metadata, not a global symbol table. Preserve these fields through validation, revisions, Trash, contribution tools, and archives, with empty-array defaults for older notes. See the [contribution format](../static/ai-instructions.md#batch-and-archive-format) for the contract.
 
+Explanation metadata adds `perspectives`, `walkthroughs`, `comparisons`, and `learningLog` arrays, plus a `verification` object. Older notes default to empty arrays and an unverified record with empty fields. Preserve this metadata in ordinary drafts, revisions, Trash, archives, contribution receipts/readback, and readable Markdown exports. Comparison alternatives may reference another concept through `shardId`, which must stay meaningful during import reuse.
+
+Content verification is independent of personal `status`. The stored personal value `verify` remains compatible with older data and is labeled **Needs clarification**. `verification.status` is `unverified`, `source-checked`, or `needs-correction`. Source-checked records require a note and a source URL or location. They record a manual assertion, not an automated source audit. Learning-log history contains explicitly recorded entries and optional partial ISO dates, without inferred chronology. Technical method comparisons belong to a shard and do not restore retired company or entity interfaces.
+
+Links also round-trip optional `scope`, `evidence`, `sourceUrl`, and `sourceLocation` strings, defaulting to empty strings for older records. Preserve these fields in edits, drafts, duplicate checks, Trash recovery, imports, exports, contributions, and receipts. The core relationship editor includes `supports` and `contradicts` alongside the existing technical relationship types.
+
 Import review automatically revalidates after selection or editing. Build the resulting archive with its selected cards, valid connection endpoints, and required assets. Reusing a saved card redirects typed connections and explicit inline ID links without modifying that card's explanation or academic metadata. Partial imports retain selected revisions and referenced images, and exclude saved canvases and Trash recovery records. Full selections preserve the complete legacy archive. Preserve the existing atomic import, safety snapshot, stable-ID conflict handling, receipts, and undo behavior.
 
 Modified import reviews ask before discard but are not durable drafts outside the current session. Ordinary editor drafts include academic metadata. Subject focus applies to shared collection views and is disabled in C++ timeline. The timeline retains C++ and legacy unclassified notes while excluding explicitly academic non-C++ notes. Native **View → Courses** uses Command-2.
@@ -100,6 +107,7 @@ From the repository root:
 python3 -m unittest discover -s tests -v
 node tests/test_frontend.mjs
 node tests/test_academic_frontend.mjs
+node tests/test_learning_frontend.mjs
 node tests/test_import_review.mjs
 node --check static/app.js
 ```

@@ -11,9 +11,11 @@ Write an explanation, keep its examples and sources beside it, and connect it to
 ## From a note to a connected explanation
 
 - **Keep the details.** Notes support Markdown, highlighted C++ code, mathematics, images, source references, and links to other notes.
-- **Explain the relationship.** Connect ideas with labels such as *depends on*, *contrasts with*, and *is an example of*, with a reason for each connection.
+- **Explain the relationship.** Connect ideas with labels such as *depends on*, *contrasts with*, and *is an example of*, with a reason, scope, evidence, and source location when useful.
 - **See how topics fit together.** Explore automatic neighborhoods, find shards shared by several topics, and expand saved relationships without arranging cards or drawing lines.
 - **Follow an idea across subjects and courses.** Use Generic, C++, Computer science, Mathematics, or Machine learning views of the same collection. Keep a concept's course and lecture occurrences, source locations, notation, and assumptions beside its explanation.
+- **Develop an explanation in layers.** Add structured perspectives, stepwise derivations or algorithm traces, and comparisons of technical methods within the same concept.
+- **Keep questions and checks distinct.** Record questions, misconceptions, and their history. A manual content-verification record stays separate from your personal understanding.
 - **Keep your bearings.** Search notes or find topics by typing, then filter by topic, kind, or understanding. Topics grow freely with your notes. Explore the separate, sourced C++ release reference from C++98 through the C++26 working draft.
 - **Give each release a familiar place.** An optional Wizard101 inspired timeline pairs C++ releases with illustrated worlds, distinct emblems, coordinated column colors, source-linked context, and small programming examples. Grouped releases show every mapped world. Switch to Plain for the original timeline presentation. The public source includes original artwork, with support for a separate local game-icon pack.
 

@@ -172,7 +172,7 @@ try {
   const windowListeners = new Map();
   const w = { document, matchMedia: () => ({ matches: reducedMotion }), addEventListener(name, callback) { const listeners = windowListeners.get(name) || []; listeners.push(callback); windowListeners.set(name, listeners); }, katex: require(path.join(project, 'static/vendor/katex/katex.min.js')), confirm: () => true };
   context = vm.createContext({ window: w, document, fetch: browserFetch, FormData: FixtureFormData, FileReader: FixtureFileReader, navigator: { clipboard: { writeText: async text => { if (failClipboard) throw new Error('Clipboard permission denied'); clipboardWrites.push(text); } } }, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key=>storage.delete(key) }, setTimeout: trackedSetTimeout, clearTimeout: timer => { timers.delete(timer); clearTimeout(timer); }, console, Blob, URL: FixtureURL, atob: value => Buffer.from(value, 'base64').toString('binary') });
-  for (const filename of ['academic.js','import-review.js']) vm.runInContext(fs.readFileSync(path.join(project,'static',filename),'utf8'),context,{filename});
+  for (const filename of ['academic.js','learning.js','import-review.js']) vm.runInContext(fs.readFileSync(path.join(project,'static',filename),'utf8'),context,{filename});
   const code = fs.readFileSync(path.join(project, 'static/app.js'), 'utf8');
   vm.runInContext(code + '\nwindow.testAtlas={state,drafts,openImageViewer,imageViewerLoaded,imageViewerFailed,fitImageViewer,setImageViewerScale,zoomImageViewer,handleImageViewerKey,get imageViewer(){return imageViewer},filteredShards,subjectMemberships,renderCourses,reviewedImport,revalidateImport,get importIncluded(){return importIncluded},markdown,stabilizeWikiLinks,renderNav,renderLibrary,renderTimeline,renderBoards,atlasModel,atlasRelationshipModel,renderAtlas,renderDetail,dateLabel,previewImport,clearImportPreview,selectImportShard,get importImageUrls(){return importImageUrls},saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,renderReleaseFeature,loadReleaseCatalog,loadSpiralCatalog,setTimelineTheme,savedTimelineTheme,filteredSpiralExamples,handlePortalKey,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,uploadImage,showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
   const t = w.testAtlas, $ = selector => document.querySelector(selector), results = [];
@@ -1031,8 +1031,8 @@ try {
     const updated = t.state.data.links.find(item => item.id === link.id); assert.equal(updated.note, 'unique rationalefind reasoning'); assert.equal(updated.type, 'contrasts_with');
     t.state.query = 'rationalefind'; const found = Array.from(t.filteredShards(), shard => shard.id); assert.ok(found.includes(link.fromId) && found.includes(link.toId)); t.state.query = '';
   });
-  await check('New connections use six technical relationships while legacy types survive editing', async () => {
-    const from=t.state.data.shards[0],to=t.state.data.shards[1],types=['depends_on','explains','contrasts_with','example_of','related_to','part_of'];t.openLink(from.id);let form=$('#link-form');assert.deepEqual([...form.elements.type.innerHTML.matchAll(/value="([^"]+)"/g)].map(match=>match[1]),types);$('#link-dialog').close();
+  await check('New connections expose technical evidence relationships while legacy types survive editing', async () => {
+    const from=t.state.data.shards[0],to=t.state.data.shards[1],types=['depends_on','explains','contrasts_with','example_of','related_to','part_of','supports','contradicts'];t.openLink(from.id);let form=$('#link-form');assert.deepEqual([...form.elements.type.innerHTML.matchAll(/value="([^"]+)"/g)].map(match=>match[1]),types);$('#link-dialog').close();
     await post('/api/links',{fromId:from.id,toId:to.id,type:'released_by',note:'Legacy relationship context'});t.state.data=await get('/api/state');const legacy=t.state.data.links.find(link=>link.fromId===from.id&&link.toId===to.id&&link.type==='released_by');t.openLink(null,legacy.id);assert.equal(form.elements.type.value,'released_by');assert.match(form.elements.type.innerHTML,/value="released_by"/);form.elements.note.value='Preserved legacy relationship context';submit(form);await until(()=>!$('#link-dialog').open&&!t.busy);assert.equal(t.state.data.links.find(link=>link.id===legacy.id).type,'released_by');
     t.openLink(from.id);assert.ok(!form.elements.type.innerHTML.includes('released_by'));$('#link-dialog').close();
   });
@@ -1263,6 +1263,66 @@ try {
       t.state.data={...previous.data,shards:[{...sample,id:'academic-search',title:'A method',content:'Explanation.',courses:[{courseCode:'CS 4789',sourceLocation:'Appendix fourteen'}],notation:[{symbol:'z',meaning:'Continuation estimate'}],assumptions:['Finite action set']}],links:[]};t.clearFilters();
       for(const query of ['appendix fourteen','continuation estimate','finite action']){t.state.query=query;assert.equal(t.filteredShards().length,1,query);}
     } finally {Object.assign(t.state,previous);t.renderNav();}
+  });
+  const learningFixture={
+    perspectives:[{title:'Geometric view',viewpoint:'Geometry',content:'A **geometric explanation** with $x+1$.',assumptions:['Projection fixture'],sourceUrl:'https://example.com/geometry',sourceLocation:'Figure 2'}],
+    walkthroughs:[{title:'Worked path',kind:'derivation',goal:'Show the transition.',steps:[{title:'Substitute',expression:'x+1=3',explanation:'Substitution fixture.',justification:'Definition fixture.'}],conclusion:'Path conclusion.'}],
+    comparisons:[{title:'Choose a method',question:'Which assumptions hold?',alternatives:[{name:'Method A',summary:'First option',assumptions:['Finite fixture'],strengths:['Exact fixture'],limitations:['Costly fixture'],cost:'Quadratic fixture'},{name:'Method B',summary:'Second option',assumptions:[],strengths:['Fast fixture'],limitations:['Approximate fixture'],cost:'Linear fixture'}],conclusion:'Choose according to assumptions.'}],
+    learningLog:[{kind:'question',prompt:'Why is the projection unique?',status:'resolved',resolution:'Resolution fixture.',history:[{date:'2026-10-21',note:'Recorded question history.'}]}],
+    verification:{status:'source-checked',note:'Manual source comparison fixture.',sourceUrl:'https://example.com/reference',sourceLocation:'Section 2',checkedAt:'2026-10-21'}
+  };
+  await check('Structured explanations render math, method choices and learning history beside independent verification', async () => {
+    const sample={...t.state.data.shards[0],...learningFixture,status:'learning'};
+    const output=t.renderDetail(sample);
+    for(const text of ['Geometric view','Worked path','Choose a method','Method A','Method B','Why is the projection unique?','Recorded question history','Source checked','Learning'])assert.ok(output.includes(text),text);
+    assert.match(output,/class="katex"/);assert.ok(!output.includes('data-view="compare"'));
+  });
+  await check('Search covers structured explanations and rich relationship scope', async () => {
+    const previous={...t.state},sample=previous.data.shards[0],peer=previous.data.shards[1];
+    try {
+      t.state.data={...previous.data,shards:[{...sample,...learningFixture},peer],links:[{id:'rich-search',fromId:sample.id,toId:peer.id,type:'supports',note:'',scope:'Conditional evidence fixture'}]};t.clearFilters();
+      for(const query of ['geometric explanation','substitution fixture','quadratic fixture','recorded question history','manual source comparison','conditional evidence']){t.state.query=query;assert.ok(t.filteredShards().some(shard=>shard.id===sample.id),query);}
+    }finally{Object.assign(t.state,previous);t.renderNav();}
+  });
+  await check('Source verification filter is independent of personal understanding and treats old cards as unverified', async () => {
+    const previous={...t.state},sample=previous.data.shards[0];
+    try {
+      t.state.data={...previous.data,shards:[{...sample,id:'verified-learning',status:'learning',...learningFixture},{...sample,id:'unverified-confident',status:'solid',verification:undefined}],links:[]};t.clearFilters();const before=JSON.stringify(t.state.data);
+      t.state.verificationFilter='source-checked';assert.deepEqual(Array.from(t.filteredShards(),shard=>shard.id),['verified-learning']);
+      t.state.status='solid';assert.equal(t.filteredShards().length,0);
+      t.state.verificationFilter='unverified';assert.deepEqual(Array.from(t.filteredShards(),shard=>shard.id),['unverified-confident']);
+      t.clearFilters();assert.equal(t.state.verificationFilter,'all');assert.equal(JSON.stringify(t.state.data),before);
+    }finally{Object.assign(t.state,previous);t.renderNav();}
+  });
+  await check('Malformed nested learning data renders validation errors without failing the import review', async () => {
+    await t.previewImport({schemaVersion:1,shards:[{id:'learning-invalid',title:'Malformed learning metadata',perspectives:[null],walkthroughs:[{steps:[null]}],comparisons:[null],learningLog:[null],verification:[]} ]});
+    assert.ok($('#import-preview-dialog').open);assert.equal($('#confirm-import').disabled,true);assert.match($('#import-preview-content').innerHTML,/object|perspective|walkthrough|verification/i);t.closeDialog('import-preview-dialog');
+  });
+  await check('Rich import review edits connection scope without writing until confirmation and preserves structured content', async () => {
+    const before=await get('/api/state');
+    await t.previewImport({schemaVersion:1,shards:[{id:'learning-rich-a',title:'Structured QA concept',...learningFixture},{id:'learning-rich-b',title:'Related QA concept'}],links:[{id:'learning-rich-edge',fromId:'learning-rich-a',toId:'learning-rich-b',type:'supports',note:'Why these connect.',scope:'Initial scope.',evidence:'Reasoned connection.',sourceUrl:'https://example.com/edge',sourceLocation:'Lemma 2'}]});
+    assert.match($('#import-preview-content').innerHTML,/Geometric view/);assert.equal((await get('/api/state')).shards.length,before.shards.length);
+    document.dispatchEvent(new FixtureEvent('change',{target:{dataset:{importLinkField:'scope',linkIndex:'0'},value:'Reviewed finite setting.'}}));await until(()=>!$('#confirm-import').disabled);
+    await t.runAction('confirm-import',{dataset:{}});const saved=await get('/api/state'),card=saved.shards.find(shard=>shard.id==='learning-rich-a'),edge=saved.links.find(link=>link.id==='learning-rich-edge');
+    assert.equal(card.perspectives[0].title,'Geometric view');assert.equal(card.walkthroughs[0].steps[0].expression,'x+1=3');assert.equal(card.verification.status,'source-checked');assert.equal(card.status,'learning');assert.equal(edge.scope,'Reviewed finite setting.');assert.equal(edge.evidence,'Reasoned connection.');assert.equal(edge.sourceLocation,'Lemma 2');assert.match(t.renderDetail(card),/Where this connection applies/);
+  });
+  await check('Reusing a saved card redirects method comparisons as well as inline references', async () => {
+    const existing=t.state.data.shards.find(shard=>shard.id==='learning-rich-b'),before=JSON.stringify(existing);
+    await t.previewImport({schemaVersion:1,shards:[{id:'learning-method-referrer',title:'Method comparison QA',comparisons:[{title:'Related methods',alternatives:[{name:'Existing method',shardId:'learning-method-duplicate',summary:'See [[id:learning-method-duplicate|method]].'},{name:'Other method',summary:'Alternative.'}]}]},{id:'learning-method-duplicate',title:existing.title,content:'Should not replace saved concept.'}]});
+    t.selectImportShard(1);await t.runAction('import-reuse-card',{dataset:{id:existing.id}});await t.runAction('confirm-import',{dataset:{}});
+    const saved=await get('/api/state'),comparison=saved.shards.find(shard=>shard.id==='learning-method-referrer').comparisons[0];assert.equal(comparison.alternatives[0].shardId,existing.id);assert.match(comparison.alternatives[0].summary,/\[\[id:learning-rich-b\|/);assert.equal(JSON.stringify(saved.shards.find(shard=>shard.id===existing.id)),before);
+  });
+  await check('Editor drafts retain structured metadata and restore independently of the body', async () => {
+    const card=t.state.data.shards.find(shard=>shard.id==='learning-rich-a'),form=$('#editor-form');t.openEditor(card.id);
+    for(const key of ['perspectives','walkthroughs','comparisons','learningLog','verification'])assert.equal(JSON.stringify(JSON.parse(form.elements[key].value)),JSON.stringify(card[key]),key);
+    form.elements.content.value='Draft body only.';t.scheduleDraft('editor');await t.persistDraft('editor');const recovered=t.drafts.editor;
+    assert.equal(JSON.parse(recovered.values.perspectives)[0].title,'Geometric view');assert.equal(JSON.parse(recovered.values.verification).status,'source-checked');$('#editor-dialog').close();t.openEditor(null,recovered);assert.equal(JSON.parse(form.elements.learningLog.value)[0].history[0].note,'Recorded question history.');assert.equal(form.elements.content.value,'Draft body only.');await t.deleteDraft('editor');$('#editor-dialog').close();
+  });
+  await check('Connection editor and recoverable draft retain scope, evidence and exact source locator', async () => {
+    const link=t.state.data.links.find(link=>link.id==='learning-rich-edge');t.openLink(link.fromId,link.id);const form=$('#link-form');
+    for(const key of ['scope','evidence','sourceUrl','sourceLocation'])assert.equal(form.elements[key].value,link[key],key);
+    form.elements.scope.value='Changed scope in draft.';t.scheduleDraft('connection');await t.persistDraft('connection');const recovered=t.drafts.connection;
+    assert.equal(recovered.values.scope,'Changed scope in draft.');assert.equal(recovered.values.sourceLocation,'Lemma 2');await t.deleteDraft('connection');$('#link-dialog').close();
   });
   await check('Malformed academic input stays previewable with validation errors', async () => {
     await t.previewImport({schemaVersion:1,shards:[{id:'academic-invalid',title:'Malformed metadata',courses:[null],notation:[null]}]});

@@ -13,7 +13,7 @@ Shard Atlas is expanding its existing technical collection to connect computer s
 
 **Source-backed capture currently means source references and locators preserved through AI-prepared JSON or manual capture.** Automatic PDF extraction is not implemented.
 
-## Phase 2: planned
+## Phase 2: complete
 
 - Structured perspectives on the same concept, such as mathematical, geometric, algorithmic, and practical explanations.
 - Stepwise derivations and algorithm traces.
@@ -21,6 +21,8 @@ Shard Atlas is expanding its existing technical collection to connect computer s
 - Questions and misconception history linked to the relevant concepts.
 - Separate content verification from the user's personal understanding.
 - Richer explained typed connections that state why the relationship holds and where it applies.
+
+Open **Edit shard → Learning & explanation** to use the structured editor. Content verification remains independent of personal Understanding, whose clarification state is labeled **Needs clarification**.
 
 ## Phase 3: later
 

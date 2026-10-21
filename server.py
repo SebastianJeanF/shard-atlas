@@ -29,8 +29,8 @@ from urllib.parse import unquote, urlsplit
 
 
 SCHEMA_VERSION = 1
-DATABASE_VERSION = 3
-BACKEND_VERSION = "2.5.0"  # Keep the additive API compatible with already-running contribution clients.
+DATABASE_VERSION = 4
+BACKEND_VERSION = "2.6.0"  # Keep the additive API compatible with already-running contribution clients.
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DB = Path.home() / "Library/Application Support/Shard Atlas/shards.sqlite3"
 KINDS = {"concept", "fact", "example", "mistake", "event", "idea"}
@@ -39,8 +39,11 @@ LINK_TYPES = {"depends_on", "explains", "contrasts_with", "example_of", "related
 EVIDENCE_STATUSES = {"unverified", "reported", "corroborated", "disputed", "superseded"}
 EVENT_TYPES = {"", "event", "announcement", "release", "research", "rumor", "forecast"}
 ENTITY_TYPES = {"", "company", "model", "concept", "person"}
+VERIFICATION_DEFAULTS = {"status": "unverified", "note": "", "sourceUrl": "", "sourceLocation": "", "checkedAt": ""}
+LINK_KNOWLEDGE_DEFAULTS = {"scope": "", "evidence": "", "sourceUrl": "", "sourceLocation": ""}
 KNOWLEDGE_DEFAULTS = {"evidenceStatus": "unverified", "sources": [], "publicationDate": "", "verifiedDate": "", "eventType": "", "entities": [], "entityType": "", "inbox": False, "facts": [],
-                      "subjects": [], "courses": [], "notation": [], "assumptions": []}
+                      "subjects": [], "courses": [], "notation": [], "assumptions": [],
+                      "perspectives": [], "walkthroughs": [], "comparisons": [], "learningLog": [], "verification": VERIFICATION_DEFAULTS}
 REVIEW_DAYS = {"again": 1, "hard": 3, "good": 7, "easy": 14}
 MAX_BODY_BYTES = 260 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
@@ -201,6 +204,7 @@ def validate_knowledge(data):
                     "unit": text_field(item.get("unit", ""), "fact unit", 100), "sourceUrl": source_url(item.get("sourceUrl", "")), "asOf": partial_date(item.get("asOf", ""), "asOf")})
         result[field] = records
     result.update(validate_academic(data))
+    result.update(validate_learning(data))
     return result
 
 
@@ -248,6 +252,146 @@ def validate_academic(data):
             "role": text_field(entry.get("role", ""), "symbol role", 240),
             "scope": text_field(entry.get("scope", ""), "symbol scope", 240),
         })
+    return result
+
+
+def validate_learning(data):
+    """Keep explanatory material and content verification separate from personal understanding."""
+    def records(value, name, maximum, minimum=0):
+        if not isinstance(value, list) or not minimum <= len(value) <= maximum:
+            raise AppError(f"{name} must contain between {minimum} and {maximum} objects.")
+        if any(not isinstance(item, dict) for item in value):
+            raise AppError(f"Each {name} entry must be an object.")
+        return value
+
+    def fields(item, allowed, name):
+        if not isinstance(item, dict) or set(item) - set(allowed):
+            raise AppError(f"{name} must be an object containing only its supported fields.")
+
+    def strings(value, name, maximum):
+        if not isinstance(value, list) or len(value) > maximum:
+            raise AppError(f"{name} must be a list of at most {maximum} text entries.")
+        return [text_field(item, name, 2000, required=True) for item in value]
+
+    def source(item):
+        return {"sourceUrl": source_url(item.get("sourceUrl", "")),
+                "sourceLocation": text_field(item.get("sourceLocation", ""), "sourceLocation", 240)}
+
+    result = {"perspectives": [], "walkthroughs": [], "comparisons": [], "learningLog": []}
+    for item in records(data.get("perspectives", []), "perspectives", 20):
+        fields(item, ("title", "viewpoint", "content", "assumptions", "sourceUrl", "sourceLocation"), "Perspective")
+        result["perspectives"].append({"title": text_field(item.get("title", ""), "perspective title", 240, required=True),
+            "viewpoint": text_field(item.get("viewpoint", ""), "viewpoint", 240),
+            "content": text_field(item.get("content", ""), "perspective content", 30_000, required=True),
+            "assumptions": strings(item.get("assumptions", []), "perspective assumptions", 20), **source(item)})
+    for item in records(data.get("walkthroughs", []), "walkthroughs", 20):
+        fields(item, ("title", "kind", "goal", "steps", "conclusion", "sourceUrl", "sourceLocation"), "Walkthrough")
+        kind = item.get("kind", "derivation")
+        if not isinstance(kind, str) or kind not in ("derivation", "trace"):
+            raise AppError("Walkthrough kind must be derivation or trace.")
+        steps = []
+        for step in records(item.get("steps", []), "walkthrough steps", 100, 1):
+            fields(step, ("title", "expression", "explanation", "justification"), "Walkthrough step")
+            normalized = {key: text_field(step.get(key, ""), "step " + key, limit)
+                          for key, limit in (("title", 240), ("expression", 5000), ("explanation", 10_000), ("justification", 5000))}
+            if not normalized["expression"].strip() and not normalized["explanation"].strip():
+                raise AppError("Each walkthrough step needs an expression or an explanation.")
+            steps.append(normalized)
+        result["walkthroughs"].append({"title": text_field(item.get("title", ""), "walkthrough title", 240, required=True),
+            "kind": kind, "goal": text_field(item.get("goal", ""), "walkthrough goal", 5000), "steps": steps,
+            "conclusion": text_field(item.get("conclusion", ""), "walkthrough conclusion", 5000), **source(item)})
+    for item in records(data.get("comparisons", []), "comparisons", 20):
+        fields(item, ("title", "question", "alternatives", "conclusion", "sourceUrl", "sourceLocation"), "Comparison")
+        alternatives = []
+        for alternative in records(item.get("alternatives", []), "comparison alternatives", 10, 2):
+            fields(alternative, ("name", "shardId", "summary", "assumptions", "strengths", "limitations", "cost"), "Comparison alternative")
+            shard_id = text_field(alternative.get("shardId", ""), "alternative shardId", 120)
+            if shard_id and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}", shard_id):
+                raise AppError("An alternative shardId must be an optional stable identifier of at most 120 characters.")
+            alternatives.append({"name": text_field(alternative.get("name", ""), "alternative name", 240, required=True),
+                "shardId": shard_id, "summary": text_field(alternative.get("summary", ""), "alternative summary", 5000),
+                **{key: strings(alternative.get(key, []), "alternative " + key, 30) for key in ("assumptions", "strengths", "limitations")},
+                "cost": text_field(alternative.get("cost", ""), "alternative cost", 2000)})
+        result["comparisons"].append({"title": text_field(item.get("title", ""), "comparison title", 240, required=True),
+            "question": text_field(item.get("question", ""), "comparison question", 5000), "alternatives": alternatives,
+            "conclusion": text_field(item.get("conclusion", ""), "comparison conclusion", 5000), **source(item)})
+    for item in records(data.get("learningLog", []), "learningLog", 100):
+        fields(item, ("kind", "prompt", "status", "resolution", "history", "sourceUrl", "sourceLocation"), "Learning log entry")
+        kind, status = item.get("kind", "question"), item.get("status", "open")
+        if not isinstance(kind, str) or kind not in ("question", "misconception"):
+            raise AppError("Learning log kind must be question or misconception.")
+        if not isinstance(status, str) or status not in ("open", "resolved"):
+            raise AppError("Learning log status must be open or resolved.")
+        history = []
+        for entry in records(item.get("history", []), "learning log history", 100):
+            fields(entry, ("date", "note"), "Learning log history entry")
+            history.append({"date": partial_date(entry.get("date", ""), "history date"),
+                            "note": text_field(entry.get("note", ""), "history note", 5000, required=True)})
+        result["learningLog"].append({"kind": kind, "prompt": text_field(item.get("prompt", ""), "learning log prompt", 5000, required=True),
+            "status": status, "resolution": text_field(item.get("resolution", ""), "resolution", 10_000, required=status == "resolved"),
+            "history": history, **source(item)})
+    verification = data.get("verification", {})
+    fields(verification, VERIFICATION_DEFAULTS, "Verification")
+    status = verification.get("status", "unverified")
+    if not isinstance(status, str) or status not in ("unverified", "source-checked", "needs-correction"):
+        raise AppError("Verification status must be unverified, source-checked, or needs-correction.")
+    result["verification"] = {"status": status, "note": text_field(verification.get("note", ""), "verification note", 5000),
+        **source(verification), "checkedAt": partial_date(verification.get("checkedAt", ""), "checkedAt")}
+    if status == "source-checked" and (not result["verification"]["note"].strip() or not (result["verification"]["sourceUrl"] or result["verification"]["sourceLocation"].strip())):
+        raise AppError("Source-checked verification needs a note and a source URL or source location.")
+    return result
+
+
+def validate_link_knowledge(data):
+    if not isinstance(data, dict):
+        raise AppError("Relationship context must be an object.")
+    return {"scope": text_field(data.get("scope", ""), "relationship scope", 5000),
+            "evidence": text_field(data.get("evidence", ""), "relationship evidence", 10_000),
+            "sourceUrl": source_url(data.get("sourceUrl", ""), "relationship source URL"),
+            "sourceLocation": text_field(data.get("sourceLocation", ""), "relationship source location", 240)}
+
+
+def learning_text(shard):
+    """Collect explanation strings for reference checks, without trusting their contents."""
+    def strings(value):
+        if isinstance(value, str):
+            yield value
+        elif isinstance(value, list):
+            for item in value:
+                yield from strings(item)
+        elif isinstance(value, dict):
+            for item in value.values():
+                yield from strings(item)
+    return "\n".join(strings({key: shard.get(key) for key in ("content", "perspectives", "walkthroughs", "comparisons", "learningLog", "verification")}))
+
+
+def learning_references(shard):
+    references = set(re.findall(r"\[\[id:([A-Za-z0-9][A-Za-z0-9_.:-]{0,99})(?=[|\]])", learning_text(shard)))
+    comparisons = shard.get("comparisons", [])
+    for comparison in comparisons if isinstance(comparisons, list) else []:
+        alternatives = comparison.get("alternatives", []) if isinstance(comparison, dict) else []
+        if isinstance(alternatives, list):
+            references.update(alternative["shardId"] for alternative in alternatives if isinstance(alternative, dict) and isinstance(alternative.get("shardId"), str))
+    return references
+
+
+def remap_shard_references(shard, aliases):
+    """Remap conceptual links in copied explanations while leaving literal code intact."""
+    def rewrite(value):
+        if isinstance(value, str):
+            return "".join(part if index % 2 else re.sub(
+                r"(\[\[id:)([A-Za-z0-9][A-Za-z0-9_.:-]{0,99})(?=[|\]])",
+                lambda match: match[1] + aliases.get(match[2], match[2]), part)
+                for index, part in enumerate(re.split(r"(```[\s\S]*?```|`[^`]+`)", value)))
+        if isinstance(value, list):
+            return [rewrite(item) for item in value]
+        if isinstance(value, dict):
+            return {key: aliases.get(item, item) if key == "shardId" and isinstance(item, str) else rewrite(item) for key, item in value.items()}
+        return value
+    result = dict(shard)
+    for key in ("content", "perspectives", "walkthroughs", "comparisons", "learningLog", "verification"):
+        if key in shard:
+            result[key] = rewrite(shard[key])
     return result
 
 
@@ -350,6 +494,7 @@ def validate_link(data, *, imported=False) -> dict:
         raise AppError("Unknown relationship type.")
     if result["fromId"] == result["toId"]:
         raise AppError("A relationship must connect two different shards.")
+    result.update(validate_link_knowledge(data))
     return result
 
 
@@ -597,6 +742,7 @@ class Store:
         links = [{
             "id": row["id"], "fromId": row["from_id"], "toId": row["to_id"],
             "type": row["type"], "note": row["note"], "createdAt": row["created_at"],
+            **validate_link_knowledge(json.loads(row["knowledge"]) if "knowledge" in row.keys() else {}),
         } for row in connection.execute("SELECT * FROM links ORDER BY created_at, id")]
         reviews = [{
             "id": row["id"], "shardId": row["shard_id"], "grade": row["grade"],
@@ -615,17 +761,21 @@ class Store:
                 connection.execute("ALTER TABLE shards ADD COLUMN knowledge TEXT NOT NULL DEFAULT '{}'")
             sql = connection.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='links'").fetchone()[0]
             if "released_by" not in sql:
+                link_columns = {row[1] for row in connection.execute("PRAGMA table_info(links)")}
                 connection.execute("""CREATE TABLE links_workspace_upgrade (
                     id TEXT PRIMARY KEY, from_id TEXT NOT NULL REFERENCES shards(id) ON DELETE CASCADE,
                     to_id TEXT NOT NULL REFERENCES shards(id) ON DELETE CASCADE,
                     type TEXT NOT NULL CHECK(type IN ('depends_on','explains','contrasts_with','example_of','related_to','part_of','supports','contradicts','supersedes','released_by')),
-                    note TEXT NOT NULL, created_at TEXT NOT NULL, CHECK(from_id <> to_id), UNIQUE(from_id,to_id,type)
+                    note TEXT NOT NULL, created_at TEXT NOT NULL, knowledge TEXT NOT NULL DEFAULT '{}', CHECK(from_id <> to_id), UNIQUE(from_id,to_id,type)
                 )""")
-                connection.execute("INSERT INTO links_workspace_upgrade SELECT * FROM links")
+                knowledge_sql = "knowledge" if "knowledge" in link_columns else "'{}'"
+                connection.execute("INSERT INTO links_workspace_upgrade SELECT id,from_id,to_id,type,note,created_at," + knowledge_sql + " FROM links")
                 connection.execute("DROP TABLE links")
                 connection.execute("ALTER TABLE links_workspace_upgrade RENAME TO links")
                 connection.execute("CREATE INDEX links_from ON links(from_id)")
                 connection.execute("CREATE INDEX links_to ON links(to_id)")
+            if "knowledge" not in {row[1] for row in connection.execute("PRAGMA table_info(links)")}:
+                connection.execute("ALTER TABLE links ADD COLUMN knowledge TEXT NOT NULL DEFAULT '{}'")
             connection.execute("CREATE TABLE IF NOT EXISTS boards (id TEXT PRIMARY KEY,payload TEXT NOT NULL)")
             connection.execute("CREATE TABLE IF NOT EXISTS imports (id TEXT PRIMARY KEY,created_at TEXT NOT NULL,payload TEXT NOT NULL)")
             if connection.execute("PRAGMA foreign_key_check").fetchall():
@@ -678,8 +828,9 @@ class Store:
 
     @staticmethod
     def _insert_link(connection, link):
-        connection.execute("INSERT INTO links VALUES(?,?,?,?,?,?)", (
+        connection.execute("INSERT INTO links(id,from_id,to_id,type,note,created_at,knowledge) VALUES(?,?,?,?,?,?,?)", (
             link["id"], link["fromId"], link["toId"], link["type"], link["note"], link["createdAt"],
+            json.dumps(validate_link_knowledge(link), ensure_ascii=False),
         ))
 
     @staticmethod
@@ -760,12 +911,12 @@ class Store:
             current = next((item for item in self._state(connection)["links"] if item["id"] == link_id), None)
             if current is None:
                 raise AppError("Relationship not found.", 404)
-            link = validate_link({**current, **{key: value for key, value in data.items() if key in ("fromId", "toId", "type", "note")}}, imported=True)
+            link = validate_link({**current, **{key: value for key, value in data.items() if key in {"fromId", "toId", "type", "note"} | set(LINK_KNOWLEDGE_DEFAULTS)}}, imported=True)
             ids = {row[0] for row in connection.execute("SELECT id FROM shards")}
             if link["fromId"] not in ids or link["toId"] not in ids:
                 raise AppError("Both relationship endpoints must exist.")
             try:
-                connection.execute("UPDATE links SET from_id=?,to_id=?,type=?,note=? WHERE id=?", (link["fromId"], link["toId"], link["type"], link["note"], link_id))
+                connection.execute("UPDATE links SET from_id=?,to_id=?,type=?,note=?,knowledge=? WHERE id=?", (link["fromId"], link["toId"], link["type"], link["note"], json.dumps(validate_link_knowledge(link), ensure_ascii=False), link_id))
             except sqlite3.IntegrityError:
                 raise AppError("This relationship already exists.", 409) from None
             connection.execute("DELETE FROM drafts WHERE kind='connection'")
@@ -1122,6 +1273,10 @@ class Store:
         if row is None:
             return None
         values = {key: base64.b64encode(row[key]).decode("ascii") if isinstance(row[key], bytes) else row[key] for key in row.keys()}
+        # Adding the optional relationship column must not invalidate v1–v3 import
+        # receipts. Empty context is logically the same as the old six-column row.
+        if table == "links" and "knowledge" in values and not any(validate_link_knowledge(json.loads(values["knowledge"])).values()):
+            values.pop("knowledge")
         return hashlib.sha256(json.dumps(values, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
 
     def imports(self):
@@ -1177,10 +1332,11 @@ class Store:
                             matched = existing_content.get((str(item.get("title", "")).strip().casefold(), item.get("content", "")))
                             if matched:
                                 duplicates.append({"kind": key, "id": identifier, "existingId": matched, "reason": "same title and content under a different ID; both records will remain"})
-                    if key == "shards" and isinstance(item.get("content", ""), str):
+                    if key in ("shards", "links"):
                         # Only relative Markdown references use this collection's asset store.
                         # Remote source metadata may contain unrelated /assets/ URL paths.
-                        for asset_id in set(re.findall(r"\]\(/assets/([A-Za-z0-9][A-Za-z0-9_.:-]{0,99})\)", item.get("content", ""))):
+                        context = learning_text(item) if key == "shards" else "\n".join(str(item.get(field, "")) for field in ("note", "scope", "evidence"))
+                        for asset_id in set(re.findall(r"\]\(/assets/([A-Za-z0-9][A-Za-z0-9_.:-]{0,99})\)", context)):
                             if asset_id not in asset_ids:
                                 missing.append({"kind": key, "id": identifier, "assetId": asset_id, "reason": "missing local image"})
                     references = []
@@ -1237,9 +1393,33 @@ class Store:
                 # Preserve notes referenced by work outside this import, including modified imported records.
                 state = self._state(connection)
                 protected = set()
+                revisions = [dict(row) for row in connection.execute("SELECT id,shard_id,snapshot FROM revisions")]
+                trash = [dict(row) for row in connection.execute("SELECT id,payload FROM trash")]
+                draft_rows = [row[0] for row in connection.execute("SELECT payload FROM drafts")]
+                for encoded in draft_rows:
+                    draft = json.loads(encoded)
+                    if not isinstance(draft, dict):
+                        continue
+                    values = draft.get("values", {})
+                    if not isinstance(values, dict):
+                        values = {}
+                    protected.update(value for value in (draft.get("id"), draft.get("editingId"), draft.get("linkingId"), values.get("fromId"), values.get("toId")) if isinstance(value, str))
+                    comparisons = values.get("comparisons", [])
+                    if isinstance(comparisons, str):
+                        try:
+                            comparisons = json.loads(comparisons)
+                        except ValueError:
+                            comparisons = []
+                    protected.update(learning_references({"comparisons": comparisons}))
+                    protected.update(re.findall(r"\[\[id:([A-Za-z0-9][A-Za-z0-9_.:-]{0,99})(?=[|\]])", encoded))
+                    editing_link = draft.get("editingLinkId")
+                    if isinstance(editing_link, str) and editing_link in candidates["links"]:
+                        candidates["links"].remove(editing_link)
+                        skipped.append({"kind": "links", "id": editing_link, "reason": "used by an unfinished connection draft"})
                 for link in state["links"]:
                     if link["id"] not in candidates["links"]:
                         protected.update((link["fromId"], link["toId"]))
+                        protected.update(re.findall(r"\[\[id:([A-Za-z0-9][A-Za-z0-9_.:-]{0,99})(?=[|\]])", json.dumps(link)))
                 for review in state["reviews"]:
                     if review["id"] not in candidates["reviews"]:
                         protected.add(review["shardId"])
@@ -1247,35 +1427,45 @@ class Store:
                     if board["id"] not in candidates["boards"]:
                         protected.update(item["shardId"] for item in board["items"])
                         protected.update(section["shardId"] for section in board["sections"] if section.get("shardId"))
-                for shard in state["shards"]:
-                    if shard["id"] not in candidates["shards"]:
-                        protected.update(re.findall(r"\[\[id:([A-Za-z0-9][A-Za-z0-9_.:-]{0,99})(?=[|\]])", shard["content"]))
-                for row in connection.execute("SELECT id,shard_id FROM revisions"):
-                    if row["id"] not in candidates["revisions"]:
-                        protected.add(row["shard_id"])
-                for row in connection.execute("SELECT payload FROM drafts"):
-                    draft = json.loads(row[0])
-                    if isinstance(draft, dict) and isinstance(draft.get("id"), str):
-                        protected.add(draft["id"])
-                    protected.update(re.findall(r"\[\[id:([A-Za-z0-9][A-Za-z0-9_.:-]{0,99})(?=[|\]])", row[0]))
-                for shard_id in candidates["shards"] & protected:
-                    skipped.append({"kind": "shards", "id": shard_id, "reason": "referenced by work outside the unchanged import"})
-                candidates["shards"] -= protected
-                # Keep imported history for any imported note that later work requires us to preserve.
-                for row in connection.execute("SELECT id,shard_id FROM revisions"):
-                    if row["id"] in candidates["revisions"] and row["shard_id"] not in candidates["shards"]:
-                        candidates["revisions"].remove(row["id"])
-                        skipped.append({"kind": "revisions", "id": row["id"], "reason": "history belongs to retained knowledge"})
+                for row in trash:
+                    if row["id"] not in candidates["trash"]:
+                        payload = json.loads(row["payload"])
+                        protected.update(learning_references(payload["shard"]))
+                        protected.update(re.findall(r"\[\[id:([A-Za-z0-9][A-Za-z0-9_.:-]{0,99})(?=[|\]])", row["payload"]))
+                        for link in payload.get("links", []):
+                            protected.update((link["fromId"], link["toId"]))
+                # Retaining one explanation can require another. Repeat until its
+                # current metadata and every retained historical snapshot remain usable.
+                while True:
+                    for shard in state["shards"]:
+                        if shard["id"] not in candidates["shards"]:
+                            protected.update(learning_references(shard))
+                    for row in revisions:
+                        if row["id"] not in candidates["revisions"]:
+                            protected.add(row["shard_id"])
+                            protected.update(learning_references(json.loads(row["snapshot"])))
+                    retained_shards = candidates["shards"] & protected
+                    for shard_id in retained_shards:
+                        skipped.append({"kind": "shards", "id": shard_id, "reason": "referenced by work outside the unchanged import"})
+                    candidates["shards"] -= retained_shards
+                    retained_revisions = {row["id"] for row in revisions if row["id"] in candidates["revisions"] and row["shard_id"] not in candidates["shards"]}
+                    for revision_id in retained_revisions:
+                        skipped.append({"kind": "revisions", "id": revision_id, "reason": "history belongs to retained knowledge"})
+                    candidates["revisions"] -= retained_revisions
+                    if not retained_shards and not retained_revisions:
+                        break
                 # Original images must survive whenever any retained note or saved revision still uses them.
                 for asset_id in tuple(candidates["assets"]):
                     token = "/assets/" + asset_id
-                    retained = any(shard["id"] not in candidates["shards"] and token in shard["content"] for shard in state["shards"])
+                    retained = any(shard["id"] not in candidates["shards"] and token in learning_text(shard) for shard in state["shards"])
                     if not retained:
-                        retained = any(row["id"] not in candidates["revisions"] and token in row["snapshot"] for row in connection.execute("SELECT id,snapshot FROM revisions"))
+                        retained = any(link["id"] not in candidates["links"] and token in json.dumps(link) for link in state["links"])
                     if not retained:
-                        retained = any(row["id"] not in candidates["trash"] and token in row["payload"] for row in connection.execute("SELECT id,payload FROM trash"))
+                        retained = any(row["id"] not in candidates["revisions"] and token in row["snapshot"] for row in revisions)
                     if not retained:
-                        retained = any(token in row[0] for row in connection.execute("SELECT payload FROM drafts"))
+                        retained = any(row["id"] not in candidates["trash"] and token in row["payload"] for row in trash)
+                    if not retained:
+                        retained = any(token in encoded for encoded in draft_rows)
                     if retained:
                         candidates["assets"].remove(asset_id)
                         skipped.append({"kind": "assets", "id": asset_id, "reason": "used by retained knowledge"})
@@ -1337,8 +1527,8 @@ class Store:
                     values["tags"].append(tag)
             normalized["shards"].append(validate_shard(values, imported=True))
         for data in links:
-            if not isinstance(data, dict) or set(data) - {"id", "fromId", "toId", "type", "note"}:
-                raise AppError("Contribution relationships contain only id, fromId, toId, type, and note.")
+            if not isinstance(data, dict) or set(data) - ({"id", "fromId", "toId", "type", "note"} | set(LINK_KNOWLEDGE_DEFAULTS)):
+                raise AppError("Contribution relationships contain only identity, endpoints, type, note, and source context.")
             values = dict(data)
             if "id" not in values:
                 identity = json.dumps([request_id, values.get("fromId"), values.get("toId"), values.get("type", "related_to")], ensure_ascii=False)
@@ -1406,8 +1596,7 @@ class Store:
             plan["shardReceipts"].append(entry)
         aliases = {key: value for key, value in plan["idMap"].items() if key != value}
         if aliases:
-            for shard in plan["shards"]:
-                shard["content"] = re.sub(r"(\[\[id:)([A-Za-z0-9][A-Za-z0-9_.:-]{0,99})(?=[|\]])", lambda match: match[1] + aliases.get(match[2], match[2]), shard["content"])
+            plan["shards"] = [remap_shard_references(shard, aliases) for shard in plan["shards"]]
         triples = {(item["fromId"], item["toId"], item["type"]): item for item in state["links"]}
         for link in normalized["links"]:
             link = dict(link)
@@ -1419,7 +1608,7 @@ class Store:
                 raise AppError("A relationship became a self-link after duplicate notes were matched. Remove that relationship and retry.")
             current = existing_links.get(link["id"])
             reason = None
-            fields = ("fromId", "toId", "type", "note")
+            fields = ("fromId", "toId", "type", "note", *LINK_KNOWLEDGE_DEFAULTS)
             if current:
                 if any(current[key] != link[key] for key in fields):
                     raise AppError(f"Relationship ID {link['id']} already belongs to different content. Existing relationships were preserved.", 409)
@@ -1469,7 +1658,7 @@ class Store:
                            or any(item["id"] not in saved_links for item in plan["linkReceipts"]))
                 changed = (any(any(saved_shards[item["id"]][field] != item[field] for field in MUTABLE_SHARD_FIELDS)
                                for item in plan["shards"] if item["id"] in saved_shards)
-                           or any(any(saved_links[item["id"]][field] != item[field] for field in ("fromId", "toId", "type", "note"))
+                           or any(any(saved_links[item["id"]][field] != item[field] for field in ("fromId", "toId", "type", "note", *LINK_KNOWLEDGE_DEFAULTS))
                                   for item in plan["links"] if item["id"] in saved_links))
                 if missing or changed:
                     raise AppError("Contribution verification failed. Nothing was saved.", 500)
@@ -1620,6 +1809,9 @@ class Store:
         state = self.export_data()
         buffer = io.BytesIO()
         titles = {shard["id"]: shard["title"] for shard in state["shards"]}
+        asset_extensions = {asset["id"]: {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp"}[asset["mimeType"]] for asset in state["assets"]}
+        def readable(value):
+            return re.sub(r"(?<=\()/assets/([A-Za-z0-9_.:-]+)(?=\))", lambda match: "../assets/" + match[1] + "." + asset_extensions.get(match[1], "missing"), value)
         with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("shard-atlas.json", json.dumps(state, ensure_ascii=False, indent=2))
             archive.writestr("relationships.json", json.dumps(state["links"], ensure_ascii=False, indent=2))
@@ -1659,6 +1851,70 @@ class Store:
                 if shard["assumptions"]:
                     lines.extend(["", "## Assumptions", ""])
                     lines.extend("- " + assumption for assumption in shard["assumptions"])
+                verification = shard["verification"]
+                lines.extend(["", "## Content verification", "", "Status: " + verification["status"]])
+                for key, label in (("note", "Check note"), ("sourceUrl", "Source"), ("sourceLocation", "Source location"), ("checkedAt", "Checked")):
+                    if verification[key]:
+                        lines.append(label + ": " + readable(verification[key]))
+                def append_source(record):
+                    if record["sourceUrl"]:
+                        lines.append("Source: " + record["sourceUrl"])
+                    if record["sourceLocation"]:
+                        lines.append("Source location: " + record["sourceLocation"])
+                if shard["perspectives"]:
+                    lines.extend(["", "## Perspectives", ""])
+                    for perspective in shard["perspectives"]:
+                        lines.extend(["### " + perspective["title"], ""])
+                        if perspective["viewpoint"]:
+                            lines.append("Viewpoint: " + perspective["viewpoint"])
+                        lines.extend(["", readable(perspective["content"]), ""])
+                        if perspective["assumptions"]:
+                            lines.append("Assumptions:")
+                            lines.extend("- " + readable(value) for value in perspective["assumptions"])
+                        append_source(perspective)
+                if shard["walkthroughs"]:
+                    lines.extend(["", "## Walkthroughs", ""])
+                    for walkthrough in shard["walkthroughs"]:
+                        lines.extend(["### " + walkthrough["title"], "", "Kind: " + walkthrough["kind"], ""])
+                        if walkthrough["goal"]:
+                            lines.extend(["Goal: " + readable(walkthrough["goal"]), ""])
+                        for index, step in enumerate(walkthrough["steps"], 1):
+                            lines.extend([f"#### Step {index}" + (": " + step["title"] if step["title"] else ""), ""])
+                            if step["expression"]:
+                                lines.extend(["$$", step["expression"], "$$", ""])
+                            if step["explanation"]:
+                                lines.extend([readable(step["explanation"]), ""])
+                            if step["justification"]:
+                                lines.extend(["Justification: " + readable(step["justification"]), ""])
+                        if walkthrough["conclusion"]:
+                            lines.extend(["Conclusion: " + readable(walkthrough["conclusion"]), ""])
+                        append_source(walkthrough)
+                if shard["comparisons"]:
+                    lines.extend(["", "## Method comparisons", ""])
+                    for comparison in shard["comparisons"]:
+                        lines.extend(["### " + comparison["title"], "", readable(comparison["question"]), ""])
+                        for alternative in comparison["alternatives"]:
+                            lines.extend(["#### " + alternative["name"], "", readable(alternative["summary"]), ""])
+                            if alternative["shardId"]:
+                                lines.append("Linked shard: " + titles.get(alternative["shardId"], alternative["shardId"]) + " (" + alternative["shardId"] + ")")
+                            for key in ("assumptions", "strengths", "limitations"):
+                                if alternative[key]:
+                                    lines.append(key.capitalize() + ":")
+                                    lines.extend("- " + readable(value) for value in alternative[key])
+                            if alternative["cost"]:
+                                lines.append("Cost: " + readable(alternative["cost"]))
+                        if comparison["conclusion"]:
+                            lines.extend(["", "Conclusion: " + readable(comparison["conclusion"]), ""])
+                        append_source(comparison)
+                if shard["learningLog"]:
+                    lines.extend(["", "## Questions and misconceptions", ""])
+                    for entry in shard["learningLog"]:
+                        lines.extend(["### " + entry["kind"].capitalize() + " · " + entry["status"], "", readable(entry["prompt"]), ""])
+                        if entry["resolution"]:
+                            lines.extend(["Resolution: " + readable(entry["resolution"]), ""])
+                        for history in entry["history"]:
+                            lines.append("- " + (history["date"] + ": " if history["date"] else "") + readable(history["note"]))
+                        append_source(entry)
                 if shard["sources"]:
                     lines.extend(["", "## Sources", ""])
                     for source in shard["sources"]:
@@ -1669,17 +1925,17 @@ class Store:
                     lines.extend(["", "## Comparison facts", ""])
                     for fact in shard["facts"]:
                         lines.append(f"- {fact['label']}: {fact['value']} {fact['unit']} (as of {fact['asOf'] or 'unknown'}; source: {fact['sourceUrl'] or 'not recorded'})")
-                readable = re.sub(r"(?<=\()/assets/([A-Za-z0-9_.:-]+)(?=\))", lambda match: "../assets/" + match.group(1) + "." + next((
-                    {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp"}[asset["mimeType"]]
-                    for asset in state["assets"] if asset["id"] == match.group(1)), "missing"), shard["content"])
-                lines.extend(["", "## Explanation", "", readable or "(No explanation yet.)"])
+                lines.extend(["", "## Explanation", "", readable(shard["content"]) or "(No explanation yet.)"])
                 relations = [link for link in state["links"] if shard["id"] in (link["fromId"], link["toId"])]
                 if relations:
                     lines.extend(["", "## Relationships", ""])
                     for link in relations:
                         lines.append(f"- {titles[link['fromId']]} ({link['fromId']}) → {link['type'].replace('_', ' ')} → {titles[link['toId']]} ({link['toId']})")
                         if link["note"]:
-                            lines.append(f"  {link['note']}")
+                            lines.append("  " + readable(link["note"]))
+                        for key, label in (("scope", "Scope"), ("evidence", "Evidence"), ("sourceUrl", "Source"), ("sourceLocation", "Source location")):
+                            if link[key]:
+                                lines.append("  " + label + ": " + readable(link[key]))
                 archive.writestr(filename, "\n".join(lines) + "\n")
         return buffer.getvalue()
 

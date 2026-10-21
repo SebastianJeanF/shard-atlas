@@ -32,7 +32,7 @@ class ContributionToolsTests(unittest.TestCase):
         self.server = LocalServer(("127.0.0.1", 0), self.store)
         self.thread = threading.Thread(target=lambda: self.server.serve_forever(poll_interval=.05), daemon=True)
         self.thread.start()
-        self.version = mock.patch("server.BACKEND_VERSION", "2.2.0")
+        self.version = mock.patch("server.BACKEND_VERSION", "2.6.0")
         self.version.start()
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
         self.client = AtlasClient(self.url)

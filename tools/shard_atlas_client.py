@@ -28,8 +28,8 @@ MAX_BATCH_BYTES = 8 * 1024 * 1024
 MAX_RESPONSE_BYTES = 260 * 1024 * 1024
 SHARD_FIELDS = {"id", "title", "content", "tags", "kind", "status", "sourceUrl", "languageVersion", "eventDate",
                 "evidenceStatus", "sources", "publicationDate", "verifiedDate", "eventType", "entities", "entityType", "inbox", "facts",
-                "subjects", "courses", "notation", "assumptions"}
-LINK_FIELDS = {"id", "fromId", "toId", "type", "note"}
+                "subjects", "courses", "notation", "assumptions", "perspectives", "walkthroughs", "comparisons", "learningLog", "verification"}
+LINK_FIELDS = {"id", "fromId", "toId", "type", "note", "scope", "evidence", "sourceUrl", "sourceLocation"}
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$")
 
 
@@ -84,7 +84,7 @@ def valid_health(health, expected_db=None):
         return False
     try:
         version = tuple(int(piece) for piece in health["backendVersion"].split("."))
-        if len(version) != 3 or version[0] not in (2, 3) or version < (2, 2, 0):
+        if len(version) != 3 or version[0] not in (2, 3) or version < (2, 6, 0):
             return False
         return bool(health.get("dbPath")) and (expected_db is None or Path(health["dbPath"]).resolve() == Path(expected_db).resolve())
     except (KeyError, ValueError, TypeError, OSError):
@@ -261,14 +261,24 @@ class AtlasClient:
             raise ClientError("query must be text of at most 1,000 characters.")
         if type(limit) is not int or not 1 <= limit <= 50:
             raise ClientError("limit must be an integer from 1 to 50.")
+        if str(ROOT) not in sys.path:
+            sys.path.insert(0, str(ROOT))
+        from server import learning_text
         terms = query.casefold().split()
         state = self.state()
         matches = []
+        connected = {}
+        for link in state.get("links", []):
+            context = "\n".join(str(link.get(field, "")) for field in ("scope", "evidence", "sourceUrl", "sourceLocation"))
+            for endpoint in (link["fromId"], link["toId"]):
+                connected[endpoint] = connected.get(endpoint, "") + "\n" + context
         for shard in state["shards"]:
             title, content, tags = shard["title"], shard["content"], shard.get("tags", [])
             academic = [*shard.get("subjects", []), *shard.get("assumptions", [])]
             academic.extend(value for course in shard.get("courses", []) for field, value in course.items() if isinstance(value, str))
             academic.extend(value for entry in shard.get("notation", []) for value in entry.values())
+            academic.append(learning_text(shard))
+            academic.append(connected.get(shard["id"], ""))
             haystack = "\n".join([title, content, *tags, *academic]).casefold()
             if terms and not all(term in haystack for term in terms):
                 continue
@@ -296,7 +306,7 @@ class AtlasClient:
 
     def add(self, batch):
         batch = validate_batch(batch)
-        from server import validate_knowledge
+        from server import remap_shard_references, validate_knowledge, validate_link_knowledge
         knowledge_defaults = validate_knowledge({})
         self.connect()
         receipt = request_json(self.base_url, "/api/contributions", batch, timeout=60)
@@ -326,10 +336,9 @@ class AtlasClient:
                 missing_shards.append(saved_id)
                 continue
             expected = proposed_shards[input_id]
-            content = expected.get("content", "")
             if entry["outcome"] == "added":
-                content = re.sub(r"(\[\[id:)([A-Za-z0-9][A-Za-z0-9_.:-]{0,99})(?=[|\]])",
-                                 lambda match: match[1] + id_map.get(match[2], match[2]), content)
+                expected = remap_shard_references(expected, id_map)
+            content = expected.get("content", "")
             matches = (normalize_title(saved["title"]) == normalize_title(expected["title"])
                        and saved["content"] == content)
             if entry["outcome"] == "added":
@@ -357,6 +366,7 @@ class AtlasClient:
             matches = all(saved.get(key) == value and entry.get(key) == value for key, value in fields.items())
             if entry["outcome"] == "added":
                 matches = matches and saved.get("note", "") == expected.get("note", "")
+                matches = matches and all(saved.get(key, "") == value for key, value in validate_link_knowledge(expected).items())
             if not matches:
                 changed_links.append(saved_id)
         matches = not (missing_shards or changed_shards or missing_links or changed_links)

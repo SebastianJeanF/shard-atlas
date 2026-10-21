@@ -57,14 +57,53 @@ SHARD_SCHEMA["properties"].update({
         "items": {"type": "string", "minLength": 1, "maxLength": 2000},
         "description": "Explicit conditions under which this explanation, method, or result applies. Do not invent assumptions absent from the source."},
 })
+def text_schema(limit, *, required=False):
+    return {"type": "string", "maxLength": limit, **({"minLength": 1} if required else {})}
+
+
+SOURCE_FIELDS = {"sourceUrl": text_schema(2048), "sourceLocation": text_schema(240)}
+TEXT_LIST = {"type": "array", "maxItems": 30, "items": text_schema(2000, required=True)}
+ALTERNATIVE_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["name"], "properties": {
+    "name": text_schema(240, required=True), "shardId": {**text_schema(120), "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9_.:-]{0,119})?$"},
+    "summary": text_schema(5000), "assumptions": TEXT_LIST, "strengths": TEXT_LIST, "limitations": TEXT_LIST, "cost": text_schema(2000)}}
+SHARD_SCHEMA["properties"].update({
+    "perspectives": {"type": "array", "maxItems": 20, "description": "Alternate explanations of the same concept, each with its own viewpoint, assumptions, and source.",
+        "items": {"type": "object", "additionalProperties": False, "required": ["title", "content"], "properties": {
+            "title": text_schema(240, required=True), "viewpoint": text_schema(240), "content": text_schema(30000, required=True),
+            "assumptions": {**TEXT_LIST, "maxItems": 20}, **SOURCE_FIELDS}}},
+    "walkthroughs": {"type": "array", "maxItems": 20, "description": "Justified derivations or algorithm traces. Each step needs an expression or explanation; do not label an unverified derivation as checked.",
+        "items": {"type": "object", "additionalProperties": False, "required": ["title", "steps"], "properties": {
+            "title": text_schema(240, required=True), "kind": {"type": "string", "enum": ["derivation", "trace"]}, "goal": text_schema(5000),
+            "steps": {"type": "array", "minItems": 1, "maxItems": 100, "items": {"type": "object", "additionalProperties": False,
+                "properties": {"title": text_schema(240), "expression": text_schema(5000), "explanation": text_schema(10000), "justification": text_schema(5000)}}},
+            "conclusion": text_schema(5000), **SOURCE_FIELDS}}},
+    "comparisons": {"type": "array", "maxItems": 20, "description": "Compare methods within a technical explanation; include assumptions, strengths, limitations, costs, and optional links to existing shards.",
+        "items": {"type": "object", "additionalProperties": False, "required": ["title", "alternatives"], "properties": {
+            "title": text_schema(240, required=True), "question": text_schema(5000),
+            "alternatives": {"type": "array", "minItems": 2, "maxItems": 10, "items": ALTERNATIVE_SCHEMA},
+            "conclusion": text_schema(5000), **SOURCE_FIELDS}}},
+    "learningLog": {"type": "array", "maxItems": 100, "description": "Personal open questions and corrected misconceptions. Record only user-supported uncertainty and resolutions; this is not recall practice or a mastery score.",
+        "items": {"type": "object", "additionalProperties": False, "required": ["prompt"], "properties": {
+            "kind": {"type": "string", "enum": ["question", "misconception"]}, "prompt": text_schema(5000, required=True),
+            "status": {"type": "string", "enum": ["open", "resolved"]}, "resolution": text_schema(10000),
+            "history": {"type": "array", "maxItems": 100, "items": {"type": "object", "additionalProperties": False,
+                "required": ["note"], "properties": {"date": text_schema(10), "note": text_schema(5000, required=True)}}}, **SOURCE_FIELDS}}},
+    "verification": {"type": "object", "additionalProperties": False,
+        "description": "Content verification is independent of the user's understanding. Source-checked requires an actual check note plus a source URL or exact source location; never invent verification.",
+        "properties": {"status": {"type": "string", "enum": ["unverified", "source-checked", "needs-correction"]},
+            "note": text_schema(5000), **SOURCE_FIELDS, "checkedAt": text_schema(10)}},
+})
 LINK_SCHEMA = {
     "type": "object", "additionalProperties": False, "required": ["fromId", "toId", "type"],
     "properties": {
         "id": {**ID_SCHEMA, "description": "Optional stable connection ID; omitted IDs are generated deterministically from the request and connection."},
         "fromId": {**ID_SCHEMA, "description": "Stable ID of a proposed note or an existing note found through search/read."},
         "toId": ID_SCHEMA,
-        "type": {"type": "string", "enum": ["depends_on", "explains", "contrasts_with", "example_of", "related_to", "part_of"], "description": "Direction is fromId → toId. Use only a source-supported relationship and explain its meaning."},
+        "type": {"type": "string", "enum": ["depends_on", "explains", "contrasts_with", "example_of", "related_to", "part_of", "supports", "contradicts"], "description": "Direction is fromId → toId. Use only a source-supported relationship and explain its meaning."},
         "note": {"type": "string", "maxLength": 2000, "description": "Briefly explain why this relationship helps. Do not infer prerequisites from proximity."},
+        "scope": {**text_schema(5000), "description": "When the relationship applies, including assumptions and limits."},
+        "evidence": {**text_schema(10000), "description": "Source-supported reasoning for the connection; distinguish inference from established facts."},
+        **SOURCE_FIELDS,
     },
 }
 BATCH_SCHEMA = {

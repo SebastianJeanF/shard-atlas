@@ -8,7 +8,7 @@ Shard Atlas stores explanations and the relationships between them. A *shard* is
 
 Create a shard with a descriptive title and an explanation in your own words. Add examples, caveats, and a source where they help you understand or verify the claim. Topics make the note easier to find. Kind distinguishes concepts, facts, examples, learning moments, and ideas.
 
-Understanding has three states: **Learning**, **Confident**, and **Needs verification**. These describe your understanding, rather than whether an AI generated the text.
+Understanding has three states: **Learning**, **Confident**, and **Needs clarification**. These describe your understanding. A separate content-verification record describes a manual source check, rather than whether you understand the idea or an AI generated its text.
 
 The initial collection includes 12 C++ examples and 18 connections. Edit or delete the examples as you build your own collection. Deleting all notes does not cause the app to insert the examples again.
 
@@ -30,13 +30,13 @@ Forest green marks the selected idea and primary actions. Amber marks learning o
 
 ## Find and connect notes
 
-The Library places the selected explanation beside its nearby ideas. Search covers note text, connection explanations, and connected-note titles. Combine search with kind, understanding, and topic filters. When selecting multiple topics, choose whether results must match **all** or **any** of them. Renaming a topic updates the notes that use it.
+The Library places the selected explanation beside its nearby ideas. Search covers note text, structured explanations, notation, connection context, and connected-note titles. Combine search with kind, understanding, source-verification, and topic filters. When selecting multiple topics, choose whether results must match **all** or **any** of them. Renaming a topic updates the notes that use it.
 
 Use **Search topics** in the sidebar to find a topic by name, then select it to filter the current view. This searches topic names separately from the main note search. Selected topics stay visible while you look for others. Enter selects an exact match or the only matching topic. Escape or the clear button clears the topic search without removing your selections.
 
 Topics are freeform and grow with your notes. Add any useful topic in a shard's comma-separated **Topics** field, including a keyword such as `consteval`. Its name appears in the sidebar after the note is saved. The topic list has no fixed vocabulary or global limit.
 
-Choose **Connect** to describe how two notes relate. The available relationships are *depends on*, *explains*, *contrasts with*, *is an example of*, *relates to*, and *is part of*. Add a reason when it makes the relationship clearer.
+Choose **Connect** to describe how two notes relate. The available relationships are *depends on*, *explains*, *contrasts with*, *is an example of*, *relates to*, *is part of*, *supports*, and *contradicts*. Add a reason, scope, evidence, source link, and source location when useful. Scope states the conditions where the connection applies. Evidence records its justification, rather than making every saved connection a verified claim.
 
 Direction matters. An arrow runs from the note making the relationship to its target. For example, an example note can point to the concept it illustrates with *is an example of*. A diagram's proximity or arrow alone does not establish a prerequisite.
 
@@ -53,6 +53,20 @@ Courses groups occurrences by course code and term. Occurrences without a lectur
 **Keep the concept once and record where it appears.** The same shard can have several course occurrences, including several lectures in one course. Its explanation remains available in Library and Topic map. Course context preserves the local framing without turning each lecture mention into a duplicate concept.
 
 Add expandable notation entries to explain each symbol's meaning, type or shape, role, and scope. For example, a role can identify a quantity as an input or a current estimate, while scope identifies the lecture or formulation where that meaning applies. The editor defaults scope to **This explanation**. A symbol's definition belongs to this note and its stated context, rather than a global dictionary. Record the assumptions needed for the explanation's claims, one per line. Course context, notation, and assumptions are included in recoverable editor drafts.
+
+## Develop an explanation
+
+Choose **Edit shard → Learning & explanation** to add structured material beside the main explanation in the desktop app. **Perspectives** keep different views of the same concept together. Give each a title, viewpoint, explanation, and any assumptions or source location needed to interpret it.
+
+**Walkthroughs** record a derivation or algorithm trace as ordered steps. Add a goal, then each step's expression, explanation, and why it follows, followed by a conclusion. Expression fields accept TeX without dollar delimiters. While reading, use the previous, next, or show-all controls to inspect the steps. The sequence explains recorded reasoning or state changes. It does not execute an algorithm or check the mathematics automatically.
+
+**Method comparisons** compare technical alternatives within a shared concept. State the question, then each alternative's summary, assumptions, strengths, limitations, and computational cost. Link an alternative to an existing concept when helpful and record a conclusion and source. These are concept-level comparisons of methods, rather than a separate company or product comparison workspace.
+
+## Record questions and content checks
+
+Use **Questions & misconceptions** to record a question or the original misconception, mark it open or resolved, and explain its resolution. A resolved entry requires a resolution. Optional dated history entries preserve what the user actually recorded. The app does not infer a learning timeline or invent earlier misunderstandings.
+
+**Content verification** has its own states: **Unverified**, **Source checked**, and **Needs correction**. These are manual records. **Source checked** requires a verification note and a source link or source location identifying what was checked. A checked date is optional. This records a source comparison, without automatically certifying every claim or changing personal Understanding. Use **Needs correction** for a content problem and **Needs clarification** when your understanding needs attention.
 
 ## Explore the Topic map
 
@@ -98,7 +112,7 @@ Select the cards you want to import. Choose **Edit incoming card** to revise pro
 
 Use connection checkboxes to include or skip links and expand **Edit connection** to revise their proposed type and rationale, with automatic revalidation and read-only preservation of existing saved relationship IDs.
 
-Choose **Use saved card** when an existing note already covers the incoming idea. Connections and explicit inline links to the incoming ID then point to the saved card. Its saved explanation, courses, and notation stay intact. To add new course context to that card, open it afterward and choose **Edit shard**.
+Choose **Use saved card** when an existing note already covers the incoming idea. Connections and explicit inline links to the incoming ID then point to the saved card. Its saved explanation and metadata stay intact. To add new course context or study material to that card, open it afterward and choose **Edit shard**.
 
 A partial import keeps selected notes' revisions and referenced images. It omits saved canvases and Trash recovery records. Selecting the full archive preserves its complete legacy recovery content. **Import review changes are temporary.** The app asks before discarding a modified review, but those changes are not recoverable editor drafts outside the current session.
 
