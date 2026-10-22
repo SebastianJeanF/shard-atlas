@@ -1,3 +1,4 @@
+
 const $ = (selector, root = document) => root.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const relations = {depends_on:'depends on', explains:'explains', contrasts_with:'contrasts with', example_of:'is an example of', related_to:'relates to',part_of:'is part of',supports:'supports',contradicts:'contradicts',supersedes:'supersedes',released_by:'was released by'};
@@ -1113,6 +1114,7 @@ async function initialize(){
 }
 window.LearningAtlas?.bindDetail(document);
 window.ExperimentAtlas?.bindDetail(document,{onSave:saveExperimentConfiguration,onAttach:attachExperimentDraft,onCopy:copyExperimentSetup});
+window.DriveInbox?.install({api,writeRequest,withBusy,refreshAtlas});
 initialize();
 loadReleaseCatalog();
 loadSpiralCatalog();

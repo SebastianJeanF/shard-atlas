@@ -51,7 +51,7 @@ The service listens on the local loopback interface. Shard Atlas is a personal d
 
 ## Capture from an AI chat
 
-**“Add this to Shard Atlas”** can save technical explanations and useful connections when your AI client has the optional local integration configured. The app's **Use with AI** guide explains the workflow. Without local access, a chat can prepare a portable JSON file with source references and course context. Review, select, and edit its cards in the import preview before saving.
+**“Add this to Shard Atlas”** can save technical explanations and useful connections when your AI client has the optional local integration configured. The app's **Use with AI** guide explains the workflow. With a configured [Google Drive inbox](docs/drive-inbox.md), a connected chat can queue additions while the Mac is off, and each Mac or browser collection can import them with **Sync**. Without either connection, a chat can prepare a portable JSON file with source references and course context. Review, select, and edit its cards in the import preview before saving.
 
 The application does not automatically install tools into every AI service. See the [AI integration setup](docs/development.md#optional-ai-integration) and the [knowledge contribution guide](static/ai-instructions.md).
 

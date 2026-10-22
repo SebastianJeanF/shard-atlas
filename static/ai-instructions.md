@@ -6,7 +6,11 @@
 
 **A chat with access to this Mac:** use the Shard Atlas tools to search, read, and add knowledge. The local integration can start the storage service when the app window is closed. It keeps the collection on this Mac. Start a new chat after installing the integration so its tools and instructions can load.
 
-**A chat without access to this Mac:** create a downloadable Shard Atlas JSON archive and tell the user to choose **Use with AI → Preview a file** or **Backup & export → Choose JSON**. The user can inspect rendered cards, embedded photos, and connections, select cards, and edit proposed details with **Edit incoming card → Apply to review**. Changes automatically refresh validation. **Use saved card** reuses an existing note without changing its explanation or academic metadata. Adding course context to that saved card requires an explicit edit afterward. The final action is **Save selected to atlas** for a selection or **Save to atlas** for the full archive. Say that the file is ready to preview and import. Do not claim it was saved in the app. If an export or relevant existing notes were supplied, use those to avoid duplicates and connect to existing IDs. Without those notes, do not invent existing IDs or pretend to have checked the collection.
+**A chat with the user's configured Google Drive inbox:** when local access is unavailable, or the user requests capture through Drive, prepare an immutable inbox batch and upload it to that configured folder. This route works on a phone or another computer while the Mac is off. Read [Google Drive capture](#capture-through-google-drive) for the envelope and verification requirements. A successful upload means **queued in Drive**, not saved into a collection. Each Shard Atlas collection imports its own copy when the user chooses **Sync**.
+
+**A chat without either connection:** create a downloadable Shard Atlas JSON archive and tell the user to choose **Use with AI → Preview a file** or **Backup & export → Choose JSON**. The user can inspect rendered cards, embedded photos, and connections, select cards, and edit proposed details with **Edit incoming card → Apply to review**. Changes automatically refresh validation. **Use saved card** reuses an existing note without changing its explanation or academic metadata. Adding course context to that saved card requires an explicit edit afterward. The final action is **Save selected to atlas** for a selection or **Save to atlas** for the full archive. Say that the file is ready to preview and import. Do not claim it was saved in the app. If an export or relevant existing notes were supplied, use those to avoid duplicates and connect to existing IDs. Without those notes, do not invent existing IDs or pretend to have checked the collection.
+
+Drive access does not provide access to the local or browser collection. Search and reuse verified notes from an export when one is supplied. Otherwise add only self-contained new notes and relationships within the batch, and disclose that existing notes could not be checked.
 
 ## Prepare useful knowledge
 
@@ -111,11 +115,52 @@ After adding, read the saved notes and connections back. Report what was added o
 
 ## Local command fallback
 
-Locate the Shard Atlas checkout in the current workspace or the user's configured integration. This guide is `static/ai-instructions.md` relative to its root. The helper is `tools/shard_atlas_client.py` in that checkout. Run it with Python 3 and `--help` for the exact command syntax. Its `instructions` command returns this full guide and current version without contacting the collection. Read it before preparing a helper contribution. The helper also provides status, search, read, additive save, and portable-archive operations. Use it through the local execution tools available in the chat. Do not assume a particular user's home folder or treat a source checkout as the knowledge database.
+Locate the Shard Atlas checkout in the current workspace or the user's configured integration. This guide is `static/ai-instructions.md` relative to its root. The helper is `tools/shard_atlas_client.py` in that checkout. Run it with Python 3 and `--help` for the exact command syntax. Its `instructions` command returns this full guide and current version without contacting the collection. Read it before preparing a helper contribution. The helper also provides status, search, read, additive save, portable-archive, and Drive-inbox packaging operations. Use it through the local execution tools available in the chat. Do not assume a particular user's home folder or treat a source checkout as the knowledge database.
 
 For automated integration, discover the valid local service rather than assuming port 48731. The helper verifies the app identity, backend version, and working database path, then starts a compatible loopback service if needed. It never opens a browser. Use an explicit isolated server address only for tests.
 
 The working database is `~/Library/Application Support/Shard Atlas/shards.sqlite3`. **Add knowledge through the tool or helper, not by modifying SQLite, `seed.json`, the public release catalog, or source Git history.** Source Git and personal knowledge backups are separate. Do not commit personal notes or exported archives to the source repository.
+
+## Capture through Google Drive
+
+**Use one immutable JSON file for each addition request.** The configured destination is normally `ChatGPT/Shard Atlas/Inbox` in the user's chosen Google account. Ground the account and folder with connected Google Drive tools or the user's saved configuration. Do not guess a folder ID, choose a same-named folder in another account, or make the folder public. This workflow uses the user's Drive connection and does not require the Mac or its local tools.
+
+Read this full current guide before preparing the notes. If no local checkout is available, retrieve it from the [source repository](https://github.com/SebastianJeanF/shard-atlas/blob/main/static/ai-instructions.md), an accessible Drive copy, or **Use with AI → Copy instructions**. Apply the authoring rules above. Do not treat the inbox as a copy of the existing collection.
+
+Wrap the unchanged additive batch in this exact envelope. This is a format example, not knowledge to save:
+
+```json
+{
+  "format": "shard-atlas-inbox",
+  "version": 1,
+  "batch": {
+    "requestId": "capture-example-001",
+    "shards": [
+      {
+        "id": "capture-example-note-001",
+        "title": "A self-contained technical explanation",
+        "content": "Replace this example with the user's supported explanation and sources.",
+        "status": "learning"
+      }
+    ],
+    "links": []
+  }
+}
+```
+
+The envelope contains only `format`, integer `version: 1`, and `batch`. The batch contains only `requestId`, `shards`, and `links`. Use the contribution fields below, with **explicit stable IDs for every note and connection**. Keep `instructionsVersion` outside this transport, and do not include archive assets, image bytes, revisions, Trash, edits, deletions, or settings. Use the portable archive route when embedded image files or a card-by-card preview are needed. A batch is at most 8 MB, with at most 1,000 notes and 2,000 connections. The helper validates these bounds without starting or reading a collection:
+
+```sh
+python3 tools/shard_atlas_client.py inbox --file batch.json --output capture-request-id.json
+```
+
+Omit `--output` to print the envelope. The helper writes a complete `.json` file atomically, refuses to replace different content, and safely reuses an identical existing file. Preparing the file does not prove that Drive has uploaded it.
+
+Upload the JSON through the connected Google Drive tools to the verified inbox folder, keeping the native JSON file type. Use a filename based on the stable request ID. Verify the returned file metadata, its destination, and readable JSON content before reporting **queued in Drive**. If the upload outcome is uncertain, inspect the folder for that request and compare the complete envelope before retrying. Preserve the same filename, request ID, note IDs, connection IDs, and payload. Do not silently create a revised batch with the same request ID.
+
+Tell the user how many notes and connections are queued and that **Use with AI → Google Drive → Sync inbox** on the web or **Sync additions** on the Mac imports them into the current collection. On the Mac, Sync reads the Google Drive desktop copy of the inbox. A browser app reads Drive directly after Google authorization, so it can import while the Mac is off. Do not claim an import until that collection returns its successful receipt. Report per-file errors or replay warnings separately.
+
+Leave source files in the inbox. Each collection records its own successful requests. Repeated syncs preserve later edits and deletions instead of restoring old content. A changed payload with an existing request ID or conflicting stable record ID is rejected. This is an **additions inbox**, not synchronization of edits or deletions between devices. See [setup and operating limits](../docs/drive-inbox.md).
 
 ## Batch and archive format
 

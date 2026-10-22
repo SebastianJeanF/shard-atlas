@@ -12,9 +12,11 @@ import hashlib
 import json
 import mimetypes
 import math
+import os
 import re
 import signal
 import sqlite3
+import stat
 import subprocess
 import sys
 import tempfile
@@ -30,7 +32,7 @@ from urllib.parse import unquote, urlsplit
 
 SCHEMA_VERSION = 1
 DATABASE_VERSION = 4
-BACKEND_VERSION = "2.7.0"  # Keep the additive API compatible with already-running contribution clients.
+BACKEND_VERSION = "2.8.0"  # Keep the additive API compatible with already-running contribution clients.
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DB = Path.home() / "Library/Application Support/Shard Atlas/shards.sqlite3"
 KINDS = {"concept", "fact", "example", "mistake", "event", "idea"}
@@ -54,6 +56,10 @@ MAX_IMPORT_RECORDS = 100_000
 MAX_CONTRIBUTION_BYTES = 8 * 1024 * 1024
 MAX_CONTRIBUTION_RECEIPTS = 10_000
 MAX_CONTRIBUTION_RECEIPT_BYTES = 8 * 1024 * 1024
+MAX_DRIVE_INBOX_FILES = 500
+MAX_DRIVE_INBOX_ENTRIES = 5000
+MAX_DRIVE_INBOX_FILE_BYTES = MAX_CONTRIBUTION_BYTES + 1024
+MAX_DRIVE_INBOX_TOTAL_BYTES = 64 * 1024 * 1024
 MAX_DRAFT_BYTES = 8 * 1024 * 1024
 CONTRIBUTION_PREFIX = "contribution:"
 ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$")
@@ -2138,14 +2144,143 @@ def spiral_catalog(static_dir):
     return catalog
 
 
+def validate_drive_inbox_envelope(payload):
+    """Validate the immutable transport without changing the batch fingerprint."""
+    if (not isinstance(payload, dict) or set(payload) != {"format", "version", "batch"}
+            or payload.get("format") != "shard-atlas-inbox"
+            or type(payload.get("version")) is not int or payload["version"] != 1):
+        raise AppError("Use a shard-atlas-inbox version 1 envelope containing only format, version, and batch.")
+    Store._contribution_payload(payload["batch"])
+    if any("id" not in item for item in payload["batch"].get("links", [])):
+        raise AppError("Inbox relationships require explicit stable IDs so every device imports the same records.")
+    return payload["batch"]
+
+
+class DriveInbox:
+    """Read-only transport from a synced folder into one collection's receipts."""
+
+    def __init__(self, store, path=None):
+        self.store = store
+        configured = path if path is not None else os.environ.get("SHARD_ATLAS_DRIVE_INBOX")
+        self.path = Path(configured).expanduser().absolute() if configured else Path.home() / "My Drive/ChatGPT/Shard Atlas/Inbox"
+        self.lock = threading.Lock()
+
+    def status(self):
+        result = {"source": "local-folder", "path": str(self.path), "available": False,
+                  "files": [], "counts": {"files": 0, "errors": 0}, "warnings": [],
+                  "limits": {"files": MAX_DRIVE_INBOX_FILES, "fileBytes": MAX_DRIVE_INBOX_FILE_BYTES,
+                             "totalBytes": MAX_DRIVE_INBOX_TOTAL_BYTES}}
+        try:
+            entries = []
+            with os.scandir(self.path) as scan:
+                for index, entry in enumerate(scan):
+                    if index >= MAX_DRIVE_INBOX_ENTRIES:
+                        raise AppError("The inbox contains too many entries. Keep at most 5,000 items in this folder.")
+                    if not entry.name.lower().endswith(".json"):
+                        continue
+                    if len(entries) >= MAX_DRIVE_INBOX_FILES:
+                        raise AppError(f"The inbox contains too many JSON files. Keep at most {MAX_DRIVE_INBOX_FILES} batches in this folder.")
+                    item = {"name": entry.name, "size": None, "status": "pending"}
+                    try:
+                        details = entry.stat(follow_symlinks=False)
+                        item["size"] = details.st_size
+                        if not stat.S_ISREG(details.st_mode):
+                            item.update(status="error", error="Only regular JSON files are accepted; links and folders are not imported.")
+                        elif details.st_size > MAX_DRIVE_INBOX_FILE_BYTES:
+                            item.update(status="error", error="This inbox file exceeds the 8 MB batch limit.")
+                    except OSError:
+                        item.update(status="error", error="This file is not available locally. Finish downloading it in Google Drive and retry.")
+                    entries.append(item)
+            result["files"] = sorted(entries, key=lambda item: item["name"])
+            result["available"] = True
+            result["counts"] = {"files": len(entries), "errors": sum(item["status"] == "error" for item in entries)}
+        except FileNotFoundError:
+            result["error"] = "The Drive inbox is not available on this Mac. Sync ChatGPT/Shard Atlas/Inbox with Google Drive, or set SHARD_ATLAS_DRIVE_INBOX to its local folder."
+        except (NotADirectoryError, PermissionError):
+            result["error"] = "The Drive inbox folder cannot be opened. Check its local path and Google Drive download permissions."
+        except (OSError, AppError) as error:
+            result["error"] = str(error)
+        return result
+
+    @staticmethod
+    def _json_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("JSON contains a repeated object field.")
+            result[key] = value
+        return result
+
+    def _read(self, name, remaining_bytes):
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+        path = self.path / name
+        if path.is_symlink():
+            raise AppError("Symbolic links are not imported.")
+        with os.fdopen(os.open(path, flags), "rb") as source:
+            before = os.fstat(source.fileno())
+            if not stat.S_ISREG(before.st_mode):
+                raise AppError("Only regular JSON files are accepted.")
+            if before.st_size > MAX_DRIVE_INBOX_FILE_BYTES:
+                raise AppError("This inbox file exceeds the 8 MB batch limit.", 413)
+            if before.st_size > remaining_bytes:
+                raise AppError("This sync exceeds the 64 MB read limit. Move older batches out of Inbox after every device has imported them.", 413)
+            raw = source.read(min(MAX_DRIVE_INBOX_FILE_BYTES, remaining_bytes) + 1)
+            after = os.fstat(source.fileno())
+        if len(raw) > MAX_DRIVE_INBOX_FILE_BYTES:
+            raise AppError("This inbox file exceeds the 8 MB batch limit.", 413)
+        if len(raw) > remaining_bytes:
+            raise AppError("This sync exceeds the 64 MB read limit. Move older batches out of Inbox after every device has imported them.", 413)
+        if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
+            raise AppError("This file changed while it was read. Wait for Google Drive to finish syncing and retry.")
+        return raw
+
+    def _parse(self, raw):
+        try:
+            def invalid_constant(_value):
+                raise ValueError("JSON must contain finite values.")
+            return json.loads(raw.decode("utf-8-sig"), object_pairs_hook=self._json_object, parse_constant=invalid_constant)
+        except (UnicodeDecodeError, ValueError, RecursionError):
+            raise AppError("This file is not valid UTF-8 JSON. Finish syncing it or replace it with a complete inbox batch.") from None
+
+    def sync(self):
+        with self.lock:
+            result = self.status()
+            result["counts"].update(imported=0, replayed=0)
+            if not result["available"]:
+                return result
+            total_bytes = 0
+            for item in result["files"]:
+                item["warnings"] = []
+                if item["status"] == "error":
+                    continue
+                try:
+                    raw = self._read(item["name"], MAX_DRIVE_INBOX_TOTAL_BYTES - total_bytes)
+                    total_bytes += len(raw)
+                    batch = validate_drive_inbox_envelope(self._parse(raw))
+                    item["requestId"] = batch["requestId"]
+                    receipt = self.store.contribute(batch)
+                    item["receipt"] = receipt
+                    item["status"] = "replayed" if receipt["replayed"] else "imported"
+                    result["counts"][item["status"]] += 1
+                    if receipt.get("missingShardIds"):
+                        item["warnings"].append("Some notes from this previously imported batch were deleted. Those deletions were preserved.")
+                except AppError as error:
+                    item.update(status="error", error=str(error))
+                except (OSError, sqlite3.Error):
+                    item.update(status="error", error="This file could not be imported. Check its Google Drive download and local storage, then retry.")
+            result["counts"]["errors"] = sum(item["status"] == "error" for item in result["files"])
+            return result
+
+
 class LocalServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address, store, *, static_dir=None):
+    def __init__(self, address, store, *, static_dir=None, drive_inbox_path=None):
         if address[0] != "127.0.0.1":
             raise ValueError("Shard Atlas only binds to 127.0.0.1.")
         self.store = store
+        self.drive_inbox = DriveInbox(store, drive_inbox_path)
         self.static_dir = Path(static_dir or store.root / "static").resolve()
         super().__init__(address, Handler)
         store.start_backup_worker()
@@ -2240,6 +2375,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, store.drafts())
                 if path == "/api/imports":
                     return self._send(200, store.imports())
+                if path == "/api/drive-inbox":
+                    return self._send(200, self.server.drive_inbox.status())
                 if path == "/api/boards":
                     return self._send(200, {"boards": store.state()["boards"]})
                 if path.startswith("/api/shards/") and path.endswith("/revisions"):
@@ -2269,6 +2406,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(201, store.create_review(data))
                 if path == "/api/contributions":
                     return self._send(200, store.contribute(data))
+                if path == "/api/drive-inbox/sync":
+                    if data:
+                        raise AppError("Drive inbox sync accepts an empty object; its folder is configured on this Mac.")
+                    return self._send(200, self.server.drive_inbox.sync())
                 if path == "/api/boards":
                     return self._send(201, store.create_board(data))
                 if path.startswith("/api/assets/") and path.endswith("/text"):

@@ -120,7 +120,9 @@ Selected releases include expandable C++ examples about spell effects, capabilit
 
 Open **Use with AI** to copy the contribution guide or import a prepared file. An AI client with the optional local integration can search existing notes, reuse topics, add a batch of notes and connections, and verify the result. Saying “Add this to Shard Atlas” works only after that client has been configured. See [integration setup](development.md#optional-ai-integration).
 
-A chat without local access can prepare an importable JSON file. Choose **Use with AI → Preview a file** to review it. A prepared file has not been saved into the atlas until you import it. Capture uses an AI-prepared handoff with source references and optional academic metadata. The app does not automatically extract concepts from a PDF or fetch the contents of a source link.
+A chat with your configured Google Drive connection can queue one immutable addition file in **ChatGPT → Shard Atlas → Inbox**, even while the Mac is off. Open **Use with AI → Google Drive** and choose **Sync inbox** on the web or **Sync additions** on the Mac. The web app reads Drive directly after Google authorization. The Mac reads the folder synced by Google Drive for desktop. Import receipts prevent repeated requests from adding copies, and source files stay in the inbox for other devices. This carries additions only. It does not synchronize edits, deletions, or your existing collection. See [Drive inbox setup and results](drive-inbox.md).
+
+A chat without local access or the configured Drive connection can prepare an importable JSON file. Choose **Use with AI → Preview a file** to review it. A prepared file has not been saved into the atlas until you import it. Capture uses an AI-prepared handoff with source references and optional academic metadata. The app does not automatically extract concepts from a PDF or fetch the contents of a source link.
 
 Knowledge capture should preserve sources, uncertainty, and exact code. It should add useful explanations rather than overwrite an existing note or claim that you have mastered an idea.
 

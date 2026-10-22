@@ -1269,3 +1269,9 @@ body[data-saving] dialog form { opacity: .75; }
   .atlas-surface { max-height: 65vh; }
   .atlas-main > details { padding: 12px; }
 }
+/* Google Drive additions share the existing Use with AI panel. */
+.drive-inbox details { margin-top: 16px; }
+.drive-inbox summary { cursor: pointer; }
+.drive-inbox-files { padding-left: 20px; overflow-wrap: anywhere; }
+.drive-inbox-files li { margin: 12px 0; }
+.drive-inbox-files p { margin: 4px 0; }

@@ -16,6 +16,7 @@ import re
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -205,6 +206,49 @@ def portable_archive(batch):
     return {"schemaVersion": 1,
             "shards": [validate_shard({**item, "createdAt": stamp, "updatedAt": stamp}, imported=True) for item in batch["shards"]],
             "links": [validate_link({**item, "createdAt": stamp}, imported=True) for item in batch["links"]], "reviews": []}
+
+
+def inbox_envelope(batch):
+    """Prepare immutable transport JSON without contacting a collection."""
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from server import AppError, validate_drive_inbox_envelope
+    envelope = {"format": "shard-atlas-inbox", "version": 1, "batch": batch}
+    try:
+        validate_drive_inbox_envelope(envelope)
+    except AppError as error:
+        raise ClientError(str(error)) from error
+    # Link identities must also survive transfer between independent collections.
+    if any(not isinstance(item.get("id"), str) or not ID_RE.fullmatch(item["id"]) for item in batch.get("links", [])):
+        raise ClientError("Drive inbox connections require explicit stable IDs. Keep those IDs unchanged on retries.")
+    return envelope
+
+
+def write_inbox_envelope(envelope, output_path):
+    """Publish a complete file atomically, never replacing an existing batch."""
+    output = Path(output_path).expanduser().absolute()
+    encoded = (json.dumps(envelope, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n").encode("utf-8")
+    temporary = None
+    reused = False
+    try:
+        with tempfile.NamedTemporaryFile(mode="wb", prefix=".shard-atlas-", suffix=".tmp", dir=output.parent, delete=False) as handle:
+            temporary = Path(handle.name)
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temporary, output)
+        except FileExistsError:
+            if output.is_symlink() or not output.is_file() or output.read_bytes() != encoded:
+                raise ClientError("That output already exists with different content. Preserve the original batch and use a different file for a new request.") from None
+            reused = True
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return {"savedToCollection": False, "uploadVerified": False, "envelopePath": str(output),
+            "requestId": envelope["batch"]["requestId"], "reusedFile": reused,
+            "shardCount": len(envelope["batch"].get("shards", [])), "linkCount": len(envelope["batch"].get("links", [])),
+            "nextStep": "Upload this unchanged JSON to the configured ChatGPT/Shard Atlas/Inbox folder, then choose Sync in each Shard Atlas collection. A local file is not proof of a Drive upload or an import."}
 
 
 class AtlasClient:
@@ -424,6 +468,9 @@ def main(argv=None):
     archive = sub.add_parser("archive")
     archive.add_argument("--file", required=True)
     archive.add_argument("--output", required=True)
+    inbox = sub.add_parser("inbox", help="Prepare a stable Drive inbox envelope without contacting the Mac collection.")
+    inbox.add_argument("--file", required=True, help="Additive batch JSON with a stable requestId and explicit note/connection IDs.")
+    inbox.add_argument("--output", help="New .json file, written atomically. Omit to print the envelope to stdout.")
     for command in ("preview-import", "import"):
         importer = sub.add_parser(command)
         importer.add_argument("--file", required=True)
@@ -431,6 +478,11 @@ def main(argv=None):
     try:
         if args.command == "instructions":
             result = contribution_instructions()
+        elif args.command == "inbox":
+            envelope = inbox_envelope(load_json(args.file))
+            if args.output and Path(args.output).suffix.lower() != ".json":
+                raise ClientError("Use a .json output filename so the Drive inbox can discover it.")
+            result = write_inbox_envelope(envelope, args.output) if args.output else envelope
         elif args.command == "archive":
             data = portable_archive(load_json(args.file))
             output = Path(args.output).expanduser().resolve()
