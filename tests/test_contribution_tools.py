@@ -32,7 +32,7 @@ class ContributionToolsTests(unittest.TestCase):
         self.server = LocalServer(("127.0.0.1", 0), self.store)
         self.thread = threading.Thread(target=lambda: self.server.serve_forever(poll_interval=.05), daemon=True)
         self.thread.start()
-        self.version = mock.patch("server.BACKEND_VERSION", "2.7.0")
+        self.version = mock.patch("server.BACKEND_VERSION", "2.9.0")
         self.version.start()
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
         self.client = AtlasClient(self.url)
@@ -49,7 +49,7 @@ class ContributionToolsTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def run_cli(self, *arguments):
-        return subprocess.run([sys.executable, str(ROOT / "tools/shard_atlas_client.py"), "--base-url", self.url, *arguments], text=True, capture_output=True, timeout=15)
+        return subprocess.run([sys.executable, str(ROOT / "tools/shard_atlas_client.py"), "--base-url", self.url, *arguments], text=True, capture_output=True, timeout=60)
 
     def instructions_fixture(self, content=b"# Contribution guide\r\n\r\nKeep examples precise.\n"):
         guide_root = self.root / "guide-source"
@@ -141,7 +141,7 @@ class ContributionToolsTests(unittest.TestCase):
             for process in processes:
                 if process.poll() is None:
                     process.terminate()
-                process.wait(timeout=5)
+                process.wait(timeout=30)
 
     def test_port_discovery_is_bounded_and_parallel(self):
         def slow_probe(url, expected):

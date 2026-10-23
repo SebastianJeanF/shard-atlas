@@ -31,22 +31,25 @@ from urllib.parse import unquote, urlsplit
 
 
 SCHEMA_VERSION = 1
-DATABASE_VERSION = 4
-BACKEND_VERSION = "2.8.0"  # Keep the additive API compatible with already-running contribution clients.
+DATABASE_VERSION = 5
+BACKEND_VERSION = "2.9.0"  # Keep the additive API compatible with already-running contribution clients.
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DB = Path.home() / "Library/Application Support/Shard Atlas/shards.sqlite3"
 KINDS = {"concept", "fact", "example", "mistake", "event", "idea"}
 STATUSES = {"learning", "solid", "verify"}
-LINK_TYPES = {"depends_on", "explains", "contrasts_with", "example_of", "related_to", "part_of", "supports", "contradicts", "supersedes", "released_by"}
+LINK_TYPES = {"depends_on", "explains", "contrasts_with", "example_of", "related_to", "part_of", "supports", "contradicts", "supersedes", "released_by", "uses", "implements", "alternative_to"}
 EVIDENCE_STATUSES = {"unverified", "reported", "corroborated", "disputed", "superseded"}
 EVENT_TYPES = {"", "event", "announcement", "release", "research", "rumor", "forecast"}
 ENTITY_TYPES = {"", "company", "model", "concept", "person"}
 VERIFICATION_DEFAULTS = {"status": "unverified", "note": "", "sourceUrl": "", "sourceLocation": "", "checkedAt": ""}
 LINK_KNOWLEDGE_DEFAULTS = {"scope": "", "evidence": "", "sourceUrl": "", "sourceLocation": ""}
+LINK_APPROACH_FIELDS = ("fromApproachId", "toApproachId")
+CODE_SOLUTION_DEFAULTS = {"role": "", "aliases": [], "purpose": "", "code": "", "headers": [],
+    "timeComplexity": "", "spaceComplexity": "", "complexityNotes": "", "assumptions": [], "pitfalls": [], "approaches": []}
 KNOWLEDGE_DEFAULTS = {"evidenceStatus": "unverified", "sources": [], "publicationDate": "", "verifiedDate": "", "eventType": "", "entities": [], "entityType": "", "inbox": False, "facts": [],
                       "subjects": [], "courses": [], "notation": [], "assumptions": [],
                       "perspectives": [], "walkthroughs": [], "comparisons": [], "learningLog": [], "verification": VERIFICATION_DEFAULTS,
-                      "experiments": []}
+                      "experiments": [], "codeSolution": CODE_SOLUTION_DEFAULTS}
 REVIEW_DAYS = {"again": 1, "hard": 3, "good": 7, "easy": 14}
 MAX_BODY_BYTES = 260 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
@@ -148,8 +151,8 @@ def timestamp(value, name: str, *, optional=False):
 
 
 def validate_tags(value) -> list[str]:
-    if not isinstance(value, list) or len(value) > 50:
-        raise AppError("tags must be a list of at most 50 tags.")
+    if not isinstance(value, list):
+        raise AppError("tags must be a list.")
     tags = [text_field(tag, "tag", 80, required=True).strip() for tag in value]
     if len(set(tags)) != len(tags):
         raise AppError("tags cannot contain duplicates.")
@@ -214,6 +217,46 @@ def validate_knowledge(data):
     result.update(validate_academic(data))
     result.update(validate_learning(data))
     result["experiments"] = validate_experiments(data.get("experiments", []))
+    result["codeSolution"] = validate_code_solution(data.get("codeSolution", {}))
+    return result
+
+
+def validate_code_solution(data):
+    """Code is literal source: never trim it, normalize whitespace, or execute it."""
+    if not isinstance(data, dict) or set(data) - set(CODE_SOLUTION_DEFAULTS):
+        raise AppError("codeSolution must contain only its supported fields.")
+    role = data.get("role", "")
+    if not isinstance(role, str) or role not in ("", "snippet", "algorithm", "problem"):
+        raise AppError("Code solution role must be snippet, algorithm, problem, or empty.")
+    def details(item, label):
+        result = {field: text_field(item.get(field, ""), label + " " + field, limit) for field, limit in (
+            ("code", 100_000), ("timeComplexity", 500), ("spaceComplexity", 500), ("complexityNotes", 5000))}
+        for field, limit in (("headers", 240), ("assumptions", 2000), ("pitfalls", 2000)):
+            values = item.get(field, [])
+            if not isinstance(values, list) or len(values) > 100:
+                raise AppError(label + " " + field + " must be a list of at most 100 text entries.")
+            result[field] = list(dict.fromkeys(text_field(value, label + " " + field, limit, required=True).strip() for value in values))
+        return result
+    aliases = data.get("aliases", [])
+    if not isinstance(aliases, list) or len(aliases) > 200:
+        raise AppError("Code solution aliases must be a list of at most 200 names.")
+    result = {"role": role, "aliases": list(dict.fromkeys(text_field(value, "code alias", 240, required=True).strip() for value in aliases)),
+              "purpose": text_field(data.get("purpose", ""), "code purpose", 10_000), **details(data, "Code solution"), "approaches": []}
+    approaches = data.get("approaches", [])
+    if not isinstance(approaches, list) or len(approaches) > 100:
+        raise AppError("Code solution approaches must be a list of at most 100 objects.")
+    for index, item in enumerate(approaches):
+        allowed = (set(CODE_SOLUTION_DEFAULTS) - {"role", "aliases", "purpose", "approaches"}) | {"id", "title", "summary"}
+        if not isinstance(item, dict) or set(item) - allowed:
+            raise AppError("Each solution approach must contain only its supported fields.")
+        # A deterministic fallback keeps imports and immutable contribution retries
+        # stable. Editors should assign IDs immediately and retain them on edits.
+        approach = {"title": text_field(item.get("title", ""), "approach title", 240),
+            "summary": text_field(item.get("summary", ""), "approach summary", 10_000), **details(item, "Approach")}
+        fallback = "approach-" + str(uuid.uuid5(uuid.NAMESPACE_URL, json.dumps([index, approach], sort_keys=True, ensure_ascii=False)))
+        result["approaches"].append({"id": record_id(item.get("id", fallback), "approach id"), **approach})
+    if len({item["id"] for item in result["approaches"]}) != len(result["approaches"]):
+        raise AppError("Solution approaches cannot contain duplicate IDs.")
     return result
 
 
@@ -476,8 +519,8 @@ def validate_experiments(data):
     return result
 
 
-def learning_text(shard):
-    """Collect explanation strings for reference checks, without trusting their contents."""
+def learning_text(shard, *, include_code=False):
+    """Collect prose references; search can additionally opt into literal code."""
     def strings(value):
         if isinstance(value, str):
             yield value
@@ -487,7 +530,15 @@ def learning_text(shard):
         elif isinstance(value, dict):
             for item in value.values():
                 yield from strings(item)
-    return "\n".join(strings({key: shard.get(key) for key in ("content", "perspectives", "walkthroughs", "comparisons", "learningLog", "verification", "experiments")}))
+    values = {key: shard.get(key) for key in ("content", "perspectives", "walkthroughs", "comparisons", "learningLog", "verification", "experiments")}
+    solution = shard.get("codeSolution", {})
+    if isinstance(solution, dict):
+        values["codeSolution"] = solution if include_code else {key: value for key, value in solution.items() if key not in ("code", "headers", "id", "approaches")}
+        if not include_code:
+            approaches = solution.get("approaches", [])
+            values["codeSolution"]["approaches"] = [{key: value for key, value in item.items() if key not in ("code", "headers", "id")}
+                for item in approaches if isinstance(item, dict)] if isinstance(approaches, list) else []
+    return "\n".join(strings(values))
 
 
 def learning_references(shard):
@@ -517,6 +568,15 @@ def remap_shard_references(shard, aliases):
     for key in ("content", "perspectives", "walkthroughs", "comparisons", "learningLog", "verification"):
         if key in shard:
             result[key] = rewrite(shard[key])
+    if "codeSolution" in shard:
+        # Only prose can contain conceptual references. Source code and headers
+        # may contain identical-looking literals that must survive unchanged.
+        result["codeSolution"] = dict(shard["codeSolution"])
+        for field in ("purpose", "complexityNotes", "assumptions", "pitfalls"):
+            if field in shard["codeSolution"]:
+                result["codeSolution"][field] = rewrite(shard["codeSolution"][field])
+        result["codeSolution"]["approaches"] = [{key: rewrite(value) if key in ("summary", "complexityNotes", "assumptions", "pitfalls") else value
+            for key, value in item.items()} for item in shard["codeSolution"].get("approaches", [])]
     return result
 
 
@@ -614,13 +674,38 @@ def validate_link(data, *, imported=False) -> dict:
         "type": data.get("type", "related_to"),
         "note": text_field(data.get("note", ""), "note", 2000),
         "createdAt": timestamp(data.get("createdAt", now()) if imported else now(), "createdAt"),
+        **{field: record_id(data[field], field) if data.get(field, "") != "" else "" for field in LINK_APPROACH_FIELDS},
     }
     if not isinstance(result["type"], str) or result["type"] not in LINK_TYPES:
         raise AppError("Unknown relationship type.")
-    if result["fromId"] == result["toId"]:
+    if (result["fromId"] == result["toId"] and not (result["type"] == "alternative_to"
+            and result["fromApproachId"] and result["toApproachId"] and result["fromApproachId"] != result["toApproachId"])):
         raise AppError("A relationship must connect two different shards.")
     result.update(validate_link_knowledge(data))
-    return result
+    return canonical_link(result)
+
+
+def canonical_link(link):
+    """Symmetric alternatives are one edge, regardless of creation direction."""
+    link = dict(link)
+    if link["type"] == "alternative_to" and (link["toId"], link.get("toApproachId", "")) < (link["fromId"], link.get("fromApproachId", "")):
+        link["fromId"], link["toId"] = link["toId"], link["fromId"]
+        link["fromApproachId"], link["toApproachId"] = link.get("toApproachId", ""), link.get("fromApproachId", "")
+    return link
+
+
+def link_identity(link):
+    link = canonical_link(link)
+    return (link["fromId"], link["toId"], link["type"], *(link.get(field, "") for field in LINK_APPROACH_FIELDS))
+
+
+def validate_link_endpoints(link, shards):
+    for endpoint, field in (("fromId", "fromApproachId"), ("toId", "toApproachId")):
+        shard = shards.get(link[endpoint])
+        if shard is None:
+            raise AppError("Both relationship endpoints must exist.")
+        if link.get(field) and link[field] not in {item["id"] for item in shard.get("codeSolution", {}).get("approaches", [])}:
+            raise AppError(f"Relationship {field} refers to a missing solution approach in {shard['title']}. Reopen the connection and choose an existing approach.", 409)
 
 
 def validate_review(data, *, imported=False) -> dict:
@@ -666,6 +751,11 @@ def validate_trash(data, *, imported=False):
             raise AppError("Trash contains duplicate record IDs.")
     if any(shard["id"] not in (link["fromId"], link["toId"]) for link in result["links"]):
         raise AppError("Trash relationships must belong to the deleted shard.")
+    approach_ids = {item["id"] for item in shard["codeSolution"]["approaches"]}
+    for link in result["links"]:
+        for endpoint, field in (("fromId", "fromApproachId"), ("toId", "toApproachId")):
+            if link[endpoint] == shard["id"] and link[field] and link[field] not in approach_ids:
+                raise AppError("Trash relationship refers to a missing solution approach in its deleted shard.")
     if any(review["shardId"] != shard["id"] for review in result["reviews"]):
         raise AppError("Trash reviews must belong to the deleted shard.")
     return result
@@ -868,6 +958,8 @@ class Store:
             "id": row["id"], "fromId": row["from_id"], "toId": row["to_id"],
             "type": row["type"], "note": row["note"], "createdAt": row["created_at"],
             **validate_link_knowledge(json.loads(row["knowledge"]) if "knowledge" in row.keys() else {}),
+            "fromApproachId": row["from_approach_id"] if "from_approach_id" in row.keys() else "",
+            "toApproachId": row["to_approach_id"] if "to_approach_id" in row.keys() else "",
         } for row in connection.execute("SELECT * FROM links ORDER BY created_at, id")]
         reviews = [{
             "id": row["id"], "shardId": row["shard_id"], "grade": row["grade"],
@@ -885,16 +977,20 @@ class Store:
             if "knowledge" not in columns:
                 connection.execute("ALTER TABLE shards ADD COLUMN knowledge TEXT NOT NULL DEFAULT '{}'")
             sql = connection.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='links'").fetchone()[0]
-            if "released_by" not in sql:
+            if "alternative_to" not in sql or "from_approach_id" not in sql:
                 link_columns = {row[1] for row in connection.execute("PRAGMA table_info(links)")}
                 connection.execute("""CREATE TABLE links_workspace_upgrade (
                     id TEXT PRIMARY KEY, from_id TEXT NOT NULL REFERENCES shards(id) ON DELETE CASCADE,
                     to_id TEXT NOT NULL REFERENCES shards(id) ON DELETE CASCADE,
-                    type TEXT NOT NULL CHECK(type IN ('depends_on','explains','contrasts_with','example_of','related_to','part_of','supports','contradicts','supersedes','released_by')),
-                    note TEXT NOT NULL, created_at TEXT NOT NULL, knowledge TEXT NOT NULL DEFAULT '{}', CHECK(from_id <> to_id), UNIQUE(from_id,to_id,type)
+                    type TEXT NOT NULL CHECK(type IN ('depends_on','explains','contrasts_with','example_of','related_to','part_of','supports','contradicts','supersedes','released_by','uses','implements','alternative_to')),
+                    note TEXT NOT NULL, created_at TEXT NOT NULL, knowledge TEXT NOT NULL DEFAULT '{}',
+                    from_approach_id TEXT NOT NULL DEFAULT '', to_approach_id TEXT NOT NULL DEFAULT '',
+                    CHECK(from_id <> to_id OR (type='alternative_to' AND from_approach_id <> '' AND to_approach_id <> '' AND from_approach_id <> to_approach_id)),
+                    UNIQUE(from_id,to_id,type,from_approach_id,to_approach_id)
                 )""")
                 knowledge_sql = "knowledge" if "knowledge" in link_columns else "'{}'"
-                connection.execute("INSERT INTO links_workspace_upgrade SELECT id,from_id,to_id,type,note,created_at," + knowledge_sql + " FROM links")
+                approach_sql = ",from_approach_id,to_approach_id" if "from_approach_id" in link_columns else ",'',''"
+                connection.execute("INSERT INTO links_workspace_upgrade SELECT id,from_id,to_id,type,note,created_at," + knowledge_sql + approach_sql + " FROM links")
                 connection.execute("DROP TABLE links")
                 connection.execute("ALTER TABLE links_workspace_upgrade RENAME TO links")
                 connection.execute("CREATE INDEX links_from ON links(from_id)")
@@ -953,9 +1049,10 @@ class Store:
 
     @staticmethod
     def _insert_link(connection, link):
-        connection.execute("INSERT INTO links(id,from_id,to_id,type,note,created_at,knowledge) VALUES(?,?,?,?,?,?,?)", (
+        connection.execute("INSERT INTO links(id,from_id,to_id,type,note,created_at,knowledge,from_approach_id,to_approach_id) VALUES(?,?,?,?,?,?,?,?,?)", (
             link["id"], link["fromId"], link["toId"], link["type"], link["note"], link["createdAt"],
             json.dumps(validate_link_knowledge(link), ensure_ascii=False),
+            link.get("fromApproachId", ""), link.get("toApproachId", ""),
         ))
 
     @staticmethod
@@ -972,13 +1069,27 @@ class Store:
             connection.execute("DELETE FROM drafts WHERE kind='editor'")
             return self._state(connection)
 
+    @staticmethod
+    def _protect_approach_references(connection, shard):
+        approach_ids = {item["id"] for item in shard["codeSolution"]["approaches"]}
+        links = [{"fromId": row["from_id"], "toId": row["to_id"], "fromApproachId": row["from_approach_id"], "toApproachId": row["to_approach_id"]}
+            for row in connection.execute("SELECT from_id,to_id,from_approach_id,to_approach_id FROM links WHERE from_id=? OR to_id=?", (shard["id"], shard["id"]))]
+        for row in connection.execute("SELECT payload FROM trash"):
+            links.extend(json.loads(row[0]).get("links", []))
+        for link in links:
+            for endpoint, field in (("fromId", "fromApproachId"), ("toId", "toApproachId")):
+                if link[endpoint] == shard["id"] and link.get(field) and link[field] not in approach_ids:
+                    raise AppError("This change would remove a solution approach used by a saved connection. Keep the approach, or restore connected shards from Trash and remove those connections before deleting it. Existing knowledge was preserved.", 409)
+
     def update_shard(self, shard_id, data):
         record_id(shard_id)
         with self.changing() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             current = next((shard for shard in self._state(connection)["shards"] if shard["id"] == shard_id), None)
             if current is None:
                 raise AppError("Shard not found.", 404)
             shard = validate_shard(data, current=current)
+            self._protect_approach_references(connection, shard)
             connection.execute("""UPDATE shards SET title=?,content=?,prompt=?,tags=?,kind=?,status=?,
                 source_url=?,language_version=?,event_date=?,updated_at=?,knowledge=? WHERE id=?""", (
                 shard["title"], shard["content"], shard["prompt"], json.dumps(shard["tags"], ensure_ascii=False),
@@ -1030,8 +1141,11 @@ class Store:
             except (OSError, sqlite3.Error) as error:
                 raise AppError("The shard was not deleted because its safety backup could not be created.", 500) from error
             with self.changing() as connection:
+                connection.execute("BEGIN IMMEDIATE")
                 state = self._state(connection)
-                shard = next(item for item in state["shards"] if item["id"] == shard_id)
+                shard = next((item for item in state["shards"] if item["id"] == shard_id), None)
+                if shard is None:
+                    raise AppError("Shard not found.", 404)
                 payload = {"shard": shard, "links": [item for item in state["links"] if shard_id in (item["fromId"], item["toId"])],
                            "reviews": [item for item in state["reviews"] if item["shardId"] == shard_id]}
                 connection.execute("INSERT INTO trash VALUES(?,?,?)", (str(uuid.uuid4()), now(), json.dumps(payload, ensure_ascii=False)))
@@ -1041,9 +1155,8 @@ class Store:
     def create_link(self, data):
         link = validate_link(data)
         with self.changing() as connection:
-            ids = {row[0] for row in connection.execute("SELECT id FROM shards")}
-            if link["fromId"] not in ids or link["toId"] not in ids:
-                raise AppError("Both relationship endpoints must exist.")
+            connection.execute("BEGIN IMMEDIATE")
+            validate_link_endpoints(link, {item["id"]: item for item in self._state(connection)["shards"]})
             try:
                 self._insert_link(connection, link)
             except sqlite3.IntegrityError:
@@ -1063,15 +1176,14 @@ class Store:
         if not isinstance(data, dict):
             raise AppError("Relationship changes must be an object.")
         with self.changing() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             current = next((item for item in self._state(connection)["links"] if item["id"] == link_id), None)
             if current is None:
                 raise AppError("Relationship not found.", 404)
-            link = validate_link({**current, **{key: value for key, value in data.items() if key in {"fromId", "toId", "type", "note"} | set(LINK_KNOWLEDGE_DEFAULTS)}}, imported=True)
-            ids = {row[0] for row in connection.execute("SELECT id FROM shards")}
-            if link["fromId"] not in ids or link["toId"] not in ids:
-                raise AppError("Both relationship endpoints must exist.")
+            link = validate_link({**current, **{key: value for key, value in data.items() if key in {"fromId", "toId", "type", "note"} | set(LINK_KNOWLEDGE_DEFAULTS) | set(LINK_APPROACH_FIELDS)}}, imported=True)
+            validate_link_endpoints(link, {item["id"]: item for item in self._state(connection)["shards"]})
             try:
-                connection.execute("UPDATE links SET from_id=?,to_id=?,type=?,note=?,knowledge=? WHERE id=?", (link["fromId"], link["toId"], link["type"], link["note"], json.dumps(validate_link_knowledge(link), ensure_ascii=False), link_id))
+                connection.execute("UPDATE links SET from_id=?,to_id=?,type=?,note=?,knowledge=?,from_approach_id=?,to_approach_id=? WHERE id=?", (link["fromId"], link["toId"], link["type"], link["note"], json.dumps(validate_link_knowledge(link), ensure_ascii=False), link["fromApproachId"], link["toApproachId"], link_id))
             except sqlite3.IntegrityError:
                 raise AppError("This relationship already exists.", 409) from None
             connection.execute("DELETE FROM drafts WHERE kind='connection'")
@@ -1102,6 +1214,7 @@ class Store:
         record_id(shard_id)
         revision_id = record_id(data.get("revisionId"), "revisionId")
         with self.changing() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             row = connection.execute("SELECT snapshot FROM revisions WHERE id=? AND shard_id=?", (revision_id, shard_id)).fetchone()
             if row is None:
                 raise AppError("Revision not found.", 404)
@@ -1109,6 +1222,7 @@ class Store:
             if current is None:
                 raise AppError("Restore the shard from trash before restoring a revision.", 409)
             snapshot = validate_shard(json.loads(row[0]), current=current)
+            self._protect_approach_references(connection, snapshot)
             connection.execute("""UPDATE shards SET title=?,content=?,prompt=?,tags=?,kind=?,status=?,source_url=?,
                 language_version=?,event_date=?,updated_at=?,knowledge=? WHERE id=?""", (
                 snapshot["title"], snapshot["content"], snapshot["prompt"], json.dumps(snapshot["tags"], ensure_ascii=False),
@@ -1125,6 +1239,7 @@ class Store:
     def restore_trash(self, trash_id):
         record_id(trash_id)
         with self.changing() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             row = connection.execute("SELECT payload FROM trash WHERE id=?", (trash_id,)).fetchone()
             if row is None:
                 raise AppError("Trash item not found.", 404)
@@ -1133,12 +1248,20 @@ class Store:
             if connection.execute("SELECT 1 FROM shards WHERE id=?", (shard["id"],)).fetchone():
                 raise AppError("A shard with this ID already exists. Existing content was preserved.", 409)
             self._insert_shard(connection, shard)
-            ids = {item[0] for item in connection.execute("SELECT id FROM shards")}
+            shards = {item["id"]: item for item in self._state(connection)["shards"]}
+            ids = set(shards)
+            existing_links = self._state(connection)["links"]
             restored_links = skipped_links = 0
-            for link in payload["links"]:
+            for raw_link in payload["links"]:
+                link = validate_link(raw_link, imported=True)
                 if link["fromId"] in ids and link["toId"] in ids:
-                    if not connection.execute("SELECT 1 FROM links WHERE id=? OR (from_id=? AND to_id=? AND type=?)", (link["id"], link["fromId"], link["toId"], link["type"])).fetchone():
+                    try:
+                        validate_link_endpoints(link, shards)
+                    except AppError as error:
+                        raise AppError("Restore was not applied; the shard and its connections remain in Trash. " + str(error), 409) from error
+                    if not any(item["id"] == link["id"] or link_identity(item) == link_identity(link) for item in existing_links):
                         self._insert_link(connection, link)
+                        existing_links.append(link)
                         restored_links += 1
                     else:
                         skipped_links += 1
@@ -1307,21 +1430,26 @@ class Store:
         if len(normalized["assets"]) > 2048 or sum(asset["size"] for asset in normalized["assets"]) > MAX_TOTAL_ASSET_BYTES:
             raise AppError("An archive can contain at most 2,048 images totaling at most 96 MB.", 413)
         current = self._state(connection)
-        shard_ids = {shard["id"] for shard in current["shards"] + normalized["shards"]}
+        # Existing IDs win during merge; validate references against the content
+        # that will actually be saved, rather than an ignored incoming snapshot.
+        shards = {shard["id"]: shard for shard in normalized["shards"] + current["shards"]}
+        shard_ids = set(shards)
         link_ids = {link["id"] for link in current["links"]}
-        triples = {(link["fromId"], link["toId"], link["type"]) for link in current["links"]}
+        triples = {link_identity(link) for link in current["links"]}
         for link in normalized["links"]:
             if link["fromId"] not in shard_ids or link["toId"] not in shard_ids:
                 raise AppError("Import contains a relationship with a missing shard.")
+            validate_link_endpoints(link, shards)
             if link["id"] not in link_ids:
-                triple = (link["fromId"], link["toId"], link["type"])
+                triple = link_identity(link)
                 if triple in triples:
                     raise AppError("Import contains a duplicate relationship with a different ID.", 409)
                 triples.add(triple)
         for review in normalized["reviews"]:
             if review["shardId"] not in shard_ids:
                 raise AppError("Import contains a review with a missing shard.")
-        trash_shards = {json.loads(row[0])["shard"]["id"] for row in connection.execute("SELECT payload FROM trash")}
+        stored_trash = [json.loads(row[0]) for row in connection.execute("SELECT payload FROM trash")]
+        trash_shards = {item["shard"]["id"] for item in stored_trash}
         if any(shard["id"] in trash_shards and shard["id"] not in {item["id"] for item in current["shards"]} for shard in normalized["shards"]):
             raise AppError("An incoming note is already in Trash. Restore it first to avoid unintentionally recreating deleted knowledge.", 409)
         trash_shards.update(item["shard"]["id"] for item in normalized["trash"])
@@ -1329,9 +1457,16 @@ class Store:
         for revision in normalized["revisions"]:
             if revision["shardId"] not in known_shards:
                 raise AppError("Import contains a revision with a missing shard.")
+        recovery_shards = {entry["shard"]["id"]: entry["shard"] for entry in stored_trash + normalized["trash"]}
+        recovery_shards.update(shards)
         for item in normalized["trash"]:
             if any(link["fromId"] not in known_shards or link["toId"] not in known_shards for link in item["links"]):
                 raise AppError("Import contains a trash relationship with a missing shard.")
+            preserved_shard = recovery_shards[item["shard"]["id"]]
+            recovery_shards[item["shard"]["id"]] = item["shard"]
+            for link in item["links"]:
+                validate_link_endpoints(link, recovery_shards)
+            recovery_shards[item["shard"]["id"]] = preserved_shard
         return normalized
 
     def _merge(self, payload, connection):
@@ -1386,6 +1521,7 @@ class Store:
                 raise AppError("Import was not applied because the safety backup could not be created.", 500) from error
             with self.changing() as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                normalized = self._validate_import(payload, connection)
                 keys = ("shards", "links", "reviews", "assets", "revisions", "trash", "boards")
                 previous_ids = {key: {row[0] for row in connection.execute(f"SELECT id FROM {key}")} for key in keys}
                 before_reviews = {shard["id"]: {key: shard[key] for key in ("reviewCount", "lastReviewedAt", "nextReviewAt")} for shard in self._state(connection)["shards"]}
@@ -1432,6 +1568,10 @@ class Store:
         # receipts. Empty context is logically the same as the old six-column row.
         if table == "links" and "knowledge" in values and not any(validate_link_knowledge(json.loads(values["knowledge"])).values()):
             values.pop("knowledge")
+        if table == "links":
+            for field in ("from_approach_id", "to_approach_id"):
+                if values.get(field) == "":
+                    values.pop(field)
         return hashlib.sha256(json.dumps(values, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
 
     def imports(self):
@@ -1671,8 +1811,8 @@ class Store:
                 raise AppError("Contribution shards may contain a stable id and editable knowledge fields, without read-only timestamps or recall prompts.")
             values = dict(data)
             raw_tags = values.get("tags", [])
-            if not isinstance(raw_tags, list) or len(raw_tags) > 50:
-                raise AppError("tags must be a list of at most 50 tags.")
+            if not isinstance(raw_tags, list):
+                raise AppError("tags must be a list.")
             values["tags"] = []
             for tag in raw_tags:
                 tag = text_field(tag, "tag", 80, required=True).strip()
@@ -1682,11 +1822,11 @@ class Store:
                     values["tags"].append(tag)
             normalized["shards"].append(validate_shard(values, imported=True))
         for data in links:
-            if not isinstance(data, dict) or set(data) - ({"id", "fromId", "toId", "type", "note"} | set(LINK_KNOWLEDGE_DEFAULTS)):
+            if not isinstance(data, dict) or set(data) - ({"id", "fromId", "toId", "type", "note"} | set(LINK_KNOWLEDGE_DEFAULTS) | set(LINK_APPROACH_FIELDS)):
                 raise AppError("Contribution relationships contain only identity, endpoints, type, note, and source context.")
             values = dict(data)
             if "id" not in values:
-                identity = json.dumps([request_id, values.get("fromId"), values.get("toId"), values.get("type", "related_to")], ensure_ascii=False)
+                identity = json.dumps([request_id, values.get("fromId"), values.get("toId"), values.get("type", "related_to"), *(values.get(field, "") for field in LINK_APPROACH_FIELDS)], ensure_ascii=False)
                 values["id"] = "ai-link-" + str(uuid.uuid5(uuid.NAMESPACE_URL, identity))
             normalized["links"].append(validate_link(values, imported=True))
         for key, records in normalized.items():
@@ -1715,7 +1855,7 @@ class Store:
         state = Store._state(connection)
         existing_shards = {item["id"]: item for item in state["shards"]}
         existing_links = {item["id"]: item for item in state["links"]}
-        title_content = lambda item: (" ".join(item["title"].split()).casefold(), item["content"])
+        title_content = lambda item: (" ".join(item["title"].split()).casefold(), item["content"], json.dumps(item["codeSolution"], sort_keys=True, ensure_ascii=False))
         duplicates = {}
         tag_names = {}
         for shard in state["shards"]:
@@ -1730,7 +1870,7 @@ class Store:
             current = existing_shards.get(shard["id"])
             reason = None
             if current:
-                if (current["title"], current["content"]) != (shard["title"], shard["content"]):
+                if (current["title"], current["content"], current["codeSolution"]) != (shard["title"], shard["content"], shard["codeSolution"]):
                     raise AppError(f"Shard ID {shard['id']} already belongs to different content. Existing notes were preserved.", 409)
                 reason = "id_exists"
             elif shard["id"] in trashed_ids:
@@ -1752,32 +1892,34 @@ class Store:
         aliases = {key: value for key, value in plan["idMap"].items() if key != value}
         if aliases:
             plan["shards"] = [remap_shard_references(shard, aliases) for shard in plan["shards"]]
-        triples = {(item["fromId"], item["toId"], item["type"]): item for item in state["links"]}
+        triples = {link_identity(item): item for item in state["links"]}
         for link in normalized["links"]:
             link = dict(link)
             link["fromId"] = plan["idMap"].get(link["fromId"], link["fromId"])
             link["toId"] = plan["idMap"].get(link["toId"], link["toId"])
+            link = canonical_link(link)
             if link["fromId"] not in existing_shards or link["toId"] not in existing_shards:
                 raise AppError("Contribution contains a relationship with a missing shard.")
-            if link["fromId"] == link["toId"]:
+            if link["fromId"] == link["toId"] and not (link["type"] == "alternative_to" and link["fromApproachId"] and link["toApproachId"] and link["fromApproachId"] != link["toApproachId"]):
                 raise AppError("A relationship became a self-link after duplicate notes were matched. Remove that relationship and retry.")
+            validate_link_endpoints(link, existing_shards)
             current = existing_links.get(link["id"])
             reason = None
-            fields = ("fromId", "toId", "type", "note", *LINK_KNOWLEDGE_DEFAULTS)
+            fields = ("fromId", "toId", "type", "note", *LINK_KNOWLEDGE_DEFAULTS, *LINK_APPROACH_FIELDS)
             if current:
                 if any(current[key] != link[key] for key in fields):
                     raise AppError(f"Relationship ID {link['id']} already belongs to different content. Existing relationships were preserved.", 409)
                 reason = "id_exists"
             else:
-                current = triples.get((link["fromId"], link["toId"], link["type"]))
+                current = triples.get(link_identity(link))
                 if current:
                     reason = "relationship_exists"
             if current is None:
                 current = link
                 plan["links"].append(link)
                 existing_links[link["id"]] = link
-                triples[(link["fromId"], link["toId"], link["type"])] = link
-            entry = {"inputId": link["id"], "id": current["id"], "fromId": current["fromId"], "toId": current["toId"], "type": current["type"], "outcome": "existing" if reason else "added"}
+                triples[link_identity(link)] = link
+            entry = {"inputId": link["id"], "id": current["id"], "fromId": current["fromId"], "toId": current["toId"], "type": current["type"], **{field: current.get(field, "") for field in LINK_APPROACH_FIELDS}, "outcome": "existing" if reason else "added"}
             if reason:
                 entry["reason"] = reason
             plan["linkReceipts"].append(entry)
@@ -1813,7 +1955,7 @@ class Store:
                            or any(item["id"] not in saved_links for item in plan["linkReceipts"]))
                 changed = (any(any(saved_shards[item["id"]][field] != item[field] for field in MUTABLE_SHARD_FIELDS)
                                for item in plan["shards"] if item["id"] in saved_shards)
-                           or any(any(saved_links[item["id"]][field] != item[field] for field in ("fromId", "toId", "type", "note", *LINK_KNOWLEDGE_DEFAULTS))
+                           or any(any(saved_links[item["id"]][field] != item[field] for field in ("fromId", "toId", "type", "note", *LINK_KNOWLEDGE_DEFAULTS, *LINK_APPROACH_FIELDS))
                                   for item in plan["links"] if item["id"] in saved_links))
                 if missing or changed:
                     raise AppError("Contribution verification failed. Nothing was saved.", 500)
@@ -1875,10 +2017,12 @@ class Store:
             if connection.execute("PRAGMA foreign_key_check").fetchall():
                 raise AppError("Snapshot contains broken relationships.")
             state = Store._state(connection)
+            shards_by_id = {shard["id"]: shard for shard in state["shards"]}
             for shard in state["shards"]:
                 validate_shard(shard, imported=True)
             for link in state["links"]:
                 validate_link(link, imported=True)
+                validate_link_endpoints(link, shards_by_id)
             for review in state["reviews"]:
                 validate_review(review, imported=True)
             for board in state["boards"]:
@@ -2006,6 +2150,24 @@ class Store:
                 if shard["assumptions"]:
                     lines.extend(["", "## Assumptions", ""])
                     lines.extend("- " + assumption for assumption in shard["assumptions"])
+                solution = shard["codeSolution"]
+                if solution["role"] or solution["code"] or solution["approaches"] or solution["purpose"]:
+                    lines.extend(["", "## Code reference", "", "Role: " + (solution["role"] or "Unspecified")])
+                    if solution["aliases"]:
+                        lines.append("Aliases: " + ", ".join(solution["aliases"]))
+                    if solution["purpose"]:
+                        lines.extend(["", readable(solution["purpose"])])
+                    for details in [solution, *solution["approaches"]]:
+                        if "id" in details:
+                            lines.extend(["", "### " + (details["title"] or "Approach"), "", "Approach ID: " + details["id"], readable(details["summary"])])
+                        for field, label in (("headers", "Required headers"), ("timeComplexity", "Time"), ("spaceComplexity", "Space"), ("complexityNotes", "Complexity notes"), ("assumptions", "Assumptions"), ("pitfalls", "Pitfalls")):
+                            value = details[field]
+                            if value:
+                                lines.append(label + ": " + ("; ".join(value) if isinstance(value, list) else value))
+                        if details["code"]:
+                            # Choose a fence longer than any literal run in source.
+                            fence = "`" * max(3, 1 + max((len(run) for run in re.findall(r"`+", details["code"])), default=0))
+                            lines.extend(["", fence + "cpp", details["code"] + ("" if details["code"].endswith("\n") else "\n") + fence, ""])
                 verification = shard["verification"]
                 lines.extend(["", "## Content verification", "", "Status: " + verification["status"]])
                 for key, label in (("note", "Check note"), ("sourceUrl", "Source"), ("sourceLocation", "Source location"), ("checkedAt", "Checked")):
@@ -2095,8 +2257,16 @@ class Store:
                 relations = [link for link in state["links"] if shard["id"] in (link["fromId"], link["toId"])]
                 if relations:
                     lines.extend(["", "## Relationships", ""])
+                    def endpoint_label(link, endpoint, approach_field):
+                        label = titles[link[endpoint]] + " (" + link[endpoint] + ")"
+                        approach_id = link.get(approach_field)
+                        if approach_id:
+                            endpoint_shard = next(item for item in state["shards"] if item["id"] == link[endpoint])
+                            approach = next((item for item in endpoint_shard["codeSolution"]["approaches"] if item["id"] == approach_id), None)
+                            label += " / " + (approach["title"] if approach and approach["title"] else approach_id)
+                        return label
                     for link in relations:
-                        lines.append(f"- {titles[link['fromId']]} ({link['fromId']}) → {link['type'].replace('_', ' ')} → {titles[link['toId']]} ({link['toId']})")
+                        lines.append(f"- {endpoint_label(link, 'fromId', 'fromApproachId')} → {link['type'].replace('_', ' ')} → {endpoint_label(link, 'toId', 'toApproachId')}")
                         if link["note"]:
                             lines.append("  " + readable(link["note"]))
                         for key, label in (("scope", "Scope"), ("evidence", "Evidence"), ("sourceUrl", "Source"), ("sourceLocation", "Source location")):

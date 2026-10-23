@@ -91,8 +91,8 @@ class ExperimentTests(unittest.TestCase):
             current = reopened.state()["shards"][0]
             self.assertEqual(current["experiments"], [])
             self.assertEqual((current["status"], current["languageVersion"], current["tags"]), ("solid", "C++17", ["C++"]))
-            self.assertEqual(reopened.health()["databaseVersion"], 4)
-            self.assertEqual(DATABASE_VERSION, 4)
+            self.assertEqual(reopened.health()["databaseVersion"], DATABASE_VERSION)
+            self.assertGreaterEqual(DATABASE_VERSION, 4)
             with reopened.connect() as connection:
                 self.assertEqual(connection.execute("SELECT knowledge FROM shards").fetchone()[0], encoded)
         finally:
@@ -425,7 +425,8 @@ class ExperimentTests(unittest.TestCase):
         self.assertEqual(len(self.store.state()["shards"][0]["experiments"]), 1)
         health = self.store.health()
         self.assertFalse(valid_health({**health, "backendVersion": "2.6.0"}, self.path))
-        self.assertTrue(valid_health({**health, "backendVersion": "2.7.0"}, self.path))
+        self.assertFalse(valid_health({**health, "backendVersion": "2.7.0"}, self.path))
+        self.assertTrue(valid_health({**health, "backendVersion": "2.9.0"}, self.path))
 
     def test_mcp_schema_exposes_both_bounded_nested_configuration_types(self):
         schema = SHARD_SCHEMA["properties"]["experiments"]

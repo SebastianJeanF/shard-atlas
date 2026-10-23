@@ -29,8 +29,8 @@ MAX_BATCH_BYTES = 8 * 1024 * 1024
 MAX_RESPONSE_BYTES = 260 * 1024 * 1024
 SHARD_FIELDS = {"id", "title", "content", "tags", "kind", "status", "sourceUrl", "languageVersion", "eventDate",
                 "evidenceStatus", "sources", "publicationDate", "verifiedDate", "eventType", "entities", "entityType", "inbox", "facts",
-                "subjects", "courses", "notation", "assumptions", "perspectives", "walkthroughs", "comparisons", "learningLog", "verification", "experiments"}
-LINK_FIELDS = {"id", "fromId", "toId", "type", "note", "scope", "evidence", "sourceUrl", "sourceLocation"}
+                "subjects", "courses", "notation", "assumptions", "perspectives", "walkthroughs", "comparisons", "learningLog", "verification", "experiments", "codeSolution"}
+LINK_FIELDS = {"id", "fromId", "toId", "type", "note", "scope", "evidence", "sourceUrl", "sourceLocation", "fromApproachId", "toApproachId"}
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$")
 
 
@@ -85,7 +85,7 @@ def valid_health(health, expected_db=None):
         return False
     try:
         version = tuple(int(piece) for piece in health["backendVersion"].split("."))
-        if len(version) != 3 or version[0] not in (2, 3) or version < (2, 7, 0):
+        if len(version) != 3 or version[0] not in (2, 3) or version < (2, 9, 0):
             return False
         return bool(health.get("dbPath")) and (expected_db is None or Path(health["dbPath"]).resolve() == Path(expected_db).resolve())
     except (KeyError, ValueError, TypeError, OSError):
@@ -260,9 +260,9 @@ class AtlasClient:
 
     def connect(self):
         if self.base_url:
-            health = request_json(self.base_url, "/api/health", timeout=2)
+            health = request_json(self.base_url, "/api/health", timeout=10)
             if not valid_health(health, self.expected_db):
-                raise ClientError("The selected local service is not a compatible Shard Atlas backend (2.2.0 or newer).")
+                raise ClientError("The selected local service is not a compatible Shard Atlas backend. This helper requires 2.9.0 or newer; reopen the updated app before using code references or contributions.")
             self.health = health
         else:
             found = discover(self.expected_db)
@@ -300,11 +300,15 @@ class AtlasClient:
         self.connect()
         return {"connected": True, "baseUrl": self.base_url, **self.health}
 
-    def search(self, query, limit=12):
+    def search(self, query, limit=12, *, role="", tags=None, tag_match="all"):
         if not isinstance(query, str) or len(query) > 1000:
             raise ClientError("query must be text of at most 1,000 characters.")
         if type(limit) is not int or not 1 <= limit <= 50:
             raise ClientError("limit must be an integer from 1 to 50.")
+        if role not in ("", "snippet", "algorithm", "problem") or tag_match not in ("all", "any"):
+            raise ClientError("Use a supported code role and tag_match all or any.")
+        if tags is not None and (not isinstance(tags, list) or any(not isinstance(tag, str) or not tag.strip() or len(tag) > 80 for tag in tags)):
+            raise ClientError("tags must be a list of nonempty names of at most 80 characters.")
         if str(ROOT) not in sys.path:
             sys.path.insert(0, str(ROOT))
         from server import learning_text
@@ -317,20 +321,30 @@ class AtlasClient:
             for endpoint in (link["fromId"], link["toId"]):
                 connected[endpoint] = connected.get(endpoint, "") + "\n" + context
         for shard in state["shards"]:
-            title, content, tags = shard["title"], shard["content"], shard.get("tags", [])
+            title, content, shard_tags = shard["title"], shard["content"], shard.get("tags", [])
+            solution = shard.get("codeSolution", {})
+            aliases = solution.get("aliases", [])
+            if role and solution.get("role") != role:
+                continue
+            selected = [tag.casefold() in {value.casefold() for value in shard_tags} for tag in (tags or [])]
+            if selected and not (all(selected) if tag_match == "all" else any(selected)):
+                continue
             academic = [*shard.get("subjects", []), *shard.get("assumptions", [])]
             academic.extend(value for course in shard.get("courses", []) for field, value in course.items() if isinstance(value, str))
             academic.extend(value for entry in shard.get("notation", []) for value in entry.values())
-            academic.append(learning_text(shard))
+            academic.append(learning_text(shard, include_code=True))
             academic.append(connected.get(shard["id"], ""))
-            haystack = "\n".join([title, content, *tags, *academic]).casefold()
+            haystack = "\n".join([title, content, *shard_tags, *aliases, *academic]).casefold()
             if terms and not all(term in haystack for term in terms):
                 continue
-            score = sum(4 * (term in title.casefold()) + 2 * any(term in tag.casefold() for tag in tags) for term in terms)
+            names = [title.casefold(), *(alias.casefold() for alias in aliases)]
+            score = 100 * (query.casefold().strip() in names) + sum(8 * any(term in name for name in names) + 2 * any(term in tag.casefold() for tag in shard_tags) for term in terms)
+            if not content:
+                content = solution.get("purpose", "") or next((item.get("summary", "") for item in solution.get("approaches", []) if item.get("summary")), "")
             offset = min((content.casefold().find(term) for term in terms if term in content.casefold()), default=0)
             start = max(0, offset - 70)
             excerpt = ("…" if start else "") + content[start:start + 260] + ("…" if len(content) > start + 260 else "")
-            matches.append((score, shard.get("updatedAt", ""), {"id": shard["id"], "title": title, "tags": tags,
+            matches.append((score, shard.get("updatedAt", ""), {"id": shard["id"], "title": title, "tags": shard_tags, "role": solution.get("role", ""), "aliases": aliases,
                 "subjects": shard.get("subjects", []), "courses": shard.get("courses", []),
                 "kind": shard.get("kind"), "status": shard.get("status"), "excerpt": excerpt}))
         matches.sort(key=lambda item: (item[0], item[1]), reverse=True)
@@ -350,7 +364,7 @@ class AtlasClient:
 
     def add(self, batch):
         batch = validate_batch(batch)
-        from server import remap_shard_references, validate_knowledge, validate_link_knowledge
+        from server import canonical_link, remap_shard_references, validate_knowledge, validate_link_knowledge
         knowledge_defaults = validate_knowledge({})
         self.connect()
         receipt = request_json(self.base_url, "/api/contributions", batch, timeout=60)
@@ -384,7 +398,8 @@ class AtlasClient:
                 expected = remap_shard_references(expected, id_map)
             content = expected.get("content", "")
             matches = (normalize_title(saved["title"]) == normalize_title(expected["title"])
-                       and saved["content"] == content)
+                       and saved["content"] == content
+                       and saved.get("codeSolution", knowledge_defaults["codeSolution"]) == validate_knowledge(expected)["codeSolution"])
             if entry["outcome"] == "added":
                 expected_tags = {tag.strip().casefold() for tag in expected.get("tags", [])}
                 matches = matches and {tag.casefold() for tag in saved.get("tags", [])} == expected_tags
@@ -405,9 +420,10 @@ class AtlasClient:
                 missing_links.append(saved_id)
                 continue
             expected = proposed_links[input_id]
-            fields = {"fromId": id_map.get(expected["fromId"], expected["fromId"]),
-                      "toId": id_map.get(expected["toId"], expected["toId"]), "type": expected.get("type", "related_to")}
-            matches = all(saved.get(key) == value and entry.get(key) == value for key, value in fields.items())
+            mapped = canonical_link({**expected, "fromId": id_map.get(expected["fromId"], expected["fromId"]),
+                      "toId": id_map.get(expected["toId"], expected["toId"]), "type": expected.get("type", "related_to")})
+            fields = {key: mapped.get(key, "") for key in ("fromId", "toId", "type", "fromApproachId", "toApproachId")}
+            matches = all(saved.get(key, "") == value and entry.get(key, "") == value for key, value in fields.items())
             if entry["outcome"] == "added":
                 matches = matches and saved.get("note", "") == expected.get("note", "")
                 matches = matches and all(saved.get(key, "") == value for key, value in validate_link_knowledge(expected).items())
@@ -461,6 +477,9 @@ def main(argv=None):
     search = sub.add_parser("search")
     search.add_argument("--query", required=True)
     search.add_argument("--limit", type=int, default=12)
+    search.add_argument("--role", choices=("snippet", "algorithm", "problem"), default="")
+    search.add_argument("--tag", action="append", dest="tags")
+    search.add_argument("--tag-match", choices=("all", "any"), default="all")
     read = sub.add_parser("read")
     read.add_argument("--id", action="append", required=True, dest="ids")
     add = sub.add_parser("add")
@@ -492,7 +511,7 @@ def main(argv=None):
             result = {"savedToCollection": False, "archivePath": str(output), "shardCount": len(data["shards"]), "linkCount": len(data["links"]), "nextStep": "Import this JSON using Shard Atlas → Import JSON. Existing-note connections require those notes to be present in the destination collection."}
         else:
             client = AtlasClient(args.base_url)
-            result = {"status": client.status, "search": lambda: client.search(args.query, args.limit), "read": lambda: client.read(args.ids), "add": lambda: client.add(load_json(args.file)),
+            result = {"status": client.status, "search": lambda: client.search(args.query, args.limit, role=args.role, tags=args.tags, tag_match=args.tag_match), "read": lambda: client.read(args.ids), "add": lambda: client.add(load_json(args.file)),
                       "preview-import": lambda: client.preview_import(load_json(args.file, 256 * 1024 * 1024)),
                       "import": lambda: client.import_archive(load_json(args.file, 256 * 1024 * 1024))}[args.command]()
         print(json.dumps(result, ensure_ascii=False, allow_nan=False))

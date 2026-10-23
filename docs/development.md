@@ -56,6 +56,7 @@ The server and native builder both accept `--backup-dir PATH`. The native app de
 | `static/app.js` | Interface behavior, note rendering, automatic topic map, connection map, and release reference |
 | `static/academic.js`, `static/academic.css` | Subject focus, course occurrences, notation, assumptions, and their interface styles |
 | `static/learning.js`, `static/learning.css` | Structured perspectives, walkthroughs, method comparisons, learning history, and independent content-verification records |
+| `static/code-solutions.js`, `static/code-solutions.css` | Code-reference roles, aliases, approach editors, compact reference views, ranked lookup, and approach-aware relationship displays |
 | `static/experiments.js`, `static/experiments.css` | Deterministic educational experiment engines, configuration editors, plots, comparisons, and the Experiments view |
 | `static/import-review.js` | Incoming-card selection, editing, reuse, dependency handling, and import revalidation |
 | `static/styles.css` | Layout and visual styles |
@@ -86,6 +87,10 @@ Academic context uses optional per-shard `subjects`, `courses`, `notation`, and 
 
 Explanation metadata adds `perspectives`, `walkthroughs`, `comparisons`, and `learningLog` arrays, plus a `verification` object. Older notes default to empty arrays and an unverified record with empty fields. Preserve this metadata in ordinary drafts, revisions, Trash, archives, contribution receipts/readback, and readable Markdown exports. Comparison alternatives may reference another concept through `shardId`, which must stay meaningful during import reuse.
 
+Optional `codeSolution` metadata adds `role`, `aliases`, `purpose`, literal `code`, `headers`, `timeComplexity`, `spaceComplexity`, `complexityNotes`, `assumptions`, `pitfalls`, and `approaches`. Roles are empty, `snippet`, `algorithm`, or `problem` and remain independent of existing shard kinds. Each approach has a distinct stable `id`, `title`, `summary`, and its own implementation details. Keep empty defaults for older notes. Preserve the complete object through ordinary editor drafts, revisions, Trash, JSON and Markdown exports, import review, local contributions, Drive batches, and saved-content readback. Code must retain exact whitespace and characters in validation, rendering, copying, and archive round trips. It is displayed, not executed.
+
+Code lookup prioritizes titles and aliases while searching the saved implementation details. Code-role filters complement existing topic all/any matching. Tags have no fixed count cap, though names remain bounded and ordinary request and archive capacities apply. Reuse existing names through suggestions. Renaming to an existing topic merges memberships and removes duplicates without changing unrelated shard fields.
+
 Content verification is independent of personal `status`. The stored personal value `verify` remains compatible with older data and is labeled **Needs clarification**. `verification.status` is `unverified`, `source-checked`, or `needs-correction`. Source-checked records require a note and a source URL or location. They record a manual assertion, not an automated source audit. Learning-log history contains explicitly recorded entries and optional partial ISO dates, without inferred chronology. Technical method comparisons belong to a shard and do not restore retired company or entity interfaces.
 
 Optional per-shard `experiments` arrays default to empty and allow at most ten entries. `algorithmVersion: 1` identifies the fixed numerical semantics for `gradient-descent` and `value-iteration`, with a typed `config` and optional complete same-type `comparisonConfig`. Persist configurations through normal editor drafts, revisions, Trash, archives, contributions, readback, and readable Markdown. Recompute results rather than storing a run as a verification or mastery claim. Both engines are deterministic and require no random seed. Unknown types or algorithm versions fail validation rather than executing supplied code.
@@ -94,7 +99,9 @@ Runtime experiment controls are temporary previews. Saving an existing configura
 
 Gradient descent uses a positive-definite two-dimensional quadratic, fixed full-gradient updates, and gradient-norm stopping. Its numerical guard reports a numeric-limit outcome, without claiming a proof of divergence. Value iteration uses synchronous Bellman updates, probability-weighted transition rewards, zero terminal future values, available actions only, declared-order tie breaking, and a policy greedy with respect to each displayed value vector. The current Bellman residual determines stopping. Its conservative value-error bound is `residual / (1 - beta)`, with `beta = discount * max(1, largest transition-row mass)`, to account for accepted probability rounding without normalization. Exactly normalized rows give the standard `residual / (1 - discount)` bound. Keep iteration caps distinct from convergence and include iteration zero in both result sequences.
 
-Links also round-trip optional `scope`, `evidence`, `sourceUrl`, and `sourceLocation` strings, defaulting to empty strings for older records. Preserve these fields in edits, drafts, duplicate checks, Trash recovery, imports, exports, contributions, and receipts. The core relationship editor includes `supports` and `contradicts` alongside the existing technical relationship types.
+Links also round-trip optional `scope`, `evidence`, `sourceUrl`, `sourceLocation`, `fromApproachId`, and `toApproachId` strings, defaulting to empty strings for older records. Preserve these fields in edits, drafts, duplicate checks, Trash recovery, imports, exports, contributions, and receipts. The core relationship editor includes `supports`, `contradicts`, `uses`, `implements`, and `alternative_to` alongside the existing technical relationship types.
+
+Approach references must resolve on their corresponding endpoint shards. Duplicate detection includes the endpoint approach IDs, so two approaches may independently use the same technique. Store one relationship and derive inverse display labels such as **Uses** and **Used in**. `alternative_to` is symmetric, with canonical endpoint ordering and duplicate detection in either direction. It may connect distinct approaches within the same shard. An approach ID remains stable through edits. Reject approach removal while a saved link references it, until that link is removed or reassigned. Revisions and Trash recovery must preserve this integrity too. Import reuse redirects shard endpoints but must not silently assign an incoming approach reference to an unrelated saved approach.
 
 Import review automatically revalidates after selection or editing. Build the resulting archive with its selected cards, valid connection endpoints, and required assets. Reusing a saved card redirects typed connections and explicit inline ID links without modifying that card's explanation or academic metadata. Partial imports retain selected revisions and referenced images, and exclude saved canvases and Trash recovery records. Full selections preserve the complete legacy archive. Preserve the existing atomic import, safety snapshot, stable-ID conflict handling, receipts, and undo behavior.
 
@@ -113,6 +120,8 @@ From the repository root:
 ```sh
 python3 -m unittest discover -s tests -v
 node tests/test_frontend.mjs
+node tests/test_code_solutions_frontend.mjs
+node tests/test_code_integration.mjs
 node tests/test_academic_frontend.mjs
 node tests/test_learning_frontend.mjs
 node tests/test_experiment_engine.mjs
@@ -121,6 +130,8 @@ node --check static/app.js
 ```
 
 Use temporary databases for persistence tests. Verify changed workflows in the actual interface, including narrow screens for layout changes. For native integration changes, build and open an isolated QA app as well as running automated checks. Build success does not prove that native dialogs, downloads, clipboard actions, or unsaved-edit checks work.
+
+The Python discovery command includes `tests/test_code_solutions.py`, which checks code-reference persistence and relationship integrity. The code-reference frontend and integration suites check literal source preservation, lookup behavior, and connected editor flows.
 
 ## Optional AI integration
 
@@ -142,6 +153,8 @@ For an AI client that supports MCP stdio servers, configure a server named `shar
 Configuration locations and supported syntax depend on the AI client. This example is the common `mcpServers` shape, not an instruction to overwrite an existing configuration. Preserve other servers and restart the client or start a new chat if required by that client.
 
 The bridge exposes `shard_atlas_get_instructions`, `shard_atlas_search`, `shard_atlas_read`, and `shard_atlas_add_knowledge`. Knowledge tools discover or start the local storage service without opening a browser. Reading the guide does not contact the collection. By default it uses the working collection. Use `--base-url http://127.0.0.1:PORT` only to select an isolated test service deliberately.
+
+The current contribution helper requires a backend at version **2.9.0 or later** so code-reference metadata and approach-scoped connections are supported. Rebuild and reopen the desktop app after updating the checkout. Older contribution clients can still use the compatible additive routes on the new backend.
 
 The checked-in skill is [integrations/add-to-shard-atlas](../integrations/add-to-shard-atlas/SKILL.md). Install it using your client's supported skill mechanism if available, or provide the [canonical contribution guide](../static/ai-instructions.md) as instructions. The **Use with AI** button refreshes and copies that guide for a chat.
 

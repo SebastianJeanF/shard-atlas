@@ -23,7 +23,7 @@ def run(*arguments: str) -> None:
 def desktop_configuration(python: Path | None = None, qa_db: Path | None = None,
                           backup_dir: Path | None = None) -> dict:
     """Keep portable builds independent of the machine that compiled them."""
-    config = {"backendVersion": "2.8.0"}
+    config = {"backendVersion": "2.9.0"}
     if python is not None:
         config["pythonCandidates"] = [str(python.expanduser().resolve())]
     if qa_db is not None:
@@ -43,7 +43,9 @@ def build(output: Path, python: Path | None = None, qa_db: Path | None = None,
     interpreter = (python or Path(sys.executable)).expanduser().resolve()
     subprocess.run([str(interpreter), "-c", "import sys, sqlite3; assert sys.version_info >= (3, 10)"], check=True)
     output.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix=".shard-atlas-build-", dir=output.parent) as staging:
+    # File-provider folders can add Finder metadata while codesign is inspecting
+    # a bundle. Finish signing outside sync-watched destinations first.
+    with tempfile.TemporaryDirectory(prefix="shard-atlas-build-") as staging:
         bundle = Path(staging) / output.name
         contents = bundle / "Contents"
         executable = contents / "MacOS" / "ShardAtlas"
@@ -62,8 +64,8 @@ def build(output: Path, python: Path | None = None, qa_db: Path | None = None,
             "CFBundleDisplayName": "Shard Atlas QA" if qa_db is not None else "Shard Atlas",
             "CFBundleExecutable": "ShardAtlas",
             "CFBundlePackageType": "APPL",
-            "CFBundleShortVersionString": "2.8.0",
-            "CFBundleVersion": "28",
+            "CFBundleShortVersionString": "2.9.0",
+            "CFBundleVersion": "29",
             "LSMinimumSystemVersion": "12.0",
             "NSHighResolutionCapable": True,
             "NSPrincipalClass": "NSApplication",
@@ -94,7 +96,7 @@ def build(output: Path, python: Path | None = None, qa_db: Path | None = None,
         if output.exists() or output.is_symlink():
             output.rename(previous)
         try:
-            bundle.rename(output)
+            shutil.move(str(bundle), str(output))
             run("/usr/bin/xattr", "-cr", str(output))
             run("/usr/bin/codesign", "--verify", "--deep", "--strict", str(output))
         except BaseException:

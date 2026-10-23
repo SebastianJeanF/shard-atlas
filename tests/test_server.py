@@ -506,7 +506,7 @@ class StoreTests(unittest.TestCase):
 
     def test_throttled_backup_worker_captures_changes_while_open(self):
         store = Store(self.root / "periodic.sqlite3", seed=False, backup_on_start=False,
-                      backup_interval_seconds=0.08, backup_poll_seconds=0.01)
+                      backup_interval_seconds=60, backup_poll_seconds=0.01)
         store.start_backup_worker()
         try:
             shard = store.create_shard({"title": "A", "content": "first"})["shards"][0]
@@ -514,7 +514,10 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(first_count, 1)
             store.update_shard(shard["id"], {"content": "changed while open"})
             self.assertEqual(len(list(store.backup_dir.glob("*.sqlite3"))), first_count)
-            deadline = time.monotonic() + 1
+            # Trigger the next interval explicitly so slow hosts do not need to
+            # finish a disk mutation within an 80 ms wall-clock race.
+            store.backup_interval_seconds = 0.01
+            deadline = time.monotonic() + 5
             while len(list(store.backup_dir.glob("*.sqlite3"))) == first_count and time.monotonic() < deadline:
                 time.sleep(0.01)
             self.assertEqual(len(list(store.backup_dir.glob("*.sqlite3"))), first_count + 1)

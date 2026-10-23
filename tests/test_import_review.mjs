@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 const context = vm.createContext({window: {}});
 vm.runInContext(fs.readFileSync(new URL('../static/import-review.js', import.meta.url), 'utf8'), context);
-const {build} = context.window.ShardImportReview;
+const {build,mapReferences,textContent} = context.window.ShardImportReview;
 const archive = {schemaVersion:1, shards:[
   {id:'a',title:'A',content:'![current](/assets/a-photo)'},
   {id:'b',title:'B',content:'B'},
@@ -65,4 +65,60 @@ const withExperiment={...archive,shards:archive.shards.map(shard=>shard.id==='a'
 const selectedExperiment=build(withExperiment,new Set([0,1]),new Map([['b','saved']]),['saved']);
 assert.equal(JSON.stringify(selectedExperiment.data.shards[0].experiments),JSON.stringify(withExperiment.shards[0].experiments),'Model IDs and saved numerical settings are independent of concept alias reuse');
 assert.ok(selectedExperiment.data.assets.some(asset=>asset.id==='experiment-image'),'Experiment source material remains portable in partial imports');
+
+const literalCode='const char* marker = "[[id:b]]";\n// ![literal code image](/assets/code-only)\n';
+const literalApproachCode='// [[id:b]] stays source text\n// ![literal approach image](/assets/approach-code-only)\nreturn order;\n';
+const literalHeaders=['<vector>','[[id:b]]','![literal header image](/assets/header-only)'];
+const codeArchive={schemaVersion:1,shards:[
+  {id:'a',title:'Course Schedule II',content:'',codeSolution:{role:'problem',purpose:'Use [[id:b|the technique]]. ![purpose](/assets/code-purpose)',code:literalCode,headers:literalHeaders,approaches:[
+    {id:'queue-approach',title:'Queue ordering',summary:'Apply [[id:b]]. ![summary](/assets/approach-summary)',code:literalApproachCode,headers:['[[id:b]]','![literal approach header](/assets/approach-header-only)']},
+    {id:'stack-approach',title:'Stack ordering',summary:'Also uses [[id:b|the same technique]].',code:'return result;\n',headers:[]}
+  ]}},
+  {id:'b',title:'Ordering technique',content:'Reusable ordering.'},
+  {id:'c',title:'Skipped unrelated shard',content:'![skipped](/assets/skipped-photo)'}
+],links:[
+  {id:'queue-use',fromId:'a',fromApproachId:'queue-approach',toId:'b',type:'uses'},
+  {id:'stack-use',fromId:'a',fromApproachId:'stack-approach',toId:'b',type:'uses'},
+  {id:'duplicate-queue-use',fromId:'a',fromApproachId:'queue-approach',toId:'b',type:'uses'},
+  {id:'between-approaches',fromId:'a',fromApproachId:'queue-approach',toId:'a',toApproachId:'stack-approach',type:'alternative_to'},
+  {id:'inverse-between-approaches',fromId:'a',fromApproachId:'stack-approach',toId:'a',toApproachId:'queue-approach',type:'alternative_to'},
+  {id:'cross-shard-alternative',fromId:'a',fromApproachId:'queue-approach',toId:'b',type:'alternative_to'},
+  {id:'inverse-cross-shard-alternative',fromId:'b',toId:'a',toApproachId:'queue-approach',type:'alternative_to'}
+],revisions:[{id:'code-revision',shardId:'a',snapshot:{content:'',codeSolution:{role:'problem',purpose:'Earlier [[id:b]]. ![revision](/assets/revision-purpose)',code:'// [[id:b]] ![literal revision](/assets/revision-code-only)\n',headers:['![literal revision header](/assets/revision-header-only)'],approaches:[{id:'queue-approach',title:'Queue ordering',summary:'Earlier [[id:b|technique]].',code:literalApproachCode}]}}}],assets:[
+  'code-purpose','approach-summary','revision-purpose','code-only','approach-code-only','header-only','approach-header-only','revision-code-only','revision-header-only','skipped-photo'
+].map(id=>({id}))};
+const codeBefore=JSON.stringify(codeArchive);
+const selectedCode=build(codeArchive,new Set([0,1]),new Map([['b','saved-technique']]),['saved-technique']);
+const codeShard=selectedCode.data.shards[0];
+assert.deepEqual(Array.from(selectedCode.data.links.filter(link=>link.type==='uses'),link=>[link.id,link.fromApproachId,link.toId]),[
+  ['queue-use','queue-approach','saved-technique'],['stack-use','stack-approach','saved-technique']
+],'Two approaches using one technique are separate relationships; an exact duplicate is omitted');
+assert.deepEqual(Array.from(selectedCode.data.links.filter(link=>link.type==='alternative_to'),link=>link.id),['between-approaches','cross-shard-alternative'],'Inverse alternatives share one canonical relationship');
+const localAlternative=selectedCode.data.links.find(link=>link.id==='between-approaches');
+assert.equal(localAlternative.fromId,'a');assert.equal(localAlternative.toId,'a');
+assert.equal(localAlternative.fromApproachId,'queue-approach');assert.equal(localAlternative.toApproachId,'stack-approach','Distinct approaches within a problem remain valid endpoints');
+assert.equal(codeShard.codeSolution.purpose,'Use [[id:saved-technique|the technique]]. ![purpose](/assets/code-purpose)');
+assert.equal(codeShard.codeSolution.approaches[0].summary,'Apply [[id:saved-technique]]. ![summary](/assets/approach-summary)');
+assert.equal(codeShard.codeSolution.approaches[1].summary,'Also uses [[id:saved-technique|the same technique]].');
+assert.equal(codeShard.codeSolution.code,literalCode,'Top-level source code is copied exactly without wiki rewriting');
+assert.equal(codeShard.codeSolution.approaches[0].code,literalApproachCode,'Approach source code is copied exactly without wiki rewriting');
+assert.equal(JSON.stringify(codeShard.codeSolution.headers),JSON.stringify(literalHeaders),'Header names are literal source, not Markdown');
+assert.equal(JSON.stringify(codeShard.codeSolution.approaches[0].headers),JSON.stringify(codeArchive.shards[0].codeSolution.approaches[0].headers));
+assert.equal(selectedCode.data.revisions[0].snapshot.codeSolution.purpose,'Earlier [[id:saved-technique]]. ![revision](/assets/revision-purpose)');
+assert.equal(selectedCode.data.revisions[0].snapshot.codeSolution.approaches[0].summary,'Earlier [[id:saved-technique|technique]].');
+assert.equal(selectedCode.data.revisions[0].snapshot.codeSolution.code,codeArchive.revisions[0].snapshot.codeSolution.code);
+assert.deepEqual(Array.from(selectedCode.data.assets,asset=>asset.id),['code-purpose','approach-summary','revision-purpose'],'Partial imports retain prose images, including history, but do not scan source code or headers for assets');
+const prose=textContent(codeShard);
+assert.ok(prose.includes('[[id:saved-technique]]'));
+for(const literal of ['[[id:b]]','code-only','approach-code-only','header-only','approach-header-only'])assert.ok(!prose.includes(literal),`Literal code/header token ${literal} is excluded from reference scanning`);
+const mappedCode=mapReferences(codeArchive.shards[0],value=>value.replaceAll('[[id:b]]','[[id:renamed]]'),value=>value==='b'?'renamed':value);
+assert.equal(mappedCode.codeSolution.code,literalCode);assert.equal(mappedCode.codeSolution.approaches[0].code,literalApproachCode);
+assert.equal(mappedCode.codeSolution.approaches[0].summary,'Apply [[id:renamed]]. ![summary](/assets/approach-summary)');
+assert.equal(JSON.stringify(codeArchive),codeBefore,'Code-specific selection and reference rewriting never mutate the source archive');
+const savedInverseCode=build(codeArchive,new Set([0,1]),new Map([['b','saved-technique']]),['saved-technique'],[
+  {fromId:'saved-technique',toId:'a',toApproachId:'queue-approach',type:'alternative_to'},
+  {fromId:'a',fromApproachId:'stack-approach',toId:'a',toApproachId:'queue-approach',type:'alternative_to'}
+]);
+assert.equal(savedInverseCode.data.links.some(link=>link.type==='alternative_to'),false,'Reversed alternatives already saved are not added again after alias reuse');
+assert.deepEqual(Array.from(savedInverseCode.data.links,link=>link.id),['queue-use','stack-use'],'Alternative deduplication does not remove separate approach usages');
 console.log('Import selection checks passed.');

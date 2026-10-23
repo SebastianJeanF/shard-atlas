@@ -28,19 +28,41 @@ Type `[[` to find another shard and insert an inline link. Links use stable IDs,
 
 Forest green marks the selected idea and primary actions. Amber marks learning or verification states. Code uses purple for keywords, teal for types, blue for functions, orange for numbers, red for literals, and green for comments. Uncertain identifiers remain neutral. The code panel includes a compact key. Highlighting is conservative and does not perform full C++ semantic analysis.
 
+## Keep code ready to use
+
+Use the code-reference fields when a shard should answer a quick implementation question. Under **Code reference type**, choose an optional role: **Snippet** for a small operation, **Algorithm or data structure** for a reusable technique, or **Solved problem** for a problem and its solutions. The role complements the shard's existing Kind and topics. Ordinary explanations can keep no code role.
+
+Add a short purpose, the exact C++ code, and any required headers. Record time and space complexity, with a note defining the input size and relevant conditions. Add assumptions and pitfalls where they affect safe reuse, such as an integer width or overflow policy. Keep the detailed explanation and source references in the main body. A longer tutorial is optional.
+
+For a solved problem, add a named approach for each useful solution. Each approach has its own summary, code, headers, complexities, assumptions, and pitfalls. Keep differences between approaches clear and link reusable explanations to their existing shards instead of copying them into every solution.
+
+**Quick reference** brings the purpose, copyable code, costs, and caveats together. Longer supporting explanations remain available beside the reference material. Code is displayed and copied as saved. The app does not compile or run it.
+
+Use **Search aliases** for words you might remember later. A shard titled **Population count** can include `count ones`, `count set bits`, and `popcount`. These appear under **Also find this as** while reading. Aliases are search names, while topics group related shards. Code-reference fields and approach identities are retained in editor drafts, revisions, Trash, portable exports, and AI capture.
+
 ## Find and connect notes
 
-The Library places the selected explanation beside its nearby ideas. Search covers note text, structured explanations, notation, connection context, and connected-note titles. Combine search with kind, understanding, source-verification, and topic filters. When selecting multiple topics, choose whether results must match **all** or **any** of them. Renaming a topic updates the notes that use it.
+The Library places the selected explanation beside its nearby ideas. Search covers note text, code-reference fields, structured explanations, notation, connection context, and connected-note titles. Title and alias matches are prioritized so a remembered name is easier to find. Combine search with code role, kind, understanding, source-verification, and topic filters. When selecting multiple topics, choose whether results must match **all** or **any** of them. Renaming a topic updates the notes that use it. To merge synonymous topics, rename one to the existing name. A shard that used both keeps one membership.
 
 Use **Search topics** in the sidebar to find a topic by name, then select it to filter the current view. This searches topic names separately from the main note search. Selected topics stay visible while you look for others. Enter selects an exact match or the only matching topic. Escape or the clear button clears the topic search without removing your selections.
 
-Topics are freeform and grow with your notes. Add any useful topic in a shard's comma-separated **Topics** field, including a keyword such as `consteval`. Its name appears in the sidebar after the note is saved. The topic list has no fixed vocabulary or global limit.
+Topics are freeform and grow with your notes. Add any useful topic in a shard's comma-separated **Topics** field, including a keyword such as `consteval`. Suggestions help reuse existing names. Its name appears in the sidebar after the note is saved. There is no fixed vocabulary or topic-count limit per shard. Each topic name can contain up to 80 characters, and normal record and archive size limits still apply.
 
-Choose **Connect** to describe how two notes relate. The available relationships are *depends on*, *explains*, *contrasts with*, *is an example of*, *relates to*, *is part of*, *supports*, and *contradicts*. Add a reason, scope, evidence, source link, and source location when useful. Scope states the conditions where the connection applies. Evidence records its justification, rather than making every saved connection a verified claim.
+Choose **Connect** to describe how two notes relate. The available relationships are *depends on*, *explains*, *contrasts with*, *is an example of*, *relates to*, *is part of*, *supports*, *contradicts*, *uses*, *implements*, and *is an alternative to*. Add a reason, scope, evidence, source link, and source location when useful. Scope states the conditions where the connection applies. Evidence records its justification, rather than making every saved connection a verified claim.
 
 Direction matters. An arrow runs from the note making the relationship to its target. For example, an example note can point to the concept it illustrates with *is an example of*. A diagram's proximity or arrow alone does not establish a prerequisite.
 
 The Library includes a compact preview of nearby ideas. Use Topic map to explore saved relationships one step at a time.
+
+### Follow a solution's techniques
+
+Use **Uses** for a solution that actually applies a technique. Select a specific approach when the relationship belongs to that solution. For example, Course Schedule II's Kahn approach can use Kahn's algorithm while its DFS approach uses DFS topological sorting. Explain the technique's contribution in the connection note.
+
+The technique's **Used in** view shows the same saved relationship from the other end, including the approach name. Save the connection once. You can connect two approaches from the same problem to the same technique independently. **Implements** describes an implementation of an algorithm or interface, while **Alternative approach** connects alternatives. An approach can be selected at either endpoint when appropriate. Two distinct approaches within the same problem can also be connected as alternatives.
+
+An approach's identity stays stable when you rename it or edit its code. Before removing an approach used by a saved connection, remove or reassign that connection. This prevents a technique link from silently becoming a link about a different solution.
+
+Topics answer which area a shard belongs to. Connections explain how ideas contribute to one another. Sharing a topic does not establish that a technique solves a problem. Applicability suggestions are not generated automatically in this release.
 
 ## Follow subjects and courses
 

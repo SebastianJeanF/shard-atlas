@@ -171,7 +171,7 @@ class LearningTests(unittest.TestCase):
         backups_before = set(legacy.backup_dir.glob("*.sqlite3"))
         migrated = self.open_store(legacy_path)
         self.assertEqual(migrated.state(), before)
-        self.assertEqual(migrated.health()["databaseVersion"], 4)
+        self.assertEqual(migrated.health()["databaseVersion"], DATABASE_VERSION)
         backups = set(migrated.backup_dir.glob("*.sqlite3")) - backups_before
         self.assertEqual(len(backups), 1)
         snapshot = next(iter(backups))
@@ -335,7 +335,8 @@ class LearningTests(unittest.TestCase):
         self.assertFalse(valid_health({**health, "backendVersion": "2.5.0"}, self.path))
         self.assertFalse(valid_health({**health, "backendVersion": "2.2.0"}, self.path))
         self.assertFalse(valid_health({**health, "backendVersion": "2.6.0"}, self.path))
-        self.assertTrue(valid_health({**health, "backendVersion": "2.7.0"}, self.path))
+        self.assertFalse(valid_health({**health, "backendVersion": "2.7.0"}, self.path))
+        self.assertTrue(valid_health({**health, "backendVersion": "2.9.0"}, self.path))
         self.assertTrue(valid_health({**health, "backendVersion": "3.0.0"}, self.path))
 
 

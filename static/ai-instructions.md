@@ -40,6 +40,55 @@ Keep build tools such as CMake independent of C++ release years and use the `Too
 
 Add connections when the relationship helps explain the knowledge. Supply a concise reason in `note`, with `scope`, `evidence`, `sourceUrl`, and `sourceLocation` when useful. Scope records the conditions where the relationship holds. Evidence records the actual justification or observation. Preserve uncertainty and do not treat a source link alone as verification. Direction matters: `fromId` is the note making the relationship and `toId` is its target. Use `related_to` when a stronger relationship is unsupported. Do not guess prerequisite direction from proximity or a diagram arrow.
 
+## Capture code references and solved problems
+
+Use optional `codeSolution` metadata to make implementation knowledge quick to retrieve. `role` is `snippet` for a small reusable operation, `algorithm` for an algorithm or data structure, or `problem` for a solved coding problem. Leave it empty for an ordinary explanation. This role complements `kind`, subjects, and topics. Prefer one useful shard for a technique and link it to the problems or other techniques that actually use it.
+
+Keep `purpose` concise. Store exact C++ source in `code` as a plain string without Markdown fences. Preserve leading and trailing whitespace, indentation, literals, comments, and newlines. Use `headers` for required include lines. Put additional explanation and actual source links in the main shard body. The five authoring rules, C++ release assessment, and required relevant cppreference links still apply. A compact code reference does not need a full walkthrough or invented learning history.
+
+Use `timeComplexity`, `spaceComplexity`, and `complexityNotes` to record supported costs, their input-size variables, and conditions. Preserve important `assumptions` and `pitfalls`, including width, overflow behavior, mutation, or ordering requirements when relevant. These lists belong to the implementation. They do not replace the shard's broader academic assumptions. Label complete examples, fragments, and untested code honestly in the body. Displaying code does not execute or verify it.
+
+Add `aliases` for alternative names and likely lookup phrases, such as `count ones` and `population count`. Reuse existing topic names for grouping. Tags have no fixed count cap, but keep each one meaningful. Aliases should help retrieve this shard rather than list every loosely related topic.
+
+Keep multiple useful solutions to the same problem in `approaches`. Each has a stable `id`, a `title`, a concise `summary`, and its own code, headers, complexity fields, assumptions, and pitfalls. Retain IDs on edits and retries. Do not regenerate an approach ID when its title or code changes. Omit unsupported details rather than inventing a solution or performance claim.
+
+Use `uses` when an approach applies a technique, `implements` when code implements an algorithm or interface, and `alternative_to` for an explained alternative. Set a link's optional `fromApproachId` or `toApproachId` to identify an approach on that endpoint. The ID must exist on the corresponding shard. A problem's two approaches may independently link to the same technique. An `alternative_to` relationship can connect two distinct approaches within the same shard. This relationship is symmetric and is stored once regardless of creation direction. Explain each actual use or alternative in `note`. Other inverse views, such as **Used in**, are derived automatically too. A shared topic or possible future application alone does not justify `uses`. Do not save speculative applicability as an established relationship.
+
+Removing an approach referenced by a saved link is blocked until the link is removed or reassigned. An additive capture cannot remove or reassign existing links. During import reuse, an approach reference must also be valid on the saved target shard. Do not silently redirect it to an unrelated approach.
+
+This is the metadata shape for one shard, not a complete batch or a code example to save:
+
+```json
+{
+  "codeSolution": {
+    "role": "problem",
+    "aliases": [],
+    "purpose": "",
+    "code": "",
+    "headers": [],
+    "timeComplexity": "",
+    "spaceComplexity": "",
+    "complexityNotes": "",
+    "assumptions": [],
+    "pitfalls": [],
+    "approaches": [
+      {
+        "id": "format-approach-001",
+        "title": "Approach name",
+        "summary": "",
+        "code": "",
+        "headers": [],
+        "timeComplexity": "",
+        "spaceComplexity": "",
+        "complexityNotes": "",
+        "assumptions": [],
+        "pitfalls": []
+      }
+    ]
+  }
+}
+```
+
 ## Preserve academic context
 
 **Capture a reusable concept once, with its course occurrences attached.** Use `subjects` for broad memberships such as `C++`, `CS`, `Mathematics`, or `ML`, and keep specific technical topics in `tags`. An idea can have several subjects. Generic view includes the shared collection. Do not create duplicate shards merely because a concept appears in several courses or lectures, and do not merge or revise existing notes without authorization.
@@ -195,7 +244,7 @@ An additive batch has this shape. This sample illustrates the format. Replace it
 | IDs and `requestId` | 1–100 characters, starting with a letter or digit, then letters, digits, `.`, `_`, `:`, or `-`. Keep them stable on retries. |
 | `title` | Nonempty text, at most 240 characters. |
 | `content` | Text, at most 100,000 characters. |
-| `tags` | Up to 50 distinct topic strings, each at most 80 characters. |
+| `tags` | Distinct topic strings, each at most 80 characters. No fixed count cap. Normal batch and archive size limits apply. |
 | `kind` | `concept`, `fact`, `example`, `mistake`, or `idea`. Legacy archives can also retain `event`. |
 | `status` | Personal understanding: `learning` (Learning), `solid` (Confident), or `verify` (Needs clarification). |
 | `subjects` | Up to 20 distinct nonempty subject strings, each at most 80 characters. Optional, defaults to `[]`. |
@@ -208,6 +257,7 @@ An additive batch has this shape. This sample illustrates the format. Replace it
 | `learningLog` | Up to 100 questions or misconceptions, each with up to 100 recorded history entries. Defaults to `[]`. |
 | `verification` | Manual content-check record. Defaults to `unverified` with empty note, source URL/location, and checked date. |
 | `experiments` | Up to 10 typed, versioned educational experiment setups. Defaults to `[]`. |
+| `codeSolution` | Optional code-reference object. Role, aliases, purpose, literal code, headers, complexities, assumptions, pitfalls, and stable-ID solution approaches. Missing fields receive empty defaults. |
 | `sourceUrl` | An actual HTTP/HTTPS source URL, or empty. |
 | `languageVersion` | Verified release(s) or scope, at most 100 characters. For C++ shards, assign supported releases or leave empty with an explicit reason in the body. |
 | `eventDate` | A source-supported `YYYY`, `YYYY-MM`, or `YYYY-MM-DD` occurrence date, or empty. Preserve date precision. Capture time is supplied separately. |
@@ -216,7 +266,9 @@ The optional `sources` array preserves several references. Each object can inclu
 
 A course occurrence accepts only `courseCode`, `courseTitle`, `term`, `lecture`, `position`, `sourceUrl`, `sourceLocation`, and `context`. `courseCode` is required. Other text fields default to empty strings. `position` defaults to `0` and must be a finite number from `0` through `100000`. Use several occurrences on the same shard when it appears in several courses or lectures. A notation entry accepts only `symbol`, `meaning`, `shape`, `role`, and `scope`. The first two are required and the remaining fields default to empty strings. These academic fields work in additive batches and portable archives. Older notes without them remain valid.
 
-Each link uses `fromId`, `toId`, `type`, and an optional `note` explaining the connection. A stable link `id` is optional in the local batch. Use `depends_on`, `explains`, `contrasts_with`, `example_of`, `related_to`, `part_of`, `supports`, or `contradicts`. Optional rich fields are `scope` (up to 5,000 characters), `evidence` (up to 10,000), `sourceUrl` (HTTP/HTTPS or empty), and `sourceLocation` (up to 240). They default to empty strings. Endpoints must refer to notes in the batch or verified existing notes. Self-links are not allowed. Explain relationships rather than guessing them from a diagram's layout.
+Each link uses `fromId`, `toId`, `type`, and an optional `note` explaining the connection. A stable link `id` is optional in the local batch. Use `depends_on`, `explains`, `contrasts_with`, `example_of`, `related_to`, `part_of`, `supports`, `contradicts`, `uses`, `implements`, or `alternative_to`. Optional rich fields are `scope` (up to 5,000 characters), `evidence` (up to 10,000), `sourceUrl` (HTTP/HTTPS or empty), and `sourceLocation` (up to 240). Optional `fromApproachId` and `toApproachId` identify stable approach IDs at their corresponding endpoints. These strings default to empty. Endpoints must refer to notes in the batch or verified existing notes, and approach IDs must exist on those endpoints. A relationship within one shard is allowed only for `alternative_to` between two distinct named approach IDs. Explain relationships rather than guessing them from a diagram's layout.
+
+A `codeSolution` object accepts only the fields in the shape above. `role` is empty, `snippet`, `algorithm`, or `problem`. Up to 200 aliases are allowed, each at most 240 characters. `purpose` and approach `summary` allow up to 10,000 characters. Code allows up to 100,000 characters and is preserved literally. Time and space complexity fields allow up to 500 characters each, and complexity notes allow up to 5,000. Headers, assumptions, and pitfalls each allow up to 100 entries. A header allows up to 240 characters, and an assumption or pitfall allows up to 2,000. Up to 100 approaches are allowed, with distinct stable IDs and titles up to 240 characters. Empty metadata remains valid for older shards. Preserve code-reference fields in local contributions, Drive batches, portable archives, and readback.
 
 Legacy archive fields remain readable for recovery. They do not require creating company pages, news events, evidence dashboards, or inbox records. Use the core fields above for new technical notes.
 
