@@ -6,13 +6,25 @@
 
 | Milestone | State | Completion evidence |
 | --- | --- | --- |
-| 1. Protect and inventory | Mac backup verified | Consistent SQLite snapshot and isolated restore passed. Other device collections need observation before reconciliation. |
-| 2. Consolidate source | In progress | Shared UI and browser adapter now live in this repository. Combined build and tests are being verified. |
-| 3. Private sync foundation | In progress | D1/R2 protocol and conditional publication have isolated tests. Production configuration and deployment remain to verify. |
-| 4. Browser sync | In progress | Durable local outbox and shared status interface are being integrated. |
-| 5. Mac sync | In progress | Python client, local endpoints, and native build are being integrated. |
-| 6. Real migration | Pending | Requires verified production service and real collection readback. |
-| 7. Everyday verification | Pending | Requires cross-client checks and deployed release evidence. |
+| 1. Protect and inventory | Verified for available collections | Consistent Mac SQLite backup, exact isolated restore, and browser export comparison passed. Other physical devices have not been inventoried. |
+| 2. Consolidate source | Complete | Shared UI, both adapters, hosted runtime, builds, checks, and handoff instructions live in this repository. |
+| 3. Private sync foundation | Deployed and verified | D1/R2 bindings and migrations applied. Authenticated readback passed and anonymous access was denied. |
+| 4. Browser sync | Deployed and verified | Live Opera GX downloaded the library, reported synced, and exported records matching the Mac exactly. Phone-width layout and lookup passed. |
+| 5. Mac sync | Installed and verified | Version 3.0.0 rebuilt, signed, reopened, and reported synced through the actual local service. |
+| 6. Real migration | Available collections migrated | Every portable record in the browser export matched the Mac. Other devices retain first-connection review for a different existing collection. |
+| 7. Everyday verification | Software checks passed | 242 Python application tests, 4 source-transfer tests, and 115 JavaScript test entries passed. Physical Windows and iPhone browser checks remain to be performed on those devices. |
+
+## Released source
+
+The application code released on October 23, 2026 is GitHub commit `f33c61cf9d3f43ef53e64438601b28e9b9d03f4b`. The matching Sites source mirror is `29bddbdad86963557350d6ac689bf2dbb97a1b4f`. Deployment `appgdep_6adbfa8dbcd481918c10fb7dea4b73ec` succeeded with runtime environment revision 1. The Mac bundle includes the same GitHub source revision. Later documentation and handoff-tool commits do not imply a new application deployment.
+
+## First use on Windows or a phone
+
+Open the existing private website and sign in with the owner's ChatGPT account. An empty browser downloads the shared library automatically. Open **Library sync** and check for **Library synced**. If an offline update is waiting, close all Shard Atlas website windows and reopen. Do not clear website storage to install an update.
+
+If that device already has different saved knowledge, export it before choosing a copy. Conflict resolution currently selects a complete device or cloud collection. Both versions remain recoverable, but automatic per-shard conflict merging is not implemented. Do not choose a complete replacement until the two copies have been reviewed.
+
+For development, clone this repository into a separate local checkout, read the cross-platform workflow, run its checks, and use the existing Sites project. Website sign-in does not supply Git or hosting-source credentials. Obtain fresh supported access rather than copying a Mac private connection file.
 
 ## Continue safely
 

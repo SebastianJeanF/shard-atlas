@@ -39,10 +39,12 @@ The tracked `.openai/hosting.json` identifies the existing Site and its `DB` and
 1. Install hosting dependencies through the Sites skill's dependency installer from `hosting/`.
 2. Build using `python3 tools/build_host.py`. Supply `--drive-config PATH` for private Drive deployment settings. Those settings remain outside tracked source.
 3. For schema changes, edit `hosting/db/schema.ts`, run `npm run db:generate` from `hosting/`, inspect the generated SQL, and commit the migration and metadata. Applied migrations are immutable.
-4. Mirror the verified tracked source into the existing Sites source checkout, preserving its `.git` and ignored runtime files. Build there and use the Sites source helper to push and package the exact state.
+4. After opening the existing Sites source checkout with the Sites helper, use `python3 tools/prepare_site_source.py --checkout PATH` to copy the verified tracked source and matching built artifact. The helper checks project identity and working-tree safety, preserving `.git` and ignored runtime files. Then use the Sites source helper to push and package the exact state.
 5. Publish the matching artifact to the existing private Site and verify its deployment result. Record the source revision and release status in the handoff.
 
 The production runtime uses `SHARD_ATLAS_OWNER_PRIVATE=true`, `SHARD_ATLAS_ALLOW_SERVICE_ACCESS=true`, `SHARD_ATLAS_OWNER_EMAIL`, and `SHARD_ATLAS_SERVICE_SECRET_SHA256`. Configure these through Sites runtime settings. The last value verifies a separate application service secret. Never expose a raw service secret in browser assets.
+
+Preserve the deployment's existing private `drive-config.json` when publishing. Obtain it through authenticated access to the current Site and supply its private local path with `--drive-config`. A build without that option uses blank public defaults, so a publisher must not accidentally reset an existing deployment's Drive settings.
 
 ## Update the Mac app
 

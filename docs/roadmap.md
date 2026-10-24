@@ -4,6 +4,10 @@ Shard Atlas is expanding its existing technical collection to connect computer s
 
 [Project overview](../README.md) · [User guide](guide.md) · [Development](development.md)
 
+## Cross-platform library: version 3.0.0
+
+The shared interface and Mac/browser adapters now live in one repository. A private hosted library synchronizes complete portable records and contribution receipts, with offline local copies, durable retries, safety backups, and explicit whole-collection conflict review. The website and rebuilt Mac app have been verified against the real migrated library. Physical Windows and iPhone checks remain for those devices. See [release evidence and remaining checks](handoff.md) and [the development workflow](cross-platform.md).
+
 ## Phase 1: complete
 
 - Shared course and lecture collections with overlapping subject focus.
