@@ -1266,7 +1266,7 @@ body[data-saving] dialog form { opacity: .75; }
 
 /* Topic-map integration with the shared library filters and SVG labels. */
 .atlas-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; margin: 0 0 17px; border: 1px solid var(--line); border-radius: 9px; background: #f0f2e9; overflow: hidden; }
-.atlas-filters .filter-row { display: flex; flex: 1; flex-wrap: wrap; gap: 7px; padding: 11px 13px; border: 0; }
+.atlas-filters .filter-row { display: flex; flex-direction: row; flex: 1; flex-wrap: wrap; gap: 7px; padding: 11px 13px; border: 0; }
 .atlas-filters .filter-row select { flex: 0 1 185px; max-width: 100%; min-height: 35px; background: var(--surface); font-size: 11px; }
 .atlas-filters > .text-button { margin-right: 8px; font-size: 10px; }
 .atlas-filters .selected-topics { flex-basis: 100%; padding: 0 13px 12px; border: 0; }

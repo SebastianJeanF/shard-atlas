@@ -16,9 +16,29 @@
 
 ## Released source
 
-The application code released on October 23, 2026 is GitHub commit `f33c61cf9d3f43ef53e64438601b28e9b9d03f4b`. The matching Sites source mirror is `29bddbdad86963557350d6ac689bf2dbb97a1b4f`. Deployment `appgdep_6adbfa8dbcd481918c10fb7dea4b73ec` succeeded with runtime environment revision 1. The Mac bundle includes the same GitHub source revision. Later documentation and handoff-tool commits do not imply a new application deployment.
+The original synchronization release on October 23, 2026 uses GitHub commit `f33c61cf9d3f43ef53e64438601b28e9b9d03f4b`. The matching Sites source mirror is `29bddbdad86963557350d6ac689bf2dbb97a1b4f`. Deployment `appgdep_6adbfa8dbcd481918c10fb7dea4b73ec` succeeded with runtime environment revision 1. The installed Mac bundle includes that GitHub source revision. Later documentation and handoff-tool commits do not imply a new application deployment.
 
-The October 23 Windows verification checkpoint changes contribution tooling and tests only. It preserves the Mac's POSIX credential protection, adds Windows startup locking and Unicode-safe JSON transport, and repairs portable test fixtures. It does not update the website or installed Mac app. Code-reference milestones 5–6 may now proceed after the owner's actual-phone confirmation; milestone 7 remains outside that implementation scope.
+The October 23 Windows verification checkpoint changed contribution tooling and tests only. It preserved the Mac's POSIX credential protection, added Windows startup locking and Unicode-safe JSON transport, and repaired portable test fixtures. That checkpoint did not update the website or installed Mac app. The owner's actual-phone confirmation allowed code-reference milestones 5–6 to proceed; milestone 7 remains outside that implementation scope.
+
+## Code-reference milestones 5–6
+
+The latest website release uses GitHub source `ce2945b6444cd5256c59469cafdda4a632a6c51f`, mirrored to Sites source `62473faf8008cc3b1b3001670319bd6491476350`. Private deployment `appgdep_6adc09adf8a481919a6ff93752537a11` succeeded with environment revision 1 at the existing URL, <https://shard-atlas.deltamaster64.chatgpt.site>. Owner-only access, D1/R2 bindings, and existing private Drive settings were preserved.
+
+Milestone 5 adds role-aware focused exploration, a retained starting context, clear saved relationship direction and approach names, symmetric alternatives, separate optional dashed shared-topic overlap, and topic browsing. The layout remains deterministic and no collection-wide Connections page or recommendation system was introduced.
+
+Milestone 6 adds direct role-specific capture, creation from an unsuccessful role-filtered lookup, and visible/editable named variants for every code role. A real library inspection found that the existing comparator snippet's two implementations were hidden; both now display with their exact saved code. Paste JSON archive adds validated preview and explicit saving when a file picker is unavailable. Unsaved pasted text and its review participate in native close, browser unload, and synchronization guards.
+
+The broader pilot saved six complementary references through the production website's validated preview: Two Sum, lower bound/exact search, Koko Eating Bananas, BFS, Dijkstra, and two Quickselect variants. Eight explained relationships connect these to existing knowledge and each other. The website reported **Library synced**, with **251 shards on the device and in the cloud copy**. The post-save portable export contained 280 links and 871 revisions. Exact comparison preserved every original record: 245 shards, 272 links, 43 assets and their image bytes, 865 revisions, 149 Trash records, and 2 legacy boards. All seven new implementation units matched the extracted source text exactly, including stable approach identities. No duplicate pilot records were added. Personal notes, source-document identifiers, exports, and compiler evidence remain outside Git.
+
+Release validation: **118 JavaScript test entries passed**, including **124 main frontend checks**, source/browser code-reference checks, and the isolated synchronization suites. The exact released source passed **248 Python tests in WSL Linux**: 245 passed and 3 macOS Swift toolchain checks were skipped. Actual Windows browser checks exercised graph direction/filtering/topic browsing, direct capture, variant-only references, and exact pasted-code round trips. The 390-pixel layout check is a simulated phone width, separate from the owner's actual-phone confirmation. Seven new C++ source units were compiled and exercised with independent assertion drivers under GCC 11.4.0 with AddressSanitizer and UndefinedBehaviorSanitizer.
+
+## Mac update still pending
+
+**The installed Mac app remains version 3.0.0 at source `f33c61cf9d3f43ef53e64438601b28e9b9d03f4b`. Publishing the website did not update it.** Shared assets changed, so rebuild from `ce2945b6444cd5256c59469cafdda4a632a6c51f` or a later descendant retaining these changes. Record the actual bundled source revision after building.
+
+1. Pull the source and run the full checks on macOS, including the three Swift checks skipped on Windows/Linux. Build an isolated QA app with `python3 desktop/build.py --output PATH --qa-db PATH`, using a disposable database.
+2. In that QA app, verify graph role filters, direction, shared-topic separation, topic browsing, direct capture, snippet/algorithm variants, and Paste JSON preview/save/discard. Check native clipboard, file dialogs, exports, image display, and unsaved-close/quit prompts.
+3. Rebuild the working app with `python3 desktop/build.py`, quit the previous app normally, reopen, and confirm the bundled revision, **Library synced**, and intact code, images, relationships, and recovery content. These native checks remain **pending** until performed on the Mac.
 
 ## First use on Windows or a phone
 
