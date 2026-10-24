@@ -46,6 +46,73 @@ test('an empty browser automatically receives a complete shared collection', asy
   assert.equal((await read(b.store)).backups.length, 1);
 });
 
+test('two independent browser stores roundtrip exact code, topics, scoped links, images and recovery through offline restart, deletion and restoration', async t => {
+  const service = cloud(), a = device(t, service), b = device(t, service);
+  const code = '\n  #include <vector>\r\nint f(int x) {\r\n\t// α and [[id:literal]] stay exact.\r\n  return x;\r\n}\r\n';
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jR7sAAAAASUVORK5CYII=';
+  const image = (await a.store.request('/api/assets', 'POST', {name: 'Isolated sync fixture', mimeType: 'image/png', data: png})).result;
+  await a.store.request('/api/shards', 'POST', {title: 'Fixture helper', tags: ['C++', 'Integers'],
+    content: `![fixture](/assets/${image.id})`, codeSolution: {role: 'snippet', code, headers: ['<vector>']}});
+  const helper = (await read(a.store)).archive.shards.at(-1);
+  await a.store.request('/api/shards', 'POST', {title: 'Fixture solved problem', tags: ['C++', 'Integers', 'Problems'],
+    codeSolution: {role: 'problem', approaches: [{id: 'fixture-approach', title: 'Reusable helper', code, timeComplexity: 'O(1)'}]}});
+  const problem = (await read(a.store)).archive.shards.at(-1);
+  await a.store.request('/api/links', 'POST', {fromId: problem.id, toId: helper.id, type: 'uses', fromApproachId: 'fixture-approach',
+    note: 'Uses the integer helper', scope: 'Fixture approach', evidence: 'Calls f(x)'});
+  // Legacy records stay in recovery storage without reviving retired interfaces.
+  await a.store.atomic(db => {
+    db.archive.boards.push({id: 'fixture-board', title: 'Legacy recovery', items: [{shardId: problem.id, x: 24, y: 48}], sections: []});
+    db.archive.reviews.push({id: 'fixture-review', shardId: helper.id, grade: 'good', reviewedAt: '2026-01-01T00:00:00.000Z'});
+    db.archive.shards[0].fixtureExtension = {preserve: true};
+  });
+  await add(a.store, 'Earlier deleted fixture');
+  const old = (await read(a.store)).archive.shards.at(-1);
+  await a.store.request(`/api/shards/${old.id}`, 'DELETE');
+  await a.sync.run(); await b.sync.run();
+  assert.equal((await b.sync.status()).state, 'synced');
+  assert.deepEqual(libraryCapsule(await read(b.store)), libraryCapsule(await read(a.store)));
+
+  service.setOnline(false);
+  await b.store.request('/api/state');
+  await b.store.request(`/api/shards/${helper.id}`, 'PUT', {title: 'Fixture helper edited offline', tags: ['C++', 'Integers', 'Offline']});
+  await b.sync.run();
+  const offlineArchive = (await read(b.store)).archive;
+  b.sync.stop(); (await b.store.ready).close();
+  const restarted = device(t, service, {indexedDB: b.indexedDB});
+  assert.deepEqual((await read(restarted.store)).archive, offlineArchive);
+  await restarted.sync.run();
+  assert.equal((await restarted.sync.status()).state, 'offline');
+  service.setOnline(true); await restarted.sync.run(); await a.sync.run();
+  assert.equal((await restarted.sync.status()).state, 'synced');
+  assert.deepEqual(libraryCapsule(await read(a.store)), libraryCapsule(await read(restarted.store)));
+  assert.equal((await read(a.store)).archive.shards.find(shard => shard.id === helper.id).codeSolution.code, code);
+  assert.equal((await read(a.store)).archive.assets[0].data, png);
+
+  await a.store.request('/api/state');
+  await a.store.request(`/api/shards/${helper.id}`, 'DELETE');
+  await a.sync.run(); await restarted.sync.run();
+  const deleted = (await read(restarted.store)).archive;
+  assert.equal(deleted.links.length, 0);
+  const trash = deleted.trash.find(item => item.shard.id === helper.id);
+  assert.equal(trash.shard.codeSolution.code, code);
+  assert.equal(trash.links[0].fromApproachId, 'fixture-approach');
+  assert.equal(trash.reviews[0].id, 'fixture-review');
+  assert.deepEqual(deleted, (await read(a.store)).archive);
+  await restarted.store.request('/api/state');
+  await restarted.store.request(`/api/trash/${trash.id}/restore`, 'POST');
+  await restarted.sync.run(); await a.sync.run();
+  const restored = (await read(a.store)).archive;
+  assert.deepEqual(restored, (await read(restarted.store)).archive);
+  assert.equal(restored.links[0].fromId, problem.id);
+  assert.equal(restored.links[0].toId, helper.id);
+  assert.equal(restored.links[0].fromApproachId, 'fixture-approach');
+  assert.equal(restored.shards.find(shard => shard.id === helper.id).codeSolution.code, code);
+  assert.ok(restored.revisions.some(item => item.shardId === helper.id && item.snapshot.codeSolution.code === code));
+  assert.equal(restored.assets[0].data, png);
+  assert.equal(restored.boards[0].items[0].shardId, problem.id);
+  assert.ok(restored.trash.some(item => item.shard.id === old.id));
+});
+
 test('offline outbox survives browser restart and retries the original mutation', async t => {
   const service = cloud(), a = device(t, service);
   await add(a.store); service.setOnline(false);

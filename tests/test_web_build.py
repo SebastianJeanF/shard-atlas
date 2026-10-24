@@ -19,7 +19,7 @@ class WebBuildTests(unittest.TestCase):
             BUILDER.build(output)
             for filename in ("app.js", "platform.js", "styles.css", "code-solutions.js", "code-solutions.css", "ai-instructions.md"):
                 self.assertEqual((ROOT / "static" / filename).read_bytes(), (output / filename).read_bytes(), filename)
-            html = (output / "index.html").read_text()
+            html = (output / "index.html").read_text(encoding="utf-8")
             self.assertIn('src="/bootstrap.mjs"', html)
             self.assertIn('href="/manifest.webmanifest"', html)
             self.assertIn('href="/phone.css"', html)
@@ -28,7 +28,7 @@ class WebBuildTests(unittest.TestCase):
             self.assertNotIn('id="drive-inbox-title"', html)
             self.assertNotIn("platform:", html)
             self.assertLess(html.index('src="/platform.js"'), html.index('src="/bootstrap.mjs"'))
-            self.assertIn('src="/drive-inbox.js"', (ROOT / "static/index.html").read_text())
+            self.assertIn('src="/drive-inbox.js"', (ROOT / "static/index.html").read_text(encoding="utf-8"))
             self.assertFalse((output / "drive-inbox.js").exists())
             self.assertFalse((output / "spiral/local-emblems").exists())
             self.assertFalse((output / "tests").exists())

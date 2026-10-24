@@ -7,7 +7,6 @@ import argparse
 import concurrent.futures
 import contextlib
 import datetime as dt
-import fcntl
 import hashlib
 import json
 import os
@@ -21,6 +20,11 @@ import time
 import urllib.error
 import urllib.request
 from urllib.parse import urlsplit
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB = Path.home() / "Library/Application Support/Shard Atlas/shards.sqlite3"
@@ -109,20 +113,35 @@ def discover(expected_db=DEFAULT_DB):
 @contextlib.contextmanager
 def startup_lock(path, timeout=12):
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a") as handle:
+    with path.open("a+b") as handle:
+        if os.name == "nt":
+            # Windows locks a byte range; keep a stable first byte and seek back
+            # before every lock/unlock so independent helpers share that range.
+            handle.seek(0, os.SEEK_END)
+            if not handle.tell():
+                handle.write(b"\0")
+                handle.flush()
         deadline = time.monotonic() + timeout
         while True:
             try:
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                if os.name == "nt":
+                    handle.seek(0)
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 break
-            except BlockingIOError:
+            except (BlockingIOError, PermissionError):
                 if time.monotonic() >= deadline:
                     raise ClientError("Another Shard Atlas helper is still starting. Retry this request shortly.") from None
                 time.sleep(.05)
         try:
             yield
         finally:
-            fcntl.flock(handle, fcntl.LOCK_UN)
+            if os.name == "nt":
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 def start_backend():
@@ -514,10 +533,10 @@ def main(argv=None):
             result = {"status": client.status, "search": lambda: client.search(args.query, args.limit, role=args.role, tags=args.tags, tag_match=args.tag_match), "read": lambda: client.read(args.ids), "add": lambda: client.add(load_json(args.file)),
                       "preview-import": lambda: client.preview_import(load_json(args.file, 256 * 1024 * 1024)),
                       "import": lambda: client.import_archive(load_json(args.file, 256 * 1024 * 1024))}[args.command]()
-        print(json.dumps(result, ensure_ascii=False, allow_nan=False))
+        print(json.dumps(result, allow_nan=False))
         return 0
     except (ClientError, OSError, ValueError) as error:
-        print(json.dumps({"error": str(error)}, ensure_ascii=False), file=sys.stderr)
+        print(json.dumps({"error": str(error)}), file=sys.stderr)
         return 1
 
 

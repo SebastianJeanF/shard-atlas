@@ -44,12 +44,13 @@ vm.runInContext([
   slice('function subjectMemberships(','function renderAcademicMetadata('),
   slice('const codeRoles=','function updateTagSuggestions('),
   slice('function highlightCpp(','function markdown('),
-  slice('function filteredShards()','function sidebarTopics('),
+  slice('function filteredShards(','function sidebarTopics('),
   slice('function renderDetail(s)','function graphSvg('),
   slice('function draftForm(kind)','function dirtyKind(kind)'),
   slice('function snapshotDraft(','function renderDraftShelf('),
   slice('function openEditor(','function renderLinkApproaches('),
   slice('function renderLinkApproaches(','function restoreDraft('),
+  slice('async function runAction(','\nconst safeUrl='),
   `function markdown(value,context=null){return context?.renderTest?context.renderTest(value):'<p>'+esc(value)+'</p>';}
    function renderShardReleaseChips(){return '';}
    function renderConnectionContext(){return '';}
@@ -70,9 +71,11 @@ vm.runInContext([
    function updateTagSuggestions(){}
    function renderDraftShelf(){}
    function draftStatus(){}
+   async function importReviewAction(){return false;}
+   async function legacyBoardAction(){return false;}
    function scheduleDraft(kind){window.lastDraftKind=kind;window.lastDraft=snapshotDraft(kind);}
    function toast(message){throw new Error(message);}
-   window.TestApp={state,codeRole,filteredShards,renderDetail,renderCodeMetadata,renderCodeRelationships,renderSavedConnection,renderExactCode,formValues,formSnapshot,codeFormData,installCodeEditor,openEditor,snapshotDraft,editorFields,renderLinkApproaches,renderLinkTargets,openLink,setEditingId:value=>{editingId=value;},setConnectionIds:(from,to)=>{linkingId=from;editingLinkId=to;}};`
+   window.TestApp={state,codeRole,filteredShards,renderDetail,renderCodeMetadata,renderCodeRelationships,renderSavedConnection,renderExactCode,formValues,formSnapshot,codeFormData,installCodeEditor,openEditor,runAction,snapshotDraft,editorFields,renderLinkApproaches,renderLinkTargets,openLink,setEditorDraft:value=>{drafts.editor=value;},setEditingId:value=>{editingId=value;},setConnectionIds:(from,to)=>{linkingId=from;editingLinkId=to;}};`
 ].join('\n'),context);
 const app=context.window.TestApp;
 const reference=value=>({role:'snippet',aliases:[],purpose:'',code:'',headers:[],timeComplexity:'',spaceComplexity:'',complexityNotes:'',assumptions:[],pitfalls:[],approaches:[],...value});
@@ -211,6 +214,24 @@ check('import editor changes remain represented in the unsaved-change snapshot',
   const form={id:'import-edit-form',elements:{codeSolution:hiddenInput('{}')},dataset:{}},container=ensure('#import-code-solution-editor');container.id='import-code-solution-editor';nodes.set('#import-edit-form',form);
   let notify;const actual=context.window.CodeSolutions;context.window.CodeSolutions={...actual,bindEditor:(_root,onChange)=>{notify=onChange;}};
   try{app.installCodeEditor({codeSolution:reference({})},container);const before=app.formSnapshot(form);notify({codeSolution:reference({code:'return 1;\n'})});assert.notEqual(app.formSnapshot(form),before);}finally{context.window.CodeSolutions=actual;}
+});
+for(const role of ['snippet','algorithm','problem']){
+  try{
+    const form=editorFormFixture();nodes.set('#editor-form',form);ensure('#code-solution-editor').id='code-solution-editor';reset([]);app.state.tags=['Binary search','C++'];app.state.subject='CS';app.state.query='  lower_bound  ';
+    await app.runAction('new-code',{dataset:{codeRole:role,captureQuery:'true'},closest:()=>null});
+    const value=app.codeFormData(form).codeSolution;assert.equal(value.role,role);assert.equal(value.code,'');assert.equal(form.elements.content.value,'');assert.equal(form.elements.title.value,'lower_bound');assert.equal(form.elements.tags.value,'Binary search, C++');assert.deepEqual(JSON.parse(form.elements.subjects.value),['CS']);
+    assert.equal(value.approaches.length,role==='problem'?1:0);
+    const recovered=app.snapshotDraft('editor');app.openEditor(null,recovered,{role:'snippet',title:'must not replace draft'});assert.deepEqual(native(app.codeFormData(form).codeSolution),native(value));assert.equal(form.elements.title.value,'lower_bound');
+    const before=app.formSnapshot(form);app.setEditorDraft(recovered);
+    await assert.rejects(app.runAction('new-code',{dataset:{codeRole:'algorithm'},closest:()=>null}),/unfinished shard/);assert.equal(app.formSnapshot(form),before);
+    app.setEditorDraft(null);app.openEditor();assert.deepEqual(native(app.codeFormData(form).codeSolution),{});assert.equal(form.elements.title.value,'','Ordinary New shard must remain blank');
+    passed++;console.log(`✓ direct ${role} capture preserves context and protects recovered drafts`);
+  }catch(error){failures.push({title:'direct code capture',error});console.error(error.stack);}
+  finally{app.setEditorDraft(null);}
+}
+check('lookup capture bounds the editable title and keeps query text out of literal code',()=>{
+  const form=editorFormFixture();nodes.set('#editor-form',form);reset([]);const title='😀'.repeat(241)+' return x;';app.openEditor(null,null,{role:'problem',title});const value=app.codeFormData(form).codeSolution;
+  assert.equal([...form.elements.title.value].length,240);assert.equal(value.code,'');assert.equal(value.approaches[0].code,'');assert.equal(form.elements.content.value,'');
 });
 console.log(`${passed} code integration checks passed.`);
 assert.equal(failures.length,0,`${failures.length} code integration checks failed.`);

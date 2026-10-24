@@ -335,7 +335,7 @@ def serve(client, source=None, destination=None):
             if notification:
                 continue
             response = {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32603, "message": "Local integration error. No save has been verified; retry the exact request to check."}}
-        destination.write(json.dumps(response, ensure_ascii=False, allow_nan=False) + "\n")
+        destination.write(json.dumps(response, allow_nan=False) + "\n")
         destination.flush()
 
 

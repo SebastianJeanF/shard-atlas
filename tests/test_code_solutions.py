@@ -1,6 +1,7 @@
 """Code-reference persistence and relationship safety using temporary collections."""
 
 import copy
+from contextlib import closing
 import io
 import json
 from pathlib import Path
@@ -261,7 +262,7 @@ class CodeSolutionsTests(unittest.TestCase):
         with mock.patch.object(Store, "backup", side_effect=OSError("blocked")):
             with self.assertRaisesRegex(AppError, "safety snapshot"):
                 self.open_store(self.store.db_path)
-        with sqlite3.connect(self.store.db_path) as connection:
+        with closing(sqlite3.connect(self.store.db_path)) as connection:
             self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 4)
         upgraded = self.open_store(self.store.db_path)
         self.assertEqual(upgraded.state()["links"], [old_link])

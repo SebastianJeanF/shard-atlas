@@ -114,10 +114,10 @@ class ContributionToolsTests(unittest.TestCase):
     def test_concurrent_helpers_start_one_persistent_backend_without_ui(self):
         source = self.root / "service-source"
         source.mkdir()
-        text = (ROOT / "server.py").read_text()
+        text = (ROOT / "server.py").read_text(encoding="utf-8")
         text = text.replace('BACKEND_VERSION = "2.1.0"', 'BACKEND_VERSION = "2.2.0"')
-        (source / "server.py").write_text(text)
-        (source / "library_sync.py").write_text((ROOT / "library_sync.py").read_text())
+        (source / "server.py").write_text(text, encoding="utf-8")
+        (source / "library_sync.py").write_text((ROOT / "library_sync.py").read_text(encoding="utf-8"), encoding="utf-8")
         database = self.root / "background-service" / "shards.sqlite3"
         with socket.socket() as sock:
             sock.bind(("127.0.0.1", 0))

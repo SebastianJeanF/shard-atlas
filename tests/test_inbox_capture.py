@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from platform_fixtures import symlink_or_skip
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -74,7 +75,7 @@ class InboxCaptureTests(unittest.TestCase):
         envelope = client.inbox_envelope(self.batch)
         client.write_inbox_envelope(envelope, target)
         output = self.folder / "capture.json"
-        output.symlink_to(target)
+        symlink_or_skip(self, output, target)
         before = target.read_bytes()
         with self.assertRaises(client.ClientError):
             client.write_inbox_envelope(envelope, output)

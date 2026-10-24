@@ -12,6 +12,7 @@ import tempfile
 import threading
 import time
 import unittest
+from platform_fixtures import symlink_or_skip
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
@@ -581,7 +582,6 @@ class HttpTests(unittest.TestCase):
         (self.static / "index.html").write_text("<!doctype html><title>Shard Atlas</title>")
         (self.static / "app.js").write_text("console.log('local');")
         (self.root / "private.txt").write_text("private data")
-        (self.static / "secret.txt").symlink_to(self.root / "private.txt")
         self.store = Store(self.root / "db.sqlite3", root=self.root, seed=False, backup_on_start=False)
         self.server = LocalServer(("127.0.0.1", 0), self.store, static_dir=self.static)
         self.port = self.server.server_address[1]
@@ -660,9 +660,7 @@ class HttpTests(unittest.TestCase):
         manifest = pack / "manifest.json"
         manifest.write_text("{invalid json")
         self.assertEqual(self.request("GET", "/spiral-timeline.json")[2], catalog)
-        for filename in ("missing.png", "../../private.txt", "https://example.com/world.png", "outside.png"):
-            if filename == "outside.png":
-                (pack / filename).symlink_to(self.root / "private.txt")
+        for filename in ("missing.png", "../../private.txt", "https://example.com/world.png"):
             manifest.write_text(json.dumps({"schemaVersion": 1, "icons": [{"id": "dragonspyre", "file": filename}]}))
             self.assertEqual(self.request("GET", "/spiral-timeline.json")[2], catalog)
 
@@ -840,6 +838,21 @@ class HttpTests(unittest.TestCase):
         for path in ("/../private.txt", "/%2e%2e/private.txt", "/%2F..%2Fprivate.txt", "/secret.txt", "/api/missing"):
             with self.subTest(path=path):
                 self.assertEqual(self.request("GET", path)[0], 404)
+
+    def test_static_symlinks_cannot_escape_the_public_directory(self):
+        symlink_or_skip(self, self.static / "secret.txt", self.root / "private.txt")
+        self.assertEqual(self.request("GET", "/secret.txt")[0], 404)
+
+    def test_local_emblem_symlink_keeps_original_fallback(self):
+        catalog = {"schemaVersion": 1, "releases": {"cpp98": {"emblems": [
+            {"id": "dragonspyre", "name": "Dragonspyre", "src": "/spiral/emblems/dragonspyre.svg"}]}}}
+        (self.static / "spiral-timeline.json").write_text(json.dumps(catalog))
+        pack = self.static / "spiral" / "local-emblems"
+        pack.mkdir(parents=True)
+        symlink_or_skip(self, pack / "outside.png", self.root / "private.txt")
+        (pack / "manifest.json").write_text(json.dumps({"schemaVersion": 1, "icons": [
+            {"id": "dragonspyre", "file": "outside.png"}]}))
+        self.assertEqual(self.request("GET", "/spiral-timeline.json")[2], catalog)
 
     def test_server_cannot_bind_to_external_interface(self):
         with self.assertRaises(ValueError):

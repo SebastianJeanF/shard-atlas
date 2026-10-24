@@ -6,7 +6,7 @@ Shard Atlas is expanding its existing technical collection to connect computer s
 
 ## Cross-platform library: version 3.0.0
 
-The shared interface and Mac/browser adapters now live in one repository. A private hosted library synchronizes complete portable records and contribution receipts, with offline local copies, durable retries, safety backups, and explicit whole-collection conflict review. The website and rebuilt Mac app have been verified against the real migrated library. Physical Windows and iPhone checks remain for those devices. See [release evidence and remaining checks](handoff.md) and [the development workflow](cross-platform.md).
+The shared interface and Mac/browser adapters now live in one repository. A private hosted library synchronizes complete portable records and contribution receipts, with offline local copies, durable retries, safety backups, and explicit whole-collection conflict review. The Windows website loaded the real migrated library and reported synced; the owner also confirmed the actual phone works. The earlier Mac 3.0.0 migration remains verified. See [verification scope](sync-verification.md), [release evidence and remaining native checks](handoff.md), and [the development workflow](cross-platform.md).
 
 ## Phase 1: complete
 
@@ -47,7 +47,10 @@ These additions share the existing collection, sources, and recovery features. T
 
 ### Further code-reference work
 
-Milestone 5 is a focused visual exploration update with role-aware graph controls and tag-based browsing. Existing Topic map exploration remains available in version 2.9.0. Milestone 6 is a broader pilot with real saved content and workflow refinement. Milestone 7, optional, would suggest relevant existing shards with reasons while keeping suggestions distinct from saved relationships. These remain future work.
+5. **Focused visual exploration.** Role filters retain the starting idea as context. Directed saved relationships and symmetric alternatives are distinct from optional dashed shared-topic overlap. Topic chips and neighborhood browsing connect the focused graph to useful tag exploration while preserving deterministic layout.
+6. **Broader content pilot and refinement.** The existing library was inventoried before selecting complementary hashing, binary-search, BFS, Dijkstra, and quickselect material. Direct role-specific capture and creation from an unsuccessful lookup reduce capture steps. Named implementation variants are visible and editable for snippets and algorithms as well as solved problems. Personal content and validation evidence stay outside source Git; the handoff records the saved pilot outcome.
+
+Milestone 7 remains optional and outside this implementation: suggestions of relevant existing shards with reasons, kept separate from saved relationships. This update does not generate those suggestions or import every tab in the source document.
 
 ## Initial content rollout
 

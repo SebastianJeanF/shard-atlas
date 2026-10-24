@@ -9,7 +9,7 @@ class ReleaseCatalogTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         path = Path(__file__).resolve().parents[1] / 'static' / 'cpp-releases.json'
-        cls.catalog = json.loads(path.read_text())
+        cls.catalog = json.loads(path.read_text(encoding='utf-8'))
         cls.releases = {release['id']: release for release in cls.catalog['releases']}
 
     def test_catalog_is_self_contained_and_sources_resolve(self):

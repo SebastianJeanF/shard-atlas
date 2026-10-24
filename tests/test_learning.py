@@ -1,6 +1,7 @@
 """Learning explanations, rich connections, and schema recovery on isolated data."""
 
 import copy
+from contextlib import closing
 import io
 import json
 from pathlib import Path
@@ -175,7 +176,7 @@ class LearningTests(unittest.TestCase):
         backups = set(migrated.backup_dir.glob("*.sqlite3")) - backups_before
         self.assertEqual(len(backups), 1)
         snapshot = next(iter(backups))
-        with sqlite3.connect(snapshot) as connection:
+        with closing(sqlite3.connect(snapshot)) as connection:
             self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 3)
             self.assertNotIn("knowledge", {row[1] for row in connection.execute("PRAGMA table_info(links)")})
         self.assertEqual(self.open_store(legacy_path).state(), before)

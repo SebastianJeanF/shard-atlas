@@ -8,6 +8,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from platform_fixtures import symlink_or_skip
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -50,7 +51,7 @@ class DriveInboxTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"SHARD_ATLAS_DRIVE_INBOX": str(self.folder)}):
             self.assertEqual(DriveInbox(self.store).path, self.folder)
             self.assertEqual(DriveInbox(self.store, self.root / "explicit").path, self.root / "explicit")
-        with mock.patch.dict(os.environ, {}, clear=True):
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(Path, "home", return_value=self.root):
             self.assertEqual(DriveInbox(self.store).path, Path.home() / "My Drive/ChatGPT/Shard Atlas/Inbox")
 
     def test_strict_versioned_envelope_rejects_archives_and_mutating_fields(self):
@@ -113,10 +114,11 @@ class DriveInboxTests(unittest.TestCase):
         self.assertIn("already used with different content", next(item for item in result["files"] if item["name"] == "original.json")["error"])
         self.assertEqual(next(item for item in self.store.state()["shards"] if item["id"] == "note-one")["content"], "An explanation.")
 
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "FIFO fixtures require POSIX.")
     def test_symlinks_folders_and_special_files_are_rejected_without_reading_them(self):
         outside = self.root / "outside.json"
         outside.write_text(json.dumps(self.envelope()), encoding="utf-8")
-        (self.folder / "link.json").symlink_to(outside)
+        symlink_or_skip(self, self.folder / "link.json", outside)
         (self.folder / "directory.json").mkdir()
         os.mkfifo(self.folder / "pipe.json")
         (self.folder / "ignored.txt").write_text("not an import", encoding="utf-8")
@@ -140,7 +142,7 @@ class DriveInboxTests(unittest.TestCase):
         outside.write_bytes(source.read_bytes())
         status = self.inbox.status()
         source.unlink()
-        source.symlink_to(outside)
+        symlink_or_skip(self, source, outside)
         with mock.patch.object(self.inbox, "status", return_value=status):
             result = self.inbox.sync()
         self.assertEqual(result["counts"]["errors"], 1)

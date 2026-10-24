@@ -1193,6 +1193,19 @@ body[data-saving] dialog form { opacity: .75; }
 .atlas-neighbor-list .atlas-relation-label { color: #697c5e; font-size: 9px; letter-spacing: .1px; }
 .atlas-relation-edge { fill: none; stroke: #7f9474; stroke-width: 1.4; vector-effect: non-scaling-stroke; }
 .atlas-relation-edge.shared-topic, .atlas-relation-edge[data-kind="topic"] { stroke: #b7aa8e; stroke-dasharray: 5 5; }
+.atlas-role-filters { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 14px; }
+.atlas-role-filters button { min-height: 38px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--muted); font-size: 11px; }
+.atlas-role-filters button[aria-pressed="true"] { border-color: var(--green); background: #e7efdd; color: var(--green-dark); font-weight: 600; }
+.atlas-role-filters button small { margin-left: 5px; font-variant-numeric: tabular-nums; }
+.atlas-context-note { margin: 0 0 12px; color: var(--muted); font-size: 11px; line-height: 1.7; }
+.atlas-relationship-node .atlas-node-role { fill: #526b49; font-size: 10px; font-weight: 600; }
+.atlas-relationship-map .atlas-shared-label { fill: #8c785a; }
+.atlas-edge-direction { color: var(--green-dark); font-size: 9px; font-weight: 600; }
+.atlas-inspector .atlas-role-caption { margin: 0 0 10px; font-size: 10px; color: var(--green); }
+.atlas-inspector .atlas-shared-topics { border-style: dashed; border-color: #b7aa8e; }
+.atlas-memberships small { margin-left: 3px; font-variant-numeric: tabular-nums; }
+.atlas-legend .atlas-overlap-key { color: #8c785a; }
+@media (max-width: 600px) { .atlas-role-filters button { min-height: 44px; flex: 1 1 125px; } }
 .atlas-relationship-map .atlas-edge-label, .atlas-relationship-map .atlas-relation-label { font-size: 10px; fill: #607255; paint-order: stroke; stroke: #fbfbf5; stroke-width: 5px; stroke-linejoin: round; }
 .atlas-relationship-node { cursor: pointer; }
 .atlas-relationship-node rect { fill: #fffefa; stroke: #b6c3aa; stroke-width: 1.2; vector-effect: non-scaling-stroke; }

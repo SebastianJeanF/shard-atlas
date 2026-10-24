@@ -32,9 +32,13 @@ Forest green marks the selected idea and primary actions. Amber marks learning o
 
 Use the code-reference fields when a shard should answer a quick implementation question. Under **Code reference type**, choose an optional role: **Snippet** for a small operation, **Algorithm or data structure** for a reusable technique, or **Solved problem** for a problem and its solutions. The role complements the shard's existing Kind and topics. Ordinary explanations can keep no code role.
 
+In the Library, **New code reference** opens a snippet, algorithm, or solved problem with its role already selected. A solved problem starts with one blank approach. Selected topics and subject context carry into the new record. If a role-filtered search finds nothing, its matching **New** action uses the search as an editable title; the code stays blank. An unfinished draft must be restored or discarded first.
+
 Add a short purpose, the exact C++ code, and any required headers. Record time and space complexity, with a note defining the input size and relevant conditions. Add assumptions and pitfalls where they affect safe reuse, such as an integer width or overflow policy. Keep the detailed explanation and source references in the main body. A longer tutorial is optional.
 
 For a solved problem, add a named approach for each useful solution. Each approach has its own summary, code, headers, complexities, assumptions, and pitfalls. Keep differences between approaches clear and link reusable explanations to their existing shards instead of copying them into every solution.
+
+Snippets and algorithms can also retain named implementation approaches alongside their primary code. Changing a role does not discard the saved variants or regenerate their IDs.
 
 **Quick reference** brings the purpose, copyable code, costs, and caveats together. Longer supporting explanations remain available beside the reference material. Code is displayed and copied as saved. The app does not compile or run it.
 
@@ -53,6 +57,10 @@ Choose **Connect** to describe how two notes relate. The available relationships
 Direction matters. An arrow runs from the note making the relationship to its target. For example, an example note can point to the concept it illustrates with *is an example of*. A diagram's proximity or arrow alone does not establish a prerequisite.
 
 The Library includes a compact preview of nearby ideas. Use Topic map to explore saved relationships one step at a time.
+
+In **Topic map → Shard connections**, filter the focused graph by snippets, algorithms, solved problems, or other notes. The starting shard remains visible as labeled context when it has a different role. Solid arrows show saved source-to-target direction; the inspector states outgoing or incoming relationships and names approach endpoints. Alternatives are symmetric. **Show shared-topic overlap** adds separate dashed links computed from tags, without saving new relationships. Organizational tags remain hidden unless enabled.
+
+Use the inspector's topic chips to browse that topic across roles, or expand **Browse all topic neighborhoods**. Returning to Shard connections retains the starting idea. View controls and graph expansion change navigation, not the saved collection.
 
 ### Follow a solution's techniques
 

@@ -146,15 +146,21 @@ try {
   }
   let instructionText = '# Add knowledge to Shard Atlas\n\nCheck for duplicates and verify every saved note.\n';
   const clipboardWrites = [];
+  // Freeze the complete HTTP snapshot before delaying its delivery to the UI.
+  // Leaving a large body paused at EOF can crash Node's HTTP client.
+  const bufferedFetch = async (url, options) => {
+    const response = await fetch(url, options);
+    return new Response(await response.arrayBuffer(), {status: response.status, statusText: response.statusText, headers: response.headers});
+  };
   const browserFetch = async (url, options = {}) => {
     const full = new URL(url, base), method = options.method || 'GET';
     if (method !== 'GET') { apiWrites++; activeWrites++; maxActiveWrites = Math.max(maxActiveWrites, activeWrites); }
     try {
-      if (full.pathname === '/api/import/preview' && importPreviewGate) { const gate = importPreviewGate; importPreviewGate = null; const response = await fetch(full, options); importPreviewStarted = true; await gate; return response; }
+      if (full.pathname === '/api/import/preview' && importPreviewGate) { const gate = importPreviewGate; importPreviewGate = null; const response = await bufferedFetch(full, options); importPreviewStarted = true; await gate; return response; }
       if(method==='PUT'&&full.pathname.startsWith('/api/boards/')&&failBoardPut)return {ok:false,json:async()=>({error:'Simulated board save failure'})};
-      if(method==='PUT'&&full.pathname.startsWith('/api/boards/')&&boardPutGate){const gate=boardPutGate;boardPutGate=null;const response=await fetch(full,options);boardPutStarted=true;await gate;return response;}
+      if(method==='PUT'&&full.pathname.startsWith('/api/boards/')&&boardPutGate){const gate=boardPutGate;boardPutGate=null;const response=await bufferedFetch(full,options);boardPutStarted=true;await gate;return response;}
       if (full.pathname.startsWith('/api/assets/') && full.pathname.endsWith('/text') && ocrResponse) return {ok:true,json:async()=>ocrResponse};
-      if (full.pathname === '/api/state' && method === 'GET') { stateReadCount++; if (stateResponseGate) { const response = await fetch(full, options); await stateResponseGate; return response; } }
+      if (full.pathname === '/api/state' && method === 'GET') { stateReadCount++; if (stateResponseGate) { const response = await bufferedFetch(full, options); await stateResponseGate; return response; } }
       if (full.pathname === '/cpp-releases.json') { releaseReadCount++; if (releaseResponseGate) await releaseResponseGate; }
       if (full.pathname === '/cpp-releases.json' && failReleaseLoad) return { ok: false, json: async () => ({ error: 'Simulated missing reference' }) };
       if (full.pathname === '/cpp-releases.json' && releaseResponse) return { ok: true, json: async () => releaseResponse };
@@ -221,7 +227,7 @@ try {
         { id: 'atlas-cd', fromId: 'atlas-c', toId: 'atlas-d', type: 'related_to', note: 'Recorded association.' },
         { id: 'atlas-missing', fromId: 'atlas-a', toId: 'missing-shard', type: 'related_to', note: 'An unavailable archive endpoint.' }
       ] };
-      t.clearFilters(); Object.assign(t.state, { atlasMode: 'topics', atlasTopic: null, atlasSelectedId: null, atlasInspectId: null, atlasExpandedIds: [], atlasShowOrganizational: false, atlasRelation: 'all', atlasBridge: null, atlasLimit: 12, atlasZoom: 1, atlasFit: false });
+      t.clearFilters(); Object.assign(t.state, { atlasMode: 'topics', atlasTopic: null, atlasSelectedId: null, atlasInspectId: null, atlasExpandedIds: [], atlasShowOrganizational: false, atlasShowShared: false, atlasRelation: 'all', atlasBridge: null, atlasLimit: 12, atlasZoom: 1, atlasFit: false });
       await test();
     } finally { Object.assign(t.state, previous); $('#search').value = t.state.query; t.renderNav(); }
   }
@@ -374,6 +380,58 @@ try {
       t.state.atlasRelation='all';t.state.tags=['Classes'];const filtered=t.atlasRelationshipModel();assert.deepEqual(Array.from(filtered.nodes,shard=>shard.id).sort(),['atlas-a','atlas-b']);assert.ok(filtered.edges.every(link=>link.fromId!=='atlas-c'&&link.toId!=='atlas-c'));
       t.state.tags=[];t.state.atlasSelectedId='atlas-e';t.state.atlasExpandedIds=[];const isolated=t.atlasRelationshipModel();assert.deepEqual(Array.from(isolated.nodes,shard=>shard.id),['atlas-e']);assert.equal(isolated.edges.length,0);assert.equal(isolated.frontierCount,0);
     });
+  });
+  await check('Focused code-role filters keep the starting problem as context and preserve saved content', async () => {
+    const base=t.state.data.shards[0],exact='  int f(int x) {\r\n\treturn x; // α\r\n}\r\n';
+    await withAtlasCollection(async()=>{
+      t.state.data.links=[{id:'role-uses',fromId:'role-problem',toId:'role-snippet',type:'uses',fromApproachId:'bfs',note:'Calls the helper.'},{id:'role-implements',fromId:'role-problem',toId:'role-algorithm',type:'implements'}];
+      t.state.atlasSelectedId='role-problem';t.state.atlasMode='connections';const before=JSON.stringify(t.state.data),writes=apiWrites;
+      await t.runAction('atlas-role',{dataset:{id:'snippet'}});
+      let model=t.atlasRelationshipModel();assert.deepEqual(Array.from(model.nodes,s=>s.id).sort(),['role-problem','role-snippet']);assert.equal(model.contextOnly,true);assert.equal(model.roleCounts.problem,1);assert.equal(model.roleCounts.snippet,1);assert.equal(model.roleCounts.algorithm,1);
+      const output=t.renderAtlas();assert.match(output,/starting shard stays visible as context/);assert.match(output,/Snippet · context|Solved problem · context/);assert.match(output,/Filter graph by code role/);assert.ok(!output.includes('id="code-role-filter"'));
+      await t.runAction('atlas-role',{dataset:{id:'algorithm'}});model=t.atlasRelationshipModel();assert.deepEqual(Array.from(model.nodes,s=>s.id).sort(),['role-algorithm','role-problem']);assert.equal(model.edges[0].id,'role-implements');
+      await t.runAction('atlas-role',{dataset:{id:'problem'}});assert.deepEqual(Array.from(t.atlasRelationshipModel().nodes,s=>s.id),['role-problem']);
+      await t.runAction('atlas-role',{dataset:{id:'all'}});assert.equal(t.atlasRelationshipModel().nodes.length,3);assert.equal(apiWrites,writes);assert.equal(JSON.stringify(t.state.data),before);
+    },[
+      {...base,id:'role-problem',title:'Course ordering',tags:['Graphs'],codeSolution:{role:'problem',approaches:[{id:'bfs',title:'Queue approach',code:exact}]}},
+      {...base,id:'role-snippet',title:'Queue helper',tags:['Queues'],codeSolution:{role:'snippet',code:exact}},
+      {...base,id:'role-algorithm',title:'Topological sort',tags:['Graphs'],codeSolution:{role:'algorithm',code:exact}}
+    ]);
+  });
+  await check('Focused map separates optional shared-topic overlap from saved edges and hides organizational overlap by default', async () => {
+    const base=t.state.data.shards[0];
+    await withAtlasCollection(async()=>{
+      t.state.atlasMode='connections';t.state.atlasSelectedId='overlap-a';const before=JSON.stringify(t.state.data),writes=apiWrites;
+      let model=t.atlasRelationshipModel();assert.equal(model.nodes.length,1);assert.equal(model.sharedEdges.length,0);
+      document.dispatchEvent(new FixtureEvent('change',{target:{id:'atlas-shared-topics',checked:true}}));
+      model=t.atlasRelationshipModel();assert.deepEqual(Array.from(model.nodes,s=>s.id).sort(),['overlap-a','overlap-b']);assert.equal(model.edges.length,0);assert.deepEqual(Array.from(model.sharedEdges[0].topics),['Graphs']);
+      let output=t.renderAtlas();assert.match(output,/data-topic-overlap="true"/);assert.match(output,/atlas-relation-edge shared-topic/);assert.match(output,/separate from saved relationships/);assert.ok(!output.includes('data-relationship-id='));
+      document.dispatchEvent(new FixtureEvent('change',{target:{id:'atlas-organizational',checked:true}}));assert.equal(t.atlasRelationshipModel().nodes.length,3);
+      const markup=t.renderAtlas();t.state.data={...t.state.data,shards:[...t.state.data.shards].reverse()};assert.equal(t.renderAtlas(),markup);
+      t.state.data={...t.state.data,shards:[...t.state.data.shards].reverse()};
+      await t.runAction('atlas-browse-topic',{dataset:{id:'graphs'}});assert.equal(t.state.atlasMode,'topics');assert.equal(t.state.atlasTopic,'graphs');assert.equal(t.state.atlasSelectedId,'overlap-a');
+      assert.equal(apiWrites,writes);assert.equal(JSON.stringify(t.state.data),before);
+    },[
+      {...base,id:'overlap-a',title:'Root graph',tags:['Graphs','C++']},
+      {...base,id:'overlap-b',title:'Shared graph',tags:['graphs']},
+      {...base,id:'overlap-c',title:'Only organizational overlap',tags:['C++']}
+    ]);
+  });
+  await check('Graph direction and inverse labels retain approach endpoints and symmetric alternatives', async () => {
+    const base=t.state.data.shards[0];
+    await withAtlasCollection(async()=>{
+      t.state.data.links=[{id:'direction-uses',fromId:'direction-problem',toId:'direction-helper',type:'uses',fromApproachId:'queue',note:'Uses the queue.'},{id:'direction-implements',fromId:'direction-problem',toId:'direction-helper',type:'implements',fromApproachId:'dfs'},{id:'direction-alt',fromId:'direction-problem',toId:'direction-problem',type:'alternative_to',fromApproachId:'queue',toApproachId:'dfs'}];
+      t.state.atlasMode='connections';t.state.atlasSelectedId='direction-problem';t.state.atlasInspectId='direction-helper';
+      let output=t.renderAtlas();assert.match(output,/This idea is used in/);assert.match(output,/This idea has an implementation in/);assert.match(output,/Solved problem · Queue &lt;approach&gt;/);assert.match(output,/Incoming relationship/);
+      const edge=id=>output.match(new RegExp('<g data-relationship-id="'+id+'"[^>]*>([\\s\\S]*?)<\\/g>'))[1];
+      assert.match(edge('direction-uses'),/marker-end="url\(#atlas-arrow\)"/);assert.ok(!edge('direction-alt').includes('marker-end='));assert.match(edge('direction-alt'),/Queue &lt;approach&gt; is an alternative to Solved problem · DFS/);
+      assert.notEqual(edge('direction-uses').match(/ d="([^"]+)"/)[1],edge('direction-implements').match(/ d="([^"]+)"/)[1]);
+      t.state.atlasInspectId='direction-problem';output=t.renderAtlas();assert.match(output,/This idea · Queue &lt;approach&gt; uses/);assert.match(output,/Symmetric alternative/);
+      t.state.data={...t.state.data,shards:[...t.state.data.shards].reverse(),links:[...t.state.data.links].reverse()};assert.equal(t.renderAtlas(),output);
+    },[
+      {...base,id:'direction-problem',title:'Solved problem',tags:['Graphs'],codeSolution:{role:'problem',approaches:[{id:'queue',title:'Queue <approach>',code:'int q;\n'},{id:'dfs',title:'DFS',code:'int d;\n'}]}},
+      {...base,id:'direction-helper',title:'Reusable helper',tags:['Queues'],codeSolution:{role:'snippet',code:'int h;\n'}}
+    ]);
   });
   await check('Topic and connection exploration changes only local view state', async () => {
     await withAtlasCollection(async () => {
@@ -1202,7 +1260,11 @@ try {
   await check('Native image/JSON file picker type and offline KaTeX resources', async () => {
     t.openEditor(); await t.runAction('upload-image', { dataset: {} }); assert.equal(w.shardAtlasDesktop.filePickerType(), 'image');
     await t.runAction('import', { dataset: {} }); assert.equal(w.shardAtlasDesktop.filePickerType(), 'json'); $('#editor-dialog').close();
-    for (const url of ['/vendor/katex/katex.min.js', '/vendor/katex/katex.min.css', '/vendor/katex/fonts/KaTeX_Main-Regular.woff2']) assert.equal((await fetch(base + url)).status, 200);
+    for (const url of ['/vendor/katex/katex.min.js', '/vendor/katex/katex.min.css', '/vendor/katex/fonts/KaTeX_Main-Regular.woff2']) {
+      const response = await fetch(base + url);
+      assert.equal(response.status, 200);
+      await response.arrayBuffer();
+    }
   });
   await check('Actual PNG upload inserts a durable local image into the draft', async () => {
     t.openEditor(); const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7m8AAAAASUVORK5CYII=', 'base64');
@@ -1427,7 +1489,7 @@ try {
     const original = JSON.stringify(archive); await t.previewImport(archive, 'With a photo.json');
     assert.equal($('#confirm-import').disabled, false); const url = t.importImageUrls.get('review-photo-asset'); assert.ok(url?.startsWith('blob:')); assert.ok(previewObjectUrls.has(url));
     const output = $('#import-preview-content').innerHTML; assert.ok(output.includes('src="' + url + '"')); assert.ok(output.includes('data-image-src="' + url + '"')); assert.match(output, /Diagram &lt;caption&gt;/);
-    assert.equal((await fetch(base + '/assets/review-photo-asset')).status, 404); assert.equal(JSON.stringify(await get('/api/state')), before); assert.equal(JSON.stringify(archive), original);
+    const missingAsset = await fetch(base + '/assets/review-photo-asset'); assert.equal(missingAsset.status, 404); await missingAsset.arrayBuffer(); assert.equal(JSON.stringify(await get('/api/state')), before); assert.equal(JSON.stringify(archive), original);
     t.openImageViewer(url, 'Pending diagram'); assert.ok($('#image-viewer-dialog').open); assert.equal($('#image-viewer-image').src, url);
     t.closeDialog('image-viewer-dialog'); t.closeDialog('import-preview-dialog');
     assert.equal(t.importImageUrls.size, 0); assert.ok(!previewObjectUrls.has(url)); assert.ok(revokedPreviewUrls.includes(url));

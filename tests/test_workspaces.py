@@ -1,6 +1,7 @@
 """Workspace, evidence, and migration safeguards, using temporary databases only."""
 
 import copy
+from contextlib import closing
 import http.client
 import json
 from pathlib import Path
@@ -270,7 +271,7 @@ class WorkspaceTests(unittest.TestCase):
         self.shard(content="Keep original knowledge")
         before = self.store.export_data()
         backup = self.store.backup()
-        with sqlite3.connect(self.store.backup_dir / backup["filename"]) as connection:
+        with closing(sqlite3.connect(self.store.backup_dir / backup["filename"])) as connection, connection:
             connection.execute("UPDATE shards SET knowledge='[\"sources\"]'")
         listed = self.store.backups()["backups"]
         self.assertFalse(next(item for item in listed if item["filename"] == backup["filename"])["valid"])
@@ -366,7 +367,7 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(migrated.health()["databaseVersion"], DATABASE_VERSION)
         snapshots = list(migrated.backup_dir.glob("*.sqlite3"))
         self.assertEqual(len(snapshots), 1)
-        with sqlite3.connect(snapshots[0]) as connection:
+        with closing(sqlite3.connect(snapshots[0])) as connection:
             self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 2)
             self.assertNotIn("knowledge", {row[1] for row in connection.execute("PRAGMA table_info(shards)")})
         other = self.shard("Other")

@@ -55,6 +55,29 @@ check('legacy shards remain ordinary notes with an optional code editor',()=>{
   assert.equal(valueOf(editor(reference({role:''}))).role,'');
   const root=editor(reference({role:''}));assert.equal(root.querySelector('[data-code-visible="active"]').hidden,true);
 });
+check('direct code captures start empty and solved problems keep a stable blank approach',()=>{
+  for(const role of ['snippet','algorithm','problem']){
+    const value=code.newReference(role),root=editor(value),draft=valueOf(root);
+    assert.equal(draft.role,role);assert.equal(draft.code,'');assert.deepEqual(native(draft.aliases),[]);
+    assert.equal(draft.approaches.length,role==='problem'?1:0);
+    if(role==='problem'){
+      const id=draft.approaches[0].id;assert.ok(id);assert.equal(draft.approaches[0].title,'');assert.equal(draft.approaches[0].code,'');
+      assert.equal(valueOf(editor(draft)).approaches[0].id,id,'Reopening an unfinished draft must reuse its approach identity');
+      const row=root.querySelector('[data-code-approach]'),source='\n\treturn input;  \r\n';field(row,'title').value='Identity';field(row,'code').value=source;
+      const saved=code.readEditor(root).codeSolution;assert.equal(saved.approaches[0].id,id);assert.equal(saved.approaches[0].code,source);
+    }
+  }
+  assert.notEqual(code.newReference('problem').approaches[0].id,code.newReference('problem').approaches[0].id);
+  assert.equal(code.newReference('unknown').role,'');
+});
+check('capture menu and failed role lookup expose only explicit creation actions',()=>{
+  const menu=code.renderCaptureMenu();assert.ok(menu.includes('<details'));assert.ok(menu.includes('New code reference'));
+  for(const role of ['snippet','algorithm','problem']){
+    assert.ok(menu.includes(`data-code-role="${role}"`));
+    const empty=code.renderEmptyCapture(role);assert.ok(empty.includes(`data-code-role="${role}"`));assert.ok(empty.includes('data-capture-query="true"'));
+  }
+  for(const role of ['all','none','<img>','__proto__','constructor','toString'])assert.equal(code.renderEmptyCapture(role),'');
+});
 check('snippet fields roundtrip without losing exact C++ whitespace or optional metadata',()=>{
   const value=reference({aliases:['reverse digits','integer reversal'],purpose:'Reverse decimal digits.',code:'\n#include <limits>\r\nint reverse(int x) {\r\n    return x;\r\n}\r\n',headers:['<limits>'],timeComplexity:'O(log |x|)',spaceComplexity:'O(1)',complexityNotes:'Decimal digits in a fixed-width input.',assumptions:['Signed 32-bit input.'],pitfalls:['Return 0 if reversing would overflow.']});
   assert.deepEqual(native(code.readEditor(editor(value)).codeSolution),value);
@@ -74,6 +97,34 @@ check('problem approaches retain order, IDs and separate complexity contracts',(
   const value=reference({role:'problem',purpose:'Return a valid ordering or an empty array.',approaches:[approach({}),approach({id:'approach-dfs',title:'DFS',timeComplexity:'O(V + E)',spaceComplexity:'O(V)',pitfalls:['Detect a back edge.']})]});
   assert.deepEqual(native(code.readEditor(editor(value)).codeSolution),value);
 });
+check('snippet and algorithm variants remain visible, editable and exact without primary code',()=>{
+  for(const role of ['snippet','algorithm']){
+    const first='\n#include <queue>\r\nbool less(int a, int b) {\r\n\treturn a < b;  \r\n}\r\n',second='\n// λ alternative\r\nreturn value;\r\n';
+    const value=reference({role,code:'',approaches:[approach({id:'variant-one',title:'Function comparator',code:first}),approach({id:'variant-two',title:'Lambda comparator',code:second,pitfalls:['Keep variant context.']})]}),root=editor(value),sources=[],connections=[];
+    const markup=code.renderDetail({codeSolution:value},{renderCode:source=>{sources.push(source);return '<pre>Exact source</pre>';},renderApproachConnections:item=>{connections.push(item.id);return '<span>Variant connection</span>';}});
+    assert.deepEqual(sources,[first,second]);assert.deepEqual(connections,['variant-one','variant-two']);
+    for(const text of ['Implementation approaches','Function comparator','Lambda comparator','Keep variant context.','data-code-approach-id="variant-one"','data-code-approach-id="variant-two"'])assert.ok(markup.includes(text));
+    assert.equal((markup.match(/aria-label="C\+\+ syntax colors"/g)||[]).length,1);
+    assert.equal(root.querySelector('[data-code-visible="reference"]').hidden,false);assert.equal(root.querySelector('[data-code-visible="approaches"]').hidden,false);assert.ok(action(root,'add'));
+    assert.deepEqual(native(code.readEditor(root).codeSolution),value);
+    const rows=root.querySelectorAll('[data-code-approach]');field(rows[1],'summary').value='A revised variant reminder.';
+    const changed=code.readEditor(root).codeSolution;assert.equal(changed.approaches[1].summary,'A revised variant reminder.');assert.equal(changed.approaches[0].code,first);assert.equal(changed.approaches[1].code,second);assert.deepEqual(native(changed.approaches.map(item=>item.id)),['variant-one','variant-two']);
+    assert.deepEqual(native(code.readEditor(editor(changed)).codeSolution),native(changed));
+  }
+});
+check('nonproblem primary code coexists with optional variants and role changes preserve both',()=>{
+  for(const role of ['snippet','algorithm']){
+    const primary='\nint primary() {\r\n\treturn 0;  \r\n}\r\n',variant='\nint variant() { return 1; }\r\n';
+    const value=reference({role,code:primary,approaches:[approach({id:'retained-variant',code:variant})]}),root=editor(value),sources=[];
+    const detail=code.renderDetail({codeSolution:value},{renderCode:source=>{sources.push(source);return source===primary?'<pre>Primary implementation</pre>':'<pre>Variant implementation</pre>';}});assert.deepEqual(new Set(sources),new Set([primary,variant]));assert.ok(detail.indexOf('Primary implementation')<detail.indexOf('Variant implementation'));
+    code.bindEditor(root);assert.equal(root.querySelector('[data-code-approaches-title]').textContent,'Implementation approaches');assert.equal(root.querySelector('[data-code-approaches-optional]').hidden,false);
+    field(root,'role').value='problem';root.fire('change');assert.equal(root.querySelector('[data-code-visible="reference"]').hidden,true);assert.equal(root.querySelector('[data-code-visible="approaches"]').hidden,false);
+    field(root,'role').value=role;root.fire('change');assert.equal(root.querySelector('[data-code-visible="reference"]').hidden,false);assert.deepEqual(native(code.readEditor(root).codeSolution),value);
+    root.fire('click',action(root,'add'));const row=root.querySelectorAll('[data-code-approach]').at(-1),newId=valueOf(root).approaches.at(-1).id;field(row,'title').value='Added implementation';field(row,'code').value='return 2;\n';
+    const saved=code.readEditor(root).codeSolution;assert.equal(saved.code,primary);assert.equal(saved.approaches[0].id,'retained-variant');assert.equal(saved.approaches[0].code,variant);assert.equal(saved.approaches[1].id,newId);assert.equal(saved.approaches[1].code,'return 2;\n');
+  }
+  for(const role of ['snippet','algorithm'])assert.equal(code.newReference(role).approaches.length,0);
+});
 check('drafts retain unfinished approaches, while save removes wholly blank rows',()=>{
   const blank=approach({id:'blank-id',title:'',summary:'',code:'',headers:[],timeComplexity:'',spaceComplexity:'',complexityNotes:''});
   const root=editor(reference({role:'problem',approaches:[blank]}));
@@ -88,7 +139,7 @@ check('role changes preserve inactive code and unfinished approaches in drafts',
   code.bindEditor(root,()=>{changes++;});
   field(root,'role').value='problem';root.fire('change');
   assert.equal(root.querySelector('[data-code-visible="reference"]').hidden,true);
-  assert.equal(root.querySelector('[data-code-visible="problem"]').hidden,false);
+  assert.equal(root.querySelector('[data-code-visible="approaches"]').hidden,false);
   field(root,'role').value='';root.fire('change');
   assert.equal(root.querySelector('[data-code-visible="active"]').hidden,true);
   assert.equal(valueOf(root).code,'int saved;\n');assert.equal(valueOf(root).approaches[0].id,'draft-id');assert.equal(changes,2);
