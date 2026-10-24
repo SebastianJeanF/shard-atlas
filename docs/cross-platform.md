@@ -48,16 +48,18 @@ Preserve the deployment's existing private `drive-config.json` when publishing. 
 
 ## Update the Mac app
 
-Pull the released source revision, run the relevant checks, then run:
+Fetch and safely fast-forward the latest main containing the released application revision, preserve local changes, and run the relevant checks. Make a consistent private database backup before updating the working app. Quit the previous app normally so its unsaved-change protection can run, then build and reopen:
 
 ```sh
 python3 desktop/build.py
 open "Shard Atlas.app"
 ```
 
-Close the previous app through its normal quit flow before reopening the rebuilt app. Preserve unsaved-edit prompts. The Mac app loads its bundled interface and local Python service, so publishing the website alone does not update the installed app. Verify its backend version and source revision after rebuilding.
+Preserve unsaved-edit prompts. The Mac app loads its bundled interface and local Python service, so publishing the website alone does not update the installed app. Verify `Contents/Resources/runtime/static/build-info.json`, the running service's `/build-info.json`, backend version, and bundled backend source bytes after rebuilding. Record the actual bundled revision separately from later documentation commits.
 
 For native testing, use `--output PATH --qa-db PATH` with a temporary database. Never run destructive tests against a personal collection.
+
+Native sync validates incoming historical snapshots and Trash before retaining their original payload fields. Older clients may have inserted empty modern fields into legacy recovery records. A guarded check can reconcile that representation with the current cloud base only when live records match exactly, each differing recovery record equals the validated cloud record, no edit is open, and the local fingerprint remains unchanged. It makes a safety backup, changes only recovery payloads, and does not publish or advance the cloud base. A real content difference is never repaired by guessing.
 
 ## Library content and device state
 

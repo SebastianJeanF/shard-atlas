@@ -1,6 +1,6 @@
 # Synchronization verification
 
-The October 23, 2026 checkpoint began from latest GitHub main, `dd0d1c8c55fb6ad179174729ec63fb592864e47e`. No newer source was reset. The owner accepted the available-device gate after confirming the phone works, allowing code-reference milestones 5–6 to continue.
+The first October 23, 2026 checkpoint began from GitHub main `dd0d1c8c55fb6ad179174729ec63fb592864e47e`. The subsequent Mac continuation safely fast-forwarded to `3207e1846564ae09635c760d45e3551d86a83cd3` and released the native recovery-preservation correction at `178d4a54f44e4742318ee663af139c592d2fa2a1`. No newer source or knowledge was reset. The owner's actual-phone confirmation remains accepted.
 
 ## Evidence and limits
 
@@ -12,9 +12,11 @@ The October 23, 2026 checkpoint began from latest GitHub main, `dd0d1c8c55fb6ad1
 | Windows browser mutation flows | Passed with a local simulated cloud | The canonical interface and real IndexedDB ran at two isolated loopback origins. The actual Worker handler used disposable SQLite/object-storage adapters and synthetic identity. Both-direction updates, an offline edit surviving page reload, reconnect, deletion on one client, restoration on the other, and explicit concurrent-edit conflict review passed. Full portable snapshots matched the simulated cloud. |
 | Automated rich two-store fixture | Passed | Exact C++ including Unicode/CRLF, tags, approach-scoped directed links, PNG bytes, revisions, Trash, and legacy board/review recovery were preserved. The separate actual Windows isolated-browser flow verified CRLF code and image display. All fixtures remained outside the personal library. |
 | Phone | Owner-confirmed pass | The owner reported checking the actual phone and that it works. This was not phone automation. Individual phone offline/restart/conflict scenarios were not observed or separately attested by the agent. |
-| Actual Mac | Earlier release evidence retained | Version 3.0.0 and its real migration were verified in the prior handoff. This Windows session did not access or rebuild the Mac. |
-| Browser-process restart and physical network outage | Pending | The isolated test reloaded the page and interrupted cloud transport. It did not restart the entire Opera process or turn off the physical device network. |
-| New exact Windows/Mac/phone export comparison | Pending | The prior Mac/Opera comparison remains the baseline. This session had a Windows export but no fresh Mac/phone exports. |
+| Actual Mac | Passed at the current native release | Version 3.0.0 rebuilt and signed at `178d4a5`, normally reopened, and observed reporting **Library synced**. Native workflows and bundled backend source were verified. |
+| Complete native and Opera process restarts | Passed with isolated data on one Mac | A saved native edit survived normal app exit plus backend-process exit/restart. A saved browser edit survived complete isolated Opera process exit and offline reopening from the persistent profile/service-worker cache. Both subsequently synchronized exact portable records after simulated transport recovery. |
+| Physical network outage | Pending | Loopback HTTP interruption and Opera offline emulation do not establish behavior after disabling and restoring the physical network adapter against a remote service. |
+| Fresh production Mac/Opera/cloud comparison | Passed | Fresh exports matched every portable record by stable ID, including exact C++, tags, directed approach endpoints, image bytes, revisions, Trash, and legacy recovery. The final record counts are in the handoff. No real collection was replaced for testing. |
+| Fresh Windows and phone export comparison | Pending | No fresh Windows or phone export was available during the Mac continuation. Their earlier loading and overall phone confirmation remain accepted. |
 
 Screenshots, exports, fixture data, diagnostic logs, and credentials remain outside Git. No synthetic collection was attached to the production whole-library slot, and no whole-collection replacement was chosen for the real library.
 
@@ -27,12 +29,24 @@ Screenshots, exports, fixture data, diagnostic logs, and credentials remain outs
 
 The added two-store round trip combines offline/restart/reconnect, both update directions, exact implementation text, tags, directed approach relationships, images, deletion/restoration, revisions, Trash, and legacy recovery. Existing tests retain lost-response retries, stale-editor protection, explicit conflict choices, incompatible versions, authentication failures, immutable contribution receipts, and corruption rejection.
 
+## Mac continuation
+
+The Mac ran macOS 26.6.2 on arm64, Swift 6.4, Python 3.13.9, and Node.js 25.8.0. The initial unmodified release passed all 248 Python tests, including the three previously skipped Swift checks, and all 118 JavaScript entries. After the native recovery correction, the full Python suite passed **252 tests with no skips**, including all **35 native-sync tests**. The correction changed Python synchronization and its tests only. Shared JavaScript syntax and whitespace checks also passed.
+
+Actual native QA verified saved arrow direction, reverse labels, symmetric alternatives, starting-context role filtering, separate optional shared-topic overlap, and tag/neighborhood browsing. Direct snippet capture, snippet/algorithm variant display and editing, exact native copying, Paste JSON preview/save/discard, image file selection and enlargement, the JSON export save dialog, and unsaved editor/paste/review close or quit prompts passed. These were WKWebView interactions on the physical Mac, not simulated screen widths. The initial UI checks used QA build `3207e18`. The rebuilt `178d4a5` retains identical Swift and shared interface assets and passed final native synchronization/conflict/restart checks.
+
+The isolated integration fixture used the production Worker handler with disposable persistent SQLite and filesystem object storage, a separate real Opera profile, the bundled native Python service, and synthetic identity on loopback only. Protocol mutations used the actual native HTTP API and browser platform/IndexedDB adapter. The browser and native conflict choices were also exercised in their visible interfaces, including confirmation dialogs. Both accepted and conflicting cloud snapshots remained recoverable. Both update directions and delete/restore retained exact code, approach-scoped links, images, revisions, Trash, and legacy board/review recovery. The native app/backend processes and the isolated Opera process were confirmed stopped before their respective restarts. Browser offline reopening was observed with `navigator.onLine` false and an active service worker before restoring transport.
+
+This fixture was a local cloud simulation on one physical computer. It was not deployed to the production library or a remote QA service, and it does not prove second-device or physical network recovery. No empty or synthetic collection was connected to the production whole-library slot.
+
+The real export check initially found default-field expansion in 850 old revision snapshots and all 149 Trash payloads on the Mac. The corrected client validated these records, backed up the database, and reconciled only recovery payloads against its unchanged synchronized base. Fresh rebuilt-Mac, signed-in production Opera, and cloud exports then matched exactly. Live records and the cloud revision remained unchanged. The previous app bundle, a consistent SQLite snapshot, and private sync state were retained outside Git before installation. See the [handoff](handoff.md#mac-rebuild-and-verification-completed) for exact revisions, counts, and evidence locations.
+
 ## Remaining device confirmations
 
 These remain unverified individually, although the owner has accepted the phone's overall behavior:
 
-1. With disposable QA data in an isolated library, save offline, close/reopen the entire browser or native app, reconnect, and confirm the change arrives on the second device.
-2. Confirm both update directions, delete/restore, and simultaneous-edit review on the actual Mac/phone combination. Review both copies before a whole-collection choice.
-3. Compare fresh portable exports across devices, including exact code, tags, relationship direction and approach IDs, image bytes, revisions, Trash, and legacy recovery.
+1. Set up a separate remote QA library and a second physical device. Test physical network disconnection/reconnection and an offline edit surviving a complete process restart before reaching the other device. The completed same-Mac loopback tests are a separate result.
+2. On that isolated remote fixture, confirm both update directions, delete/restore, and simultaneous-edit review on the actual Mac/phone or Mac/Windows combination. Review both copies before a whole-collection choice.
+3. Compare fresh Windows and phone portable exports with the verified Mac/Opera/cloud records, including exact code, tags, relationship direction and approach IDs, image bytes, revisions, Trash, and legacy recovery. Do not repeat general phone verification.
 
 Do not perform these checks by replacing the production library with an empty synthetic collection. New shared interface changes require a separate Mac rebuild and native verification at the exact released revision; website publication alone does not update the installed app.

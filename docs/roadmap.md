@@ -6,7 +6,7 @@ Shard Atlas is expanding its existing technical collection to connect computer s
 
 ## Cross-platform library: version 3.0.0
 
-The shared interface and Mac/browser adapters now live in one repository. A private hosted library synchronizes complete portable records and contribution receipts, with offline local copies, durable retries, safety backups, and explicit whole-collection conflict review. The Windows website loaded the real migrated library and reported synced; the owner also confirmed the actual phone works. The earlier Mac 3.0.0 migration remains verified. See [verification scope](sync-verification.md), [release evidence and remaining native checks](handoff.md), and [the development workflow](cross-platform.md).
+The shared interface and Mac/browser adapters now live in one repository. A private hosted library synchronizes complete portable records and contribution receipts, with offline local copies, durable retries, safety backups, and explicit whole-collection conflict review. The Mac 3.0.0 app has been rebuilt from `178d4a5`, with native workflows, all macOS checks, and exact production Mac/Opera/cloud export comparisons verified. Isolated native and browser process restarts passed on one physical Mac. Physical network recovery and second-device mutation scenarios remain pending. Earlier actual Windows loading and the owner's phone confirmation remain accepted. See [verification scope](sync-verification.md), [release evidence and remaining checks](handoff.md), and [the development workflow](cross-platform.md).
 
 ## Phase 1: complete
 

@@ -10,13 +10,13 @@
 | 2. Consolidate source | Complete | Shared UI, both adapters, hosted runtime, builds, checks, and handoff instructions live in this repository. |
 | 3. Private sync foundation | Deployed and verified | D1/R2 bindings and migrations applied. Authenticated readback passed and anonymous access was denied. |
 | 4. Browser sync | Deployed and verified | Live Opera GX downloaded the library, reported synced, and exported records matching the Mac exactly. Phone-width layout and lookup passed. |
-| 5. Mac sync | Installed and verified | Version 3.0.0 rebuilt, signed, reopened, and reported synced through the actual local service. |
+| 5. Mac sync | Updated and verified | Version 3.0.0 rebuilt from `178d4a54f44e4742318ee663af139c592d2fa2a1`, signed, reopened, and reported synced. Native QA and exact Mac/Opera/cloud exports passed. |
 | 6. Real migration | Available collections migrated | Every portable record in the browser export matched the Mac. Other devices retain first-connection review for a different existing collection. |
-| 7. Everyday verification | Available-device gate accepted | Actual Windows Opera GX loaded the owner-private shared library and displayed **Library synced**. The owner confirmed the phone works. Isolated Windows browser flows and the complete automated suites passed; see [verification scope and evidence](sync-verification.md). |
+| 7. Everyday verification | Available checks passed | Actual Windows loading and the owner's phone confirmation are retained. Mac native workflows, isolated Mac/Opera process restarts, and exact production Mac/Opera/cloud exports passed. Physical network and second-device scenarios remain pending. See [verification scope and evidence](sync-verification.md). |
 
 ## Released source
 
-The original synchronization release on October 23, 2026 uses GitHub commit `f33c61cf9d3f43ef53e64438601b28e9b9d03f4b`. The matching Sites source mirror is `29bddbdad86963557350d6ac689bf2dbb97a1b4f`. Deployment `appgdep_6adbfa8dbcd481918c10fb7dea4b73ec` succeeded with runtime environment revision 1. The installed Mac bundle includes that GitHub source revision. Later documentation and handoff-tool commits do not imply a new application deployment.
+The original synchronization release on October 23, 2026 uses GitHub commit `f33c61cf9d3f43ef53e64438601b28e9b9d03f4b`. The matching Sites source mirror is `29bddbdad86963557350d6ac689bf2dbb97a1b4f`. Deployment `appgdep_6adbfa8dbcd481918c10fb7dea4b73ec` succeeded with runtime environment revision 1. The previous Mac bundle included that GitHub source revision. The current Mac rebuild is recorded below. Documentation commits do not imply a new application deployment.
 
 The October 23 Windows verification checkpoint changed contribution tooling and tests only. It preserved the Mac's POSIX credential protection, added Windows startup locking and Unicode-safe JSON transport, and repaired portable test fixtures. That checkpoint did not update the website or installed Mac app. The owner's actual-phone confirmation allowed code-reference milestones 5–6 to proceed; milestone 7 remains outside that implementation scope.
 
@@ -32,13 +32,33 @@ The broader pilot saved six complementary references through the production webs
 
 Release validation: **118 JavaScript test entries passed**, including **124 main frontend checks**, source/browser code-reference checks, and the isolated synchronization suites. The application revision `ce2945b6444cd5256c59469cafdda4a632a6c51f` passed **248 Python tests in WSL Linux**: 245 passed and 3 macOS Swift toolchain checks were skipped. The final release adds only documentation and a CSS correction to that revision. Actual Windows browser checks exercised graph direction/filtering/topic browsing, direct capture, variant-only references, and exact pasted-code round trips. The final visual check found and corrected inherited vertical filter sizing at medium widths; filter heights were verified at 972 CSS pixels and 390 CSS pixels. The 390-pixel layout check is a simulated phone width, separate from the owner's actual-phone confirmation. Seven new C++ source units were compiled and exercised with independent assertion drivers under GCC 11.4.0 with AddressSanitizer and UndefinedBehaviorSanitizer.
 
-## Mac update still pending
+## Mac rebuild and verification completed
 
-**The installed Mac app remains version 3.0.0 at source `f33c61cf9d3f43ef53e64438601b28e9b9d03f4b`. Publishing the website did not update it.** Shared assets changed, so rebuild from `e9231c65120fc1bb64b9c335b346a24f7ac03cab` or a later descendant retaining these changes. Record the actual bundled source revision after building.
+**The installed Mac app is version 3.0.0 at source `178d4a54f44e4742318ee663af139c592d2fa2a1`.** The clean Mac checkout was fetched and fast-forwarded from `dd0d1c8c55fb6ad179174729ec63fb592864e47e` to `3207e1846564ae09635c760d45e3551d86a83cd3`, preserving the published application release `e9231c65120fc1bb64b9c335b346a24f7ac03cab`. No older handoff commit was restored.
 
-1. Pull the source and run the full checks on macOS, including the three Swift checks skipped on Windows/Linux. Build an isolated QA app with `python3 desktop/build.py --output PATH --qa-db PATH`, using a disposable database.
-2. In that QA app, verify graph role filters, direction, shared-topic separation, topic browsing, direct capture, snippet/algorithm variants, and Paste JSON preview/save/discard. Check native clipboard, file dialogs, exports, image display, and unsaved-close/quit prompts.
-3. Rebuild the working app with `python3 desktop/build.py`, quit the previous app normally, reopen, and confirm the bundled revision, **Library synced**, and intact code, images, relationships, and recovery content. These native checks remain **pending** until performed on the Mac.
+The export comparison found that the earlier native sync client expanded optional empty fields in old revision snapshots and Trash payloads. Commit `178d4a5` preserves validated recovery payloads exactly. It also repairs this older normalization only on a clean, unchanged synchronized base, after a safety backup and a second local-change check. The repair updates recovery payloads without replacing live notes or publishing a cloud revision. Distinct local history and edits arriving during the check remain protected.
+
+| Check | Verified result |
+| --- | --- |
+| Full macOS suite | **252 Python tests passed, no skips**, including all three Swift configuration checks. The four new recovery-preservation checks passed within 35 native-sync tests. **118 JavaScript test entries passed**. Shared JavaScript syntax and whitespace checks passed. |
+| Isolated native build | `desktop/build.py --output PATH --qa-db PATH` built and signed a disposable QA app at `3207e18`, then rebuilt it at `178d4a5`. Test records, fixtures, backups, profiles, screenshots, and exports stayed outside Git and the working collection. |
+| Native workflows | Actual WKWebView checks passed for graph role filtering with retained starting context, saved direction, symmetric alternatives, separate shared-topic overlap, topic browsing, direct snippet capture, snippet/algorithm variant display and editing, and Paste JSON preview/save/discard. Native image selection, saved image display/enlargement, JSON export save dialog, clipboard, and unsaved editor/paste/review close or quit protection passed. |
+| Exact C++ | The native Copy button produced an exact 105-byte match containing Unicode, tabs, an initial newline, and five CRLF line endings. A title-only native edit retained exact approach code and identities. Pasted code and exported image bytes also matched exactly. |
+| Isolated synchronization | The real native service and actual Opera GX IndexedDB synchronized through the real Worker handler with disposable local SQLite/object-storage adapters and synthetic identity. Both update directions, delete/restore, native and browser explicit conflict review, retained conflicting copies, and complete process restarts passed. This was one physical Mac with a loopback cloud simulation. |
+| Working installation | A consistent SQLite backup passed integrity and foreign-key checks. Private sync state and the old bundle were preserved. The previous app quit normally. The rebuilt bundle passed signing verification and was reopened with a new native/backend process. Bundle build information and bundled backend file bytes match `178d4a5`. The obsolete standalone 2.9.0 service was shut down normally. |
+| Real library | The working app and signed-in production Opera both displayed **Library synced**. Fresh portable exports from Mac, Opera, and cloud matched exactly by stable record ID: **251 shards, 280 links, 43 assets, 871 revisions, 149 Trash records, 2 legacy boards, and 0 reviews**. Comparisons included complete records, exact code, tags, directed approach endpoints, and decoded image bytes. Live records and the cloud revision were unchanged. |
+
+The initial native workflow checks used QA build `3207e18`. The final `178d4a5` build retains the exact same Swift source and shared-interface fingerprint, `b3008419260744abdb5dc68993d7dd0ccc18b4d2c6dc5ee22780725e651a4c6e`. Final native conflict, restart, synchronization, installation, and real-library checks used `178d4a5`.
+
+No website fix was needed. The website remains at application release `e9231c6`, at the existing URL and audience. The Mac-only backend correction did not require publication or reimporting the content pilot. Optional milestone 7 was not implemented.
+
+Private evidence and backups are retained under `Documents/Codex/2026-10-23/shard-atlas-mac-verification/`, including `python-final-tests.log`, `javascript-tests.log`, build logs, `scenario-*.log`, isolated record comparisons, and the private preinstall/postinstall directories. Credentials and personal archives are not in Git.
+
+## Specific remaining checks
+
+- [ ] Use a separate remote QA library and a second physical device to test actual network disconnection and reconnection. The completed outage checks interrupted loopback transport or emulated Opera offline mode. No physical network adapter was disabled.
+- [ ] On that isolated remote fixture, verify Mac-to-phone/Windows and reverse updates, complete device-process restarts while offline, delete/restore, and concurrent-edit review with both copies retained. The same-Mac native/browser checks do not establish these physical-device results.
+- [ ] Compare fresh Windows and phone portable exports against the current Mac/cloud records. Their earlier Windows loading and the owner's actual-phone confirmation remain accepted. General phone verification does not need repeating.
 
 ## First use on Windows or a phone
 
