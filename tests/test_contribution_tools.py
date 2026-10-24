@@ -117,6 +117,7 @@ class ContributionToolsTests(unittest.TestCase):
         text = (ROOT / "server.py").read_text()
         text = text.replace('BACKEND_VERSION = "2.1.0"', 'BACKEND_VERSION = "2.2.0"')
         (source / "server.py").write_text(text)
+        (source / "library_sync.py").write_text((ROOT / "library_sync.py").read_text())
         database = self.root / "background-service" / "shards.sqlite3"
         with socket.socket() as sock:
             sock.bind(("127.0.0.1", 0))

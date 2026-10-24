@@ -2,7 +2,7 @@
 
 **The Drive inbox lets a connected AI chat queue technical knowledge while the Mac is off.** The web app can read those additions directly from Drive. The Mac imports the same files through Google Drive for desktop.
 
-Every collection keeps its own import receipts. Your existing Mac notes remain in SQLite, and the web app keeps its collection in this browser. The inbox carries additions between them. It does not copy all existing knowledge or synchronize later edits and deletions.
+The inbox transports additions. Full library synchronization is a separate connection described in [the cross-platform workflow](cross-platform.md). Connected devices share saved additions, later edits, deletions, images, and recovery content through that private library. A successful inbox import on one connected device can therefore reach the others without another import. Installations without library sync still keep separate collections.
 
 ## Set up the inbox
 
@@ -10,7 +10,7 @@ Create or select **ChatGPT → Shard Atlas → Inbox** in the Google account use
 
 In an AI chat, say **“Add this to Shard Atlas.”** A client with local access can continue using the local integration. A client without local access can upload an addition to your configured Drive inbox when it has a connected Google Drive tool. Give a new client the current [contribution guide](../static/ai-instructions.md) and the inbox location if it does not already have them. A client without either connection can still prepare a downloadable portable archive for manual import.
 
-**Queued in Drive** means the JSON upload was verified. It does not mean the notes have been imported. Open **Use with AI → Google Drive**, connect when needed, and choose **Sync inbox** on the web or **Sync additions** on the Mac in each collection that should receive the additions.
+**Queued in Drive** means the JSON upload was verified. It does not mean the notes have been imported. Open **Use with AI → Google Drive**, connect when needed, and choose **Sync inbox** on the web or **Sync additions** on the Mac. Check **Library sync** for delivery to connected devices. Separate collections still need their own import.
 
 ## Connect the web app to Google
 
@@ -82,4 +82,4 @@ Omit `--output` to print the envelope. A completed output file appears atomicall
 
 Keep each batch immutable. If an upload or sync times out, inspect the existing file or receipt and retry the **same request ID and payload**. A changed payload with the same request ID is rejected. An incoming stable ID cannot overwrite a different saved note. Fix a conflicting proposal by inspecting the saved record and preparing a separate, genuinely new addition when appropriate.
 
-Leave files in the inbox so other collections can import them. Do not move them into a shared Processed folder after one device succeeds. Browser storage and Mac database backups keep receipts for that collection, while a portable knowledge archive does not promise to preserve import receipts. Keep normal backups and exports, especially before clearing browser data or changing devices.
+Leave files in the inbox so other collections can import them. Do not move them into a shared Processed folder after one device succeeds. Shared library capsules also carry immutable contribution receipts, preventing old batches from recreating deleted additions on another connected device. Ordinary portable JSON exports still do not promise to preserve import receipts. Keep normal backups and exports, especially before clearing browser data or changing devices.

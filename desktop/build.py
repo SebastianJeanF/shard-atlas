@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import plistlib
@@ -23,7 +24,7 @@ def run(*arguments: str) -> None:
 def desktop_configuration(python: Path | None = None, qa_db: Path | None = None,
                           backup_dir: Path | None = None) -> dict:
     """Keep portable builds independent of the machine that compiled them."""
-    config = {"backendVersion": "2.9.0"}
+    config = {"backendVersion": "3.0.0"}
     if python is not None:
         config["pythonCandidates"] = [str(python.expanduser().resolve())]
     if qa_db is not None:
@@ -53,9 +54,19 @@ def build(output: Path, python: Path | None = None, qa_db: Path | None = None,
         runtime = resources / "runtime"
         executable.parent.mkdir(parents=True)
         runtime.mkdir(parents=True)
-        for filename in ("server.py", "seed.json"):
+        for filename in ("server.py", "library_sync.py", "seed.json"):
             shutil.copy2(ROOT / filename, runtime / filename)
         shutil.copytree(ROOT / "static", runtime / "static", ignore=shutil.ignore_patterns(".DS_Store"))
+        try:
+            revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, stderr=subprocess.DEVNULL).strip()
+        except (OSError, subprocess.CalledProcessError):
+            revision = "unknown"
+        digest = hashlib.sha256()
+        for asset in sorted((ROOT / "static").rglob("*")):
+            if asset.is_file() and not any(part.startswith('.') for part in asset.relative_to(ROOT / 'static').parts):
+                digest.update(asset.relative_to(ROOT / "static").as_posix().encode())
+                digest.update(asset.read_bytes())
+        (runtime / 'static/build-info.json').write_text(json.dumps({"version": "3.0.0", "sourceRevision": revision, "interfaceFingerprint": digest.hexdigest()}) + '\n', encoding='utf-8')
         config = desktop_configuration(python, qa_db, backup_dir)
         (resources / "desktop-config.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
         info = {
@@ -64,8 +75,8 @@ def build(output: Path, python: Path | None = None, qa_db: Path | None = None,
             "CFBundleDisplayName": "Shard Atlas QA" if qa_db is not None else "Shard Atlas",
             "CFBundleExecutable": "ShardAtlas",
             "CFBundlePackageType": "APPL",
-            "CFBundleShortVersionString": "2.9.0",
-            "CFBundleVersion": "29",
+            "CFBundleShortVersionString": "3.0.0",
+            "CFBundleVersion": "30",
             "LSMinimumSystemVersion": "12.0",
             "NSHighResolutionCapable": True,
             "NSPrincipalClass": "NSApplication",

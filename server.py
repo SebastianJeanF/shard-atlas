@@ -32,7 +32,7 @@ from urllib.parse import unquote, urlsplit
 
 SCHEMA_VERSION = 1
 DATABASE_VERSION = 5
-BACKEND_VERSION = "2.9.0"  # Keep the additive API compatible with already-running contribution clients.
+BACKEND_VERSION = "3.0.0"  # Keep the additive API compatible with already-running contribution clients.
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DB = Path.home() / "Library/Application Support/Shard Atlas/shards.sqlite3"
 KINDS = {"concept", "fact", "example", "mistake", "event", "idea"}
@@ -2446,17 +2446,21 @@ class LocalServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address, store, *, static_dir=None, drive_inbox_path=None):
+    def __init__(self, address, store, *, static_dir=None, drive_inbox_path=None, library_sync_config=None):
         if address[0] != "127.0.0.1":
             raise ValueError("Shard Atlas only binds to 127.0.0.1.")
         self.store = store
         self.drive_inbox = DriveInbox(store, drive_inbox_path)
         self.static_dir = Path(static_dir or store.root / "static").resolve()
+        from library_sync import LibrarySync
+        self.library_sync = LibrarySync(store, config_path=library_sync_config)
         super().__init__(address, Handler)
         store.start_backup_worker()
+        self.library_sync.start()
 
     def server_close(self):
         super().server_close()
+        self.library_sync.stop()
         self.store.stop_backup_worker()
 
 
@@ -2508,6 +2512,9 @@ class Handler(BaseHTTPRequestHandler):
         return data
 
     def _send(self, status, body, content_type="application/json; charset=utf-8", *, filename=None):
+        if (200 <= status < 300 and self.command in ("POST", "PUT", "DELETE")
+                and not urlsplit(self.path).path.startswith("/api/library-sync/")):
+            self.server.library_sync.changed()
         if isinstance(body, (dict, list)):
             body = json.dumps(body, ensure_ascii=False, allow_nan=False).encode("utf-8")
         elif isinstance(body, str):
@@ -2517,6 +2524,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
+        if hasattr(self, "_library_view_revision"):
+            self.send_header("X-Shard-Atlas-Library-Revision", self._library_view_revision)
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
         if filename:
@@ -2526,15 +2535,32 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
 
     def _dispatch(self):
+        guarded_store = None
         try:
             self._check_local_request()
             path = unquote(urlsplit(self.path).path)
             store = self.server.store
+            local_operation = (path.startswith(("/api/library-sync/", "/api/drafts/"))
+                               or path in ("/api/import-preview", "/api/import/preview", "/api/backup")
+                               or path.startswith("/api/assets/") and path.endswith("/text"))
+            if self.command in ("POST", "PUT", "DELETE") and path.startswith("/api/") and not local_operation:
+                # A sleeping local window must not overwrite a library pulled by
+                # another window after its editing lease expired. Keep the view
+                # check and actual mutation in the same local transaction lock.
+                store.lock.acquire()
+                guarded_store = store
+                expected = self.headers.get_all("X-Shard-Atlas-View-Revision", [])
+                if expected and (len(expected) != 1 or expected[0] != self.server.library_sync.view_revision()):
+                    raise AppError("Your library changed on another device. Your draft is retained; refresh the library before saving this edit.", 409)
             if self.command in ("GET", "HEAD"):
                 if path in ("/api/state", "/api/data", "/api/export"):
-                    return self._send(200, store.export_data() if path == "/api/export" else store.state(), filename="shard-atlas.json" if path == "/api/export" else None)
+                    with store.lock:
+                        self._library_view_revision = self.server.library_sync.view_revision()
+                        return self._send(200, store.export_data() if path == "/api/export" else store.state(), filename="shard-atlas.json" if path == "/api/export" else None)
                 if path == "/api/health":
                     return self._send(200, store.health())
+                if path == "/api/library-sync/status":
+                    return self._send(200, self.server.library_sync.status())
                 if path == "/api/export/markdown":
                     return self._send(200, store.markdown_export(), "application/zip", filename="shard-atlas-markdown.zip")
                 if path == "/api/trash":
@@ -2568,6 +2594,20 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, target.read_bytes(), content_type)
             if self.command == "POST":
                 data = self._json_body()
+                if path == "/api/library-sync/run":
+                    if data:
+                        raise AppError("Library synchronization accepts an empty object.")
+                    return self._send(200, self.server.library_sync.run())
+                if path == "/api/library-sync/editing":
+                    if (set(data) not in ({"editing"}, {"editing", "clientId"}) or type(data["editing"]) is not bool
+                            or "clientId" in data and (not isinstance(data["clientId"], str)
+                            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", data["clientId"]))):
+                        raise AppError("Editing status must contain an editing boolean.")
+                    return self._send(200, self.server.library_sync.editing(data["editing"], data.get("clientId", "legacy")))
+                if path == "/api/library-sync/resolve":
+                    if set(data) != {"choice"} or data["choice"] not in ("cloud", "device"):
+                        raise AppError("Choose the shared library or this device's version.")
+                    return self._send(200, self.server.library_sync.resolve(data["choice"]))
                 if path == "/api/shards":
                     return self._send(201, store.create_shard(data))
                 if path == "/api/links":
@@ -2631,6 +2671,9 @@ class Handler(BaseHTTPRequestHandler):
         except (OSError, sqlite3.Error) as error:
             sys.stderr.write(f"Storage error: {error}\n")
             self._send(500, {"error": "The local storage operation failed. Your previous data remains available."})
+        finally:
+            if guarded_store is not None:
+                guarded_store.lock.release()
 
     do_GET = _dispatch
     do_HEAD = _dispatch

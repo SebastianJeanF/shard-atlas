@@ -11,3 +11,8 @@ work/
 *.dSYM/
 /desktop/.build/
 /static/spiral/local-emblems/
+
+/node_modules/
+/web-dist/
+/web/drive-config.local.json
+/dist/

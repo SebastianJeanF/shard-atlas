@@ -1,6 +1,6 @@
 # Development
 
-Shard Atlas is a personal macOS application. The native shell supplies the window and operating-system integration. A local Python service owns the collection, while a bundled web interface renders the notes and views.
+Shard Atlas has a native macOS app and a browser app built from the same shared interface. The native shell supplies the window and operating-system integration. A local Python service owns the Mac copy, while the browser adapter uses IndexedDB. Optional private library synchronization connects both copies. See [the cross-platform workflow](cross-platform.md) and [current handoff](handoff.md) for website builds, cloud storage, and release checks.
 
 [Project overview](../README.md) · [User guide](guide.md) · [Contribution guidelines](../CONTRIBUTING.md)
 

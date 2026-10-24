@@ -1,0 +1,13 @@
+{
+  "name": "shard-atlas",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:web": "node web/tools/build.mjs",
+    "test": "node web/tools/test.mjs",
+    "test:web": "node web/tools/test.mjs"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.2.6"
+  }
+}

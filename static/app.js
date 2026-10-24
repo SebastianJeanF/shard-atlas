@@ -41,7 +41,7 @@ function toast(message) {
   clearTimeout(toastTimer);toastTimer=setTimeout(()=>{el.hidden=true;},4500);
 }
 async function api(path,method='GET',data) {
-  const response=await fetch(path,{method,headers:data===undefined?{}:{'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data)});
+  const response=await (window.ShardAtlasPlatform?.request || fetch)(path,{method,headers:data===undefined?{}:{'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data)});
   let result;try{result=await response.json();}catch{throw new Error('The app could not read the response. Try opening it again.');}
   if(!response.ok)throw new Error(result.error||'The change could not be saved.');return result;
 }
@@ -175,7 +175,7 @@ function inlineMarkdown(text,context=null) {
   output=output.replace(/`([^`]+)`|\[\[([^\]\n]+)\]\]|!\[([^\]\n]*)\]\((\/assets\/[A-Za-z0-9_.:-]+)\)|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|(?<!\\)\$(?!\$)([^$\n]+)(?<!\\)\$/g,(whole,code,wiki,alt,image,label,url,math)=>{
     if(code!==undefined)return protect('<code>'+esc(code)+'</code>');
     if(wiki!==undefined){const split=wiki.indexOf('|'),target=split<0?wiki:wiki.slice(0,split),alias=split<0?null:wiki.slice(split+1),s=context?.resolveWiki?context.resolveWiki(target):resolveWiki(target);return protect(s?(context?.renderWiki?context.renderWiki(s,alias||s.title):`<button type="button" class="wiki-link" data-shard-id="${esc(s.id)}">${esc(alias||s.title)}</button>`):`<span class="wiki-unresolved" title="No shard with this title yet">${esc(alias||target)}</span>`);}
-    if(image!==undefined){const src=context?.imageSource?context.imageSource(image):image;if(!src)return protect(`<figure class="note-image"><p class="import-image-missing">Image unavailable in this file${alt?': '+esc(alt):''}.</p></figure>`);return protect(`<figure class="note-image"><button type="button" class="image-preview" data-action="open-image" data-image-src="${esc(src)}" data-image-alt="${esc(alt)}" aria-label="${esc(alt?'Enlarge image: '+alt:'Enlarge image')}" aria-haspopup="dialog"><img src="${esc(src)}" alt="${esc(alt)}" loading="lazy"><span class="image-preview-hint" aria-hidden="true">Click to enlarge</span></button>${alt?`<figcaption>${esc(alt)}</figcaption>`:''}</figure>`);}
+    if(image!==undefined){const src=context?.imageSource?context.imageSource(image):(window.ShardAtlasPlatform?.imageSource(image)||image);if(!src)return protect(`<figure class="note-image"><p class="import-image-missing">Image unavailable in this file${alt?': '+esc(alt):''}.</p></figure>`);return protect(`<figure class="note-image"><button type="button" class="image-preview" data-action="open-image" data-image-src="${esc(src)}" data-image-alt="${esc(alt)}" aria-label="${esc(alt?'Enlarge image: '+alt:'Enlarge image')}" aria-haspopup="dialog"><img src="${esc(src)}" alt="${esc(alt)}" loading="lazy"><span class="image-preview-hint" aria-hidden="true">Click to enlarge</span></button>${alt?`<figcaption>${esc(alt)}</figcaption>`:''}</figure>`);}
     if(url!==undefined)return protect(`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(label)} ↗</a>`);
     return protect(mathMarkup(math));
   });
@@ -706,7 +706,7 @@ function draftStatus(kind,message){const el=$(kind==='editor'?'#editor-draft-sta
 async function persistDraft(kind){
   clearTimeout(draftTimers[kind]);if(!dirtyKind(kind))return true;
   const draft=snapshotDraft(kind);drafts[kind]=draft;writeLocalDrafts();renderDraftShelf();draftStatus(kind,'Saving a recoverable draft…');
-  try{await writeRequest('/api/drafts/'+kind,'PUT',{draft});persistedDrafts[kind]=JSON.stringify(draft.values);if(dirtyKind(kind)&&formSnapshot(draftForm(kind))===persistedDrafts[kind])draftStatus(kind,'Draft saved on this Mac.');return true;}
+  try{await writeRequest('/api/drafts/'+kind,'PUT',{draft});persistedDrafts[kind]=JSON.stringify(draft.values);if(dirtyKind(kind)&&formSnapshot(draftForm(kind))===persistedDrafts[kind])draftStatus(kind,window.ShardAtlasPlatform?.message('draftSaved')||'Draft saved on this Mac.');return true;}
   catch(error){draftStatus(kind,'Draft kept in this window. Save your note before quitting.');toast('Draft recovery could not be saved: '+error.message);return false;}
 }
 function scheduleDraft(kind){
@@ -788,7 +788,7 @@ async function loadAiInstructions(refresh=false){
   if(aiInstructionsLoading)return aiInstructionsLoading;if(aiInstructions&&!refresh)return aiInstructions;
   aiInstructions='';$('#ai-instructions-text').value='';
   $('#ai-instructions-status').textContent='Opening instructions…';
-  aiInstructionsLoading=(async()=>{const response=await fetch('/ai-instructions.md',{cache:'no-store'});if(!response.ok)throw new Error('The instructions could not be opened. Close this window and try again.');const text=await response.text();if(!text.trim())throw new Error('The instructions are empty. Reopen Shard Atlas and try again.');aiInstructions=text;$('#ai-instructions-text').value=text;$('#ai-instructions-status').textContent='Ready to copy. Your atlas stays on this Mac.';return text;})();
+  aiInstructionsLoading=(async()=>{const response=await fetch('/ai-instructions.md',{cache:'no-store'});if(!response.ok)throw new Error('The instructions could not be opened. Close this window and try again.');const text=await response.text();if(!text.trim())throw new Error('The instructions are empty. Reopen Shard Atlas and try again.');aiInstructions=text;$('#ai-instructions-text').value=text;$('#ai-instructions-status').textContent=window.ShardAtlasPlatform?.message('aiReady')||'Ready to copy. Share these instructions with your chat.';return text;})();
   try{return await aiInstructionsLoading;}catch(error){$('#ai-instructions-status').textContent=error.message;throw error;}finally{aiInstructionsLoading=null;}
 }
 async function openAiHelp(){
@@ -803,7 +803,7 @@ async function copyAiInstructions(){
 }
 function imageIdsInEditor(){return [...$('#shard-content').value.matchAll(/!\[[^\]]*\]\(\/assets\/([A-Za-z0-9_.:-]+)\)/g)].map(m=>m[1]);}
 function updateImageRecognitionButton(){$('#recognize-image').hidden=!imageIdsInEditor().length;}
-function renderImageRecognition(){const pane=$('#image-recognition');updateImageRecognitionButton();pane.hidden=!editorOcr;if(!editorOcr)return;pane.innerHTML=editorOcr.loading?'<p class="muted">Reading text from your image on this Mac…</p>':editorOcr.text?`<div class="recognition-heading"><h3>Text recognized from your image</h3><span>Review before using</span></div><p class="field-hint">Your original image and explanation are preserved. Check code, symbols, and layout before adding this text.</p><label class="field">Recognized text<textarea id="recognized-text" rows="7">${esc(editorOcr.text)}</textarea></label><div class="recognition-actions"><button type="button" class="secondary" data-action="append-recognized-text">Append edited text to note</button><button type="button" class="text-button" data-action="dismiss-recognition">Dismiss</button></div>`:`<p class="muted">${esc(editorOcr.message||'No readable text was found. The original image is retained.')}</p>`;}
+function renderImageRecognition(){const pane=$('#image-recognition');updateImageRecognitionButton();pane.hidden=!editorOcr;if(!editorOcr)return;pane.innerHTML=editorOcr.loading?`<p class="muted">${esc(window.ShardAtlasPlatform?.message('readingImage')||'Reading text from your image on this Mac…')}</p>`:editorOcr.text?`<div class="recognition-heading"><h3>Text recognized from your image</h3><span>Review before using</span></div><p class="field-hint">Your original image and explanation are preserved. Check code, symbols, and layout before adding this text.</p><label class="field">Recognized text<textarea id="recognized-text" rows="7">${esc(editorOcr.text)}</textarea></label><div class="recognition-actions"><button type="button" class="secondary" data-action="append-recognized-text">Append edited text to note</button><button type="button" class="text-button" data-action="dismiss-recognition">Dismiss</button></div>`:`<p class="muted">${esc(editorOcr.message||'No readable text was found. The original image is retained.')}</p>`;}
 async function recognizeImage(id){editorOcr={loading:true};renderImageRecognition();try{const result=await api('/api/assets/'+encodeURIComponent(id)+'/text','POST',{});if(!result.available){editorOcr={message:'Text recognition is unavailable on this device. The original image is retained; you can add its text manually.'};}else if(!result.text?.trim()){editorOcr={message:'No readable text was found. The original image is retained.'};}else{editorOcr={text:result.text,method:result.method};}renderImageRecognition();}catch(error){editorOcr={message:'The image was saved, but text recognition could not finish: '+error.message};renderImageRecognition();}}
 function insertContent(text){const field=$('#shard-content');field.setRangeText(text,field.selectionStart,field.selectionEnd,'end');field.focus();scheduleDraft('editor');refreshPreview();}
 async function uploadImage(file){
@@ -892,7 +892,7 @@ function importPreviewContext(){
   return {
     resolveWiki:target=>target.startsWith('id:')?(shards.find(shard=>shard.id===target.slice(3))||resolveWiki(target)):(shards.find(shard=>shard.title.toLocaleLowerCase()===target.toLocaleLowerCase())||resolveWiki(target)),
     renderWiki:(shard,label)=>{const index=shards.findIndex(item=>item.id===shard.id);return index<0?`<span class="wiki-link" title="Already in your atlas">${esc(label)}</span>`:`<button type="button" class="wiki-link" data-action="preview-import-shard" data-index="${index}">${esc(label)}</button>`;},
-    imageSource:src=>{const id=src.slice('/assets/'.length);return (state.data.assets||[]).some(asset=>asset.id===id)?src:importImageUrls.get(id)||null;}
+    imageSource:src=>{const id=src.slice('/assets/'.length);return (state.data.assets||[]).some(asset=>asset.id===id)?(window.ShardAtlasPlatform?.imageSource(src)||src):importImageUrls.get(id)||null;}
   };
 }
 function duplicateCandidate(shard){
@@ -1046,7 +1046,7 @@ async function legacyBoardAction(action,button){const id=button?.dataset.id,boar
     if(!importArchive||importPreview?.valid===false||$('#confirm-import').disabled)return true;
     await withBusy(async()=>{
       const previous=JSON.stringify([importPreview.added,importPreview.skipped,importPreview.conflicts]);
-      state.data=mergeBoardDrafts(await api('/api/state'));
+      const latestState=await api('/api/state');window.ShardAtlasPlatform?.acceptState(latestState);state.data=mergeBoardDrafts(latestState);
       const data=reviewedImport().data;
       const latest=await api('/api/import/preview','POST',{data});importPreview=latest;
       if(!latest.valid||previous!==JSON.stringify([latest.added,latest.skipped,latest.conflicts])){renderImportReview();toast('Your atlas changed during review. Check the refreshed preview before saving.');return;}
@@ -1119,7 +1119,7 @@ async function clearSavedDraft(kind){
 $('#editor-form').addEventListener('submit',async event=>{
   event.preventDefault();if(busy)return;const form=event.target,values=formValues(form),original=byId(editingId),wasNew=!editingId;values.tags=original&&values.tags===original.tags.join(', ')?original.tags:[...new Set(values.tags.split(',').map(t=>t.trim()).filter(Boolean))];values.entities=original&&values.entities===(original.entities||[]).join(', ')?original.entities:[...new Set(values.entities.split(',').map(v=>v.trim()).filter(Boolean))];values.inbox=values.inbox==='true';try{values.sources=JSON.parse(values.sources||'[]');values.facts=JSON.parse(values.facts||'[]');}catch{toast('A source or fact could not be read. Reopen the editor.');return;}values.content=stabilizeWikiLinks(values.content);$('#editor-error').hidden=true;
   try{Object.assign(values,window.AcademicAtlas.readEditor($('#academic-editor')),window.LearningAtlas.readEditor($('#learning-editor')),window.ExperimentAtlas.readEditor($('#experiment-editor')),window.CodeSolutions?.readEditor($('#code-solution-editor'))||codeFormData(form));const stabilized=window.ShardImportReview.mapReferences(values,stabilizeWikiLinks);for(const key of learningFields)values[key]=stabilized[key];await withBusy(async()=>{
-    clearTimeout(draftTimers.editor);const oldIds=new Set(state.data.shards.map(s=>s.id)),result=await writeRequest('/api/shards'+(editingId?'/'+encodeURIComponent(editingId):''),editingId?'PUT':'POST',{...original,...values});state.data=mergeBoardDrafts(result);editingId=editingId||result.shards.find(s=>!oldIds.has(s.id))?.id;state.selectedId=editingId;state.view='library';clearFilters();form.dataset.baseline=formSnapshot(form);const cleaned=await clearSavedDraft('editor');$('#editor-dialog').close();render();toast(cleaned?(wasNew?'A new idea, saved.':'Your explanation is up to date.'):'Your shard was saved. An older draft still needs to be discarded.');
+    clearTimeout(draftTimers.editor);const oldIds=new Set(state.data.shards.map(s=>s.id)),result=await writeRequest('/api/shards'+(editingId?'/'+encodeURIComponent(editingId):''),editingId?'PUT':'POST',{...original,...values});state.data=mergeBoardDrafts(result);editingId=editingId||result.shards.find(s=>!oldIds.has(s.id))?.id;state.selectedId=editingId;state.view='library';clearFilters();form.dataset.baseline=formSnapshot(form);const cleaned=await clearSavedDraft('editor');$('#editor-dialog').close();render();window.ShardAtlasPlatform?.didSave({id:editingId});toast(cleaned?(wasNew?'A new idea, saved.':'Your explanation is up to date.'):'Your shard was saved. An older draft still needs to be discarded.');
   });}catch(error){$('#editor-error').textContent=error.message;$('#editor-error').hidden=false;}
 });
 $('#import-edit-dialog').addEventListener('cancel',event=>{event.preventDefault();closeDialog('import-edit-dialog');});
@@ -1152,25 +1152,29 @@ async function loadDrafts(){
   try{const result=await api('/api/drafts');for(const kind of draftKinds){const remote=result.drafts?.[kind]||null,candidate=local[kind];drafts[kind]=candidate?.values&&(!remote||candidate.updatedAt>remote.updatedAt)?candidate:remote;persistedDrafts[kind]=remote?JSON.stringify(remote.values):null;}}catch{for(const kind of draftKinds)drafts[kind]=local[kind]?.values?local[kind]:null;}
   writeLocalDrafts();renderDraftShelf();
 }
-function canRefreshAtlas(manual=false){const dialog=document.querySelector('dialog[open]');return document.visibilityState!=='hidden'&&!busy&&!pendingWrites&&!editorDirty()&&!linkDirty()&&!extraFormDirty()&&!boardDirty&&!boardDragActive&&!window.ExperimentAtlas?.hasPreviewChanges?.(document)&&(!dialog||(manual&&dialog.id==='ai-dialog'));}
+function hasUnsavedLibraryChanges(){const dialog=document.querySelector('dialog[open]');return busy||!!pendingWrites||editorDirty()||linkDirty()||extraFormDirty()||boardDirty||boardDragActive||!!window.ExperimentAtlas?.hasPreviewChanges?.(document)||!!(dialog&&!(window.ShardAtlasPlatform?.canRefreshDialog(dialog)??dialog.id==='ai-dialog'));}
+function canRefreshAtlas(manual=false){return document.visibilityState!=='hidden'&&!hasUnsavedLibraryChanges()&&(!document.querySelector('dialog[open]')||manual);}
 async function refreshAtlas(manual=false){
   if(!canRefreshAtlas(manual))return {changed:false,skipped:true};if(atlasRefreshLoading)return atlasRefreshLoading;
   const baseline=JSON.stringify([state.data.shards,state.data.links,state.data.boards]);
-  atlasRefreshLoading=(async()=>{const data=await api('/api/state');if(!canRefreshAtlas(manual)||JSON.stringify([state.data.shards,state.data.links,state.data.boards])!==baseline)return {changed:false,skipped:true};const changed=JSON.stringify([data.shards,data.links,data.boards])!==baseline;if(changed){state.data=mergeBoardDrafts(data);if(!byId(state.selectedId))state.selectedId=filteredShards()[0]?.id||data.shards[0]?.id||null;render();$('#save-status').textContent='Latest notes are ready.';}return {changed,skipped:false};})();
+  atlasRefreshLoading=(async()=>{const data=await api('/api/state');if(!canRefreshAtlas(manual)||JSON.stringify([state.data.shards,state.data.links,state.data.boards])!==baseline)return {changed:false,skipped:true};window.ShardAtlasPlatform?.acceptState(data);const changed=JSON.stringify([data.shards,data.links,data.boards])!==baseline;if(changed){state.data=mergeBoardDrafts(data);if(!byId(state.selectedId))state.selectedId=filteredShards()[0]?.id||data.shards[0]?.id||null;render();$('#save-status').textContent='Latest notes are ready.';}return {changed,skipped:false};})();
   try{return await atlasRefreshLoading;}catch(error){if(manual)throw error;return {changed:false,failed:true};}finally{atlasRefreshLoading=null;}
 }
 function scheduleAtlasRefresh(){setTimeout(async()=>{await refreshAtlas();scheduleAtlasRefresh();},15000);}
 window.addEventListener('focus',()=>{void refreshAtlas();});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='hidden')void refreshAtlas();});
 async function initialize(){
-  try{const results=await Promise.allSettled([api('/api/state'),api('/api/health')]);if(results[0].status==='rejected')throw results[0].reason;state.data=results[0].value;state.selectedId=byId('cpp-raii')?.id||state.data.shards[0]?.id;
+  try{const results=await Promise.allSettled([api('/api/state'),api('/api/health')]);if(results[0].status==='rejected')throw results[0].reason;window.ShardAtlasPlatform?.acceptState(results[0].value);state.data=results[0].value;state.selectedId=byId('cpp-raii')?.id||state.data.shards[0]?.id;
     if(results[1].status==='fulfilled'){const health=results[1].value;localDraftKey='shard-atlas-drafts:'+String(health.dbPath||'default');$('#settings-path').textContent='Notes: '+(health.dbPath||'stored locally')+'\nBackups: '+(health.backupDirectory||'project backups folder');if(health.lastBackupError){$('#save-status').textContent='Notes saved. Backup needs attention.';toast('Your notes are saved, but the daily backup needs attention: '+health.lastBackupError);}}
     loadBoardRecovery();render();await loadDrafts();
   }catch(error){$('#workspace').innerHTML='<div class="error-state"><h1>Your atlas could not open.</h1><p>'+esc(error.message)+'</p><button class="primary" id="retry-open">Try again</button></div>';$('#retry-open').addEventListener('click',initialize);}
 }
 window.LearningAtlas?.bindDetail(document);
 window.ExperimentAtlas?.bindDetail(document,{onSave:saveExperimentConfiguration,onAttach:attachExperimentDraft,onCopy:copyExperimentSetup});
-window.DriveInbox?.install({api,writeRequest,withBusy,refreshAtlas});
+window.ShardAtlasCanApplyLibrary=()=>canRefreshAtlas(true);
+window.ShardAtlasHasUnsavedLibraryChanges=hasUnsavedLibraryChanges;
+if(window.ShardAtlasPlatform)window.ShardAtlasPlatform.installIntegrations({api,writeRequest,withBusy,refreshAtlas,canRefreshAtlas});else window.DriveInbox?.install({api,writeRequest,withBusy,refreshAtlas});
+window.ShardAtlasLibraryUI?.install();
 initialize();
 loadReleaseCatalog();
 loadSpiralCatalog();

@@ -4,7 +4,7 @@
 
 Write an explanation, keep its examples and sources beside it, and connect it to what you already know. Shard Atlas brings notes, course context, an automatic topic map, and a C++ release timeline into a macOS app that works offline.
 
-[User guide](docs/guide.md) · [Roadmap](docs/roadmap.md) · [Development](docs/development.md) · [Contributing](CONTRIBUTING.md)
+[User guide](docs/guide.md) · [Roadmap](docs/roadmap.md) · [Development](docs/development.md) · [Cross-platform workflow](docs/cross-platform.md) · [Contributing](CONTRIBUTING.md)
 
 ![A short tour of Shard Atlas using the included sample collection](docs/images/demo.gif)
 
@@ -42,13 +42,13 @@ If needed, install Xcode Command Line Tools with `xcode-select --install` and in
 
 This is currently a **source build**, signed locally during compilation. There is no notarized, self-contained download. The native window uses AppKit and WKWebView around a bundled local Python service.
 
-## Your knowledge stays local
+## Your library and its local copies
 
-Your collection lives in SQLite under `~/Library/Application Support/Shard Atlas`, outside the source checkout. No account is required for the app, and your notes do not become part of this Git repository.
+The Mac collection lives in SQLite under `~/Library/Application Support/Shard Atlas`, outside the source checkout. The website keeps an offline copy in browser storage. A configured private shared library synchronizes saved content between devices. Without that connection, an installation remains local. Personal knowledge and private connection settings never become part of this Git repository.
 
-Saved revisions, Trash, automatic database snapshots, and JSON or Markdown exports provide recovery options. Backups are local files. Cloud backup requires configuring a destination that your own sync service uploads. See [storage, backups, and recovery](docs/guide.md#storage-backups-and-recovery) for locations and restore behavior.
+Saved revisions, Trash, automatic database snapshots, and JSON or Markdown exports provide recovery options. Cloud synchronization retains competing snapshots for explicit review. Unfinished editor drafts and database backups remain device-local. See [the cross-platform workflow](docs/cross-platform.md) for setup and release boundaries, and [storage, backups, and recovery](docs/guide.md#storage-backups-and-recovery) for local recovery.
 
-The service listens on the local loopback interface. Shard Atlas is a personal desktop application without user authentication or a multiuser hosting mode. Do not expose its service to a network.
+The desktop service listens on the local loopback interface and must not be exposed to a network. The separate hosted library uses authenticated private access.
 
 ## Capture from an AI chat
 
