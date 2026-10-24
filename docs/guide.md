@@ -34,6 +34,8 @@ Use the code-reference fields when a shard should answer a quick implementation 
 
 In the Library, **New code reference** opens a snippet, algorithm, or solved problem with its role already selected. A solved problem starts with one blank approach. Selected topics and subject context carry into the new record. If a role-filtered search finds nothing, its matching **New** action uses the search as an editable title; the code stays blank. An unfinished draft must be restored or discarded first.
 
+To capture a prepared archive without a file picker, choose **Use with AI → Paste JSON archive** or the same action in **Backup & export**. Paste up to 8 MB and choose **Preview archive**. The ordinary card review, duplicate checks, and **Save to atlas** still apply. Preview alone does not save notes. Invalid JSON remains editable, and closing an unfinished paste or review asks before discarding it. Larger archives can use **Preview a file** or **Choose JSON**.
+
 Add a short purpose, the exact C++ code, and any required headers. Record time and space complexity, with a note defining the input size and relevant conditions. Add assumptions and pitfalls where they affect safe reuse, such as an integer width or overflow policy. Keep the detailed explanation and source references in the main body. A longer tutorial is optional.
 
 For a solved problem, add a named approach for each useful solution. Each approach has its own summary, code, headers, complexities, assumptions, and pitfalls. Keep differences between approaches clear and link reusable explanations to their existing shards instead of copying them into every solution.

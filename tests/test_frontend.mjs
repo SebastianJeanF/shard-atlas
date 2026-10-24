@@ -1451,6 +1451,30 @@ try {
     await post('/api/contributions',{requestId:'academic-concurrent-write',shards:[{id:'academic-concurrent',title:'Saved by another chat',content:'Preserve this text.'}],links:[]});
     await t.runAction('confirm-import',{dataset:{}});assert.ok($('#import-preview-dialog').open);assert.match($('#import-preview-content').innerHTML,/existing content will be preserved/);assert.equal((await get('/api/state')).shards.find(shard=>shard.id==='academic-concurrent').content,'Preserve this text.');t.closeDialog('import-preview-dialog');
   });
+  await check('Pasted archives reject invalid or oversized text and protect unsaved input on cancel and quit', async () => {
+    const before=JSON.stringify(await get('/api/state')),writes=apiWrites;
+    $('#ai-dialog').showModal();await t.runAction('paste-import',{dataset:{}});assert.ok(!$('#ai-dialog').open&&$('#paste-import-dialog').open);
+    const input=$('#archive-json'),form=$('#paste-import-form');input.value='{invalid';submit(form);await until(()=>!$('#paste-import-error').hidden);assert.match($('#paste-import-error').textContent,/not valid JSON/);assert.equal(apiWrites,writes);assert.equal(input.value,'{invalid');
+    input.value='x'.repeat(8*1024*1024+1);submit(form);await until(()=>!$('#paste-import-error').hidden);assert.match($('#paste-import-error').textContent,/8 MB/);assert.equal(apiWrites,writes);
+    input.value='{"schemaVersion":1}';assert.equal(w.shardAtlasDesktop.status().dirty,true);assert.equal(w.shardAtlasDesktop.status().draftSaved,false);assert.equal(w.ShardAtlasCanApplyLibrary(),false);
+    const unload=new FixtureEvent('beforeunload');for(const listener of windowListeners.get('beforeunload')||[])listener(unload);assert.equal(unload.defaultPrevented,true);
+    t.closeDialog('paste-import-dialog');assert.ok($('#confirm-dialog').open&&$('#paste-import-dialog').open);t.closeDialog('confirm-dialog');assert.equal(input.value,'{"schemaVersion":1}');
+    t.closeDialog('paste-import-dialog');$('#confirm-action').click();await until(()=>!$('#confirm-dialog').open&&!$('#paste-import-dialog').open&&!t.busy);assert.equal(input.value,'');assert.equal(JSON.stringify(await get('/api/state')),before);assert.equal(apiWrites,writes);
+  });
+  await check('Pasted JSON uses existing archive validation and cannot save invalid records', async () => {
+    const before=JSON.stringify(await get('/api/state'));await t.runAction('paste-import',{dataset:{}});$('#archive-json').value=JSON.stringify({schemaVersion:1,shards:[{id:'paste-invalid',title:123}]});submit($('#paste-import-form'));await until(()=>$('#import-preview-dialog').open&&!t.busy);
+    assert.equal($('#confirm-import').disabled,true);assert.equal($('#paste-import-dialog').open,false);assert.equal(w.shardAtlasDesktop.status().dirty,true);const writes=apiWrites;await t.runAction('confirm-import',{dataset:{}});assert.equal(apiWrites,writes);assert.equal(JSON.stringify(await get('/api/state')),before);
+    t.closeDialog('import-preview-dialog');assert.ok($('#confirm-dialog').open);$('#confirm-action').click();await until(()=>!$('#confirm-dialog').open&&!$('#import-preview-dialog').open&&!t.busy);
+  });
+  await check('Pasted archive preview preserves exact C++ and existing drafts until explicit Save to atlas', async () => {
+    const before=JSON.stringify(await get('/api/state')),clientBefore=JSON.stringify(t.state.data),oldDraft=t.drafts.editor;
+    const cpp='\n#include <vector>\r\nint pasted(int x) {\r\n\treturn x;  // literal [[id:unchanged]]\r\n}\r\n';
+    const archive={schemaVersion:1,shards:[{id:'pasted-code-fixture',title:'Pasted code fixture',kind:'concept',status:'learning',tags:['C++'],codeSolution:{role:'snippet',code:cpp,approaches:[{id:'pasted-variant',title:'Alternative implementation',code:'\nreturn 2;\r\n'}]}}],links:[]};
+    t.drafts.editor={values:{title:'Preserve existing draft',codeSolution:'{}'},baseline:'draft-before-paste'};const draftBefore=JSON.stringify(t.drafts.editor);
+    try{await t.runAction('paste-import',{dataset:{}});$('#archive-json').value=JSON.stringify(archive);submit($('#paste-import-form'));await until(()=>$('#import-preview-dialog').open&&!t.busy);assert.equal($('#confirm-import').disabled,false);assert.equal($('#archive-json').value,'');assert.equal(JSON.stringify(await get('/api/state')),before);assert.equal(JSON.stringify(t.state.data),clientBefore);assert.equal(JSON.stringify(t.drafts.editor),draftBefore);assert.equal(w.ShardAtlasCanApplyLibrary(),false);
+      await t.runAction('confirm-import',{dataset:{}});const saved=(await get('/api/state')).shards.find(shard=>shard.id==='pasted-code-fixture');assert.equal(saved.codeSolution.code,cpp);assert.equal(saved.codeSolution.approaches[0].id,'pasted-variant');assert.equal(saved.codeSolution.approaches[0].code,'\nreturn 2;\r\n');assert.equal(JSON.stringify(t.drafts.editor),draftBefore);assert.equal($('#import-preview-dialog').open,false);
+    }finally{t.drafts.editor=oldDraft;}
+  });
   await check('AI JSON review renders full cards, syntax, math, releases, sources and pending relationships without saving', async () => {
     const before = JSON.stringify(await get('/api/state')), clientBefore = JSON.stringify(t.state.data);
     const archive = { schemaVersion: 1, shards: [

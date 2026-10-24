@@ -780,9 +780,11 @@ function openLink(id,linkId=null,recovered=null,approachId=''){
   form.dataset.baseline=recovered?.baseline||formSnapshot(form);$('#link-error').hidden=true;$('#link-dialog').showModal();draftStatus('connection',recovered?'Recovered draft. Save when ready.':'Changes are kept as a recoverable draft.');
 }
 function restoreDraft(kind){const draft=drafts[kind];if(!draft)return;if(document.querySelector('dialog[open]')){toast('Close the current dialog first.');return;}if(kind==='editor')openEditor(null,draft);else openLink(null,null,draft);}
-function extraFormDirty(){return ($('#import-edit-dialog').open&&$('#import-edit-form').dataset.baseline!==formSnapshot($('#import-edit-form')))||importReviewChanged||['board','board-item','section'].some(name=>$('#'+name+'-dialog').open&&$('#'+name+'-form').dataset.baseline!==formSnapshot($('#'+name+'-form')));}
+function pasteImportDirty(){return !!$('#archive-json').value.trim();}
+function extraFormDirty(){return pasteImportDirty()||($('#import-edit-dialog').open&&$('#import-edit-form').dataset.baseline!==formSnapshot($('#import-edit-form')))||importReviewChanged||['board','board-item','section'].some(name=>$('#'+name+'-dialog').open&&$('#'+name+'-form').dataset.baseline!==formSnapshot($('#'+name+'-form')));}
 function closeDialog(id){
   if(id==='image-viewer-dialog'){closeImageViewer();return;}
+  if(id==='paste-import-dialog'&&!busy){if(pasteImportDirty()){confirmAction('Discard this pasted archive?','This JSON has not been saved to the atlas. Cancel to keep editing or preview it.','Discard pasted text',()=>{$('#archive-json').value='';$('#paste-import-error').hidden=true;$('#paste-import-dialog').close();},true);return;}$('#paste-import-dialog').close();return;}
   if(id==='import-preview-dialog'&&!busy){if(importReviewChanged){confirmAction('Discard this import review?','Your selections and edits have not been saved to the atlas. Cancel to continue reviewing.','Discard review',()=>{$('#import-preview-dialog').close();clearImportPreview();},true);return;}$('#import-preview-dialog').close();clearImportPreview();return;}
   if(id==='import-edit-dialog'&&!busy){const form=$('#import-edit-form');if(form.dataset.baseline!==formSnapshot(form)){confirmAction('Discard these incoming card edits?','The incoming card keeps its previous text and metadata.','Discard edits',()=>{$('#import-edit-dialog').close();},true);return;}$('#import-edit-dialog').close();return;}
   if(busy){toast('Saving your change…');return;}
@@ -868,6 +870,7 @@ async function runAction(action,button){
   else if(action==='clear-topic-search')clearTopicSearch();else if(action==='clear-filters'){clearFilters();render();}else if(action==='settings')$('#settings-dialog').showModal();else if(action==='help')$('#help-dialog').showModal();else if(action==='read-selected'){state.view='library';selectShard(state.selectedId);}
   else if(action==='open-topic-map'){Object.assign(state,{atlasMode:'connections',atlasSelectedId:byId(id)?.id||state.selectedId,atlasInspectId:byId(id)?.id||state.selectedId,atlasExpandedIds:[],atlasZoom:1,atlasFit:false});changeView('atlas');}
   else if(action==='backup')await withBusy(async()=>{const result=await writeRequest('/api/backup','POST',{});toast('Backup saved: '+result.filename);});
+  else if(action==='paste-import')openPasteImport();
   else if(action==='import'||action==='import-ai'){if(action==='import-ai')$('#ai-dialog').close();pendingFilePickerType='json';$('#import-file').click();}else if(action==='upload-image'){pendingFilePickerType='image';$('#image-file').click();}
   else if(action==='toggle-preview'){previewOpen=!previewOpen;$('#editor-preview').hidden=!previewOpen;$('#preview-toggle').textContent=previewOpen?'Hide preview':'Show preview';refreshPreview();}
   else if(action==='insert-wiki')insertWiki(id);else if(action==='rename-tag')openTagRename();else if(action==='history')await showHistory(id);else if(action==='trash'||action==='backups')await showRecovery(action);
@@ -895,6 +898,21 @@ function renderStructuredEditor(kind){
   $('#source-editor').innerHTML=readStructured(kind).map((row,index)=>`<div class="structured-row" data-structured-row="${index}"><div class="structured-row-heading"><span>Source ${index+1}</span><button type="button" class="icon-button" data-action="remove-${kind}" data-index="${index}" aria-label="Remove source ${index+1}">×</button></div><div class="structured-fields">${fields.map(([key,label])=>`<label class="field">${label}<input data-structured="${kind}" data-row="${index}" data-key="${key}" value="${esc(row[key]||'')}" ${['url','sourceUrl'].includes(key)?'type="url"':'type="text"'} placeholder="${key.toLowerCase().includes('date')||key==='asOf'?'YYYY, YYYY-MM, or YYYY-MM-DD':''}"></label>`).join('')}</div></div>`).join('');
 }
 function syncStructuredEditor(kind){const rows=readStructured(kind);document.querySelectorAll(`[data-structured="${kind}"]`).forEach(el=>{if(rows[Number(el.dataset.row)])rows[Number(el.dataset.row)][el.dataset.key]=el.value;});$('#editor-form').elements[kind].value=JSON.stringify(rows);}
+function openPasteImport(){
+  const dialog=document.querySelector('dialog[open]');
+  if(busy||dialog&&!['settings-dialog','ai-dialog','paste-import-dialog'].includes(dialog.id)){toast('Finish or close the current dialog first.');return;}
+  $('#settings-dialog').close();$('#ai-dialog').close();$('#paste-import-error').hidden=true;
+  if(!$('#paste-import-dialog').open)$('#paste-import-dialog').showModal();$('#archive-json').focus();
+}
+async function previewPastedImport(){
+  if(busy)return;const text=$('#archive-json').value,error=$('#paste-import-error');error.hidden=true;
+  try{
+    if(!text.trim())throw new Error('Paste a Shard Atlas JSON archive first.');
+    if(text.length>8*1024*1024||new Blob([text]).size>8*1024*1024)throw new Error('Pasted archives can be up to 8 MB. Choose a JSON file for a larger archive.');
+    let data;try{data=JSON.parse(text);}catch{throw new Error('This text is not valid JSON. Your atlas has not changed.');}
+    await withBusy(async()=>{await previewImport(data,'Pasted archive');if(importArchive===data){importReviewChanged=true;$('#archive-json').value='';$('#paste-import-dialog').close();}});
+  }catch(failure){error.textContent=failure.message;error.hidden=false;$('#archive-json').focus();}
+}
 function clearImportPreview(){
   importPreviewRequest++;
   if([...importImageUrls.values()].includes(imageViewer.src))closeImageViewer();
@@ -1100,6 +1118,8 @@ let searchTimer;$('#search').addEventListener('input',event=>{if(state.view==='e
 $('#topic-search').addEventListener('input',event=>{state.topicQuery=event.target.value;renderTopics();});
 $('#import-preview-dialog').addEventListener('cancel',event=>{event.preventDefault();closeDialog('import-preview-dialog');});
 $('#import-preview-dialog').addEventListener('close',()=>{if(!$('#import-preview-dialog').open)clearImportPreview();});
+$('#paste-import-dialog').addEventListener('cancel',event=>{event.preventDefault();closeDialog('paste-import-dialog');});
+$('#paste-import-form').addEventListener('submit',event=>{event.preventDefault();void previewPastedImport();});
 $('#image-viewer-image').addEventListener('load',imageViewerLoaded);
 $('#image-viewer-image').addEventListener('error',imageViewerFailed);
 $('#image-viewer-dialog').addEventListener('cancel',event=>{event.preventDefault();closeImageViewer();});

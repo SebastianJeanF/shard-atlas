@@ -507,12 +507,18 @@ class StoreTests(unittest.TestCase):
 
     def test_throttled_backup_worker_captures_changes_while_open(self):
         store = Store(self.root / "periodic.sqlite3", seed=False, backup_on_start=False,
-                      backup_interval_seconds=60, backup_poll_seconds=0.01)
+                      backup_interval_seconds=0.01, backup_poll_seconds=0.01)
         store.start_backup_worker()
         try:
             shard = store.create_shard({"title": "A", "content": "first"})["shards"][0]
+            # A fresh host's monotonic clock can be below the normal interval.
+            # Explicitly await the initial due snapshot before testing throttling.
+            deadline = time.monotonic() + 5
+            while not list(store.backup_dir.glob("*.sqlite3")) and time.monotonic() < deadline:
+                time.sleep(0.01)
             first_count = len(list(store.backup_dir.glob("*.sqlite3")))
             self.assertEqual(first_count, 1)
+            store.backup_interval_seconds = 60
             store.update_shard(shard["id"], {"content": "changed while open"})
             self.assertEqual(len(list(store.backup_dir.glob("*.sqlite3"))), first_count)
             # Trigger the next interval explicitly so slow hosts do not need to
