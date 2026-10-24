@@ -381,7 +381,7 @@ class LibrarySync:
         self.pending_path.unlink(missing_ok=True)
         path.unlink(missing_ok=True)
 
-    def _apply(self, capsule, expected_fingerprint):
+    def _validated_archive(self, capsule):
         validate_capsule(capsule)
         # Import validation must run against an empty collection, rather than
         # merge semantics in which an old local ID silently wins over the cloud.
@@ -391,6 +391,59 @@ class LibrarySync:
                 seed=False, backup_on_start=False, automatic_backups=False, backup_dir=root / "backups")
             with validation.connect() as connection:
                 normalized = validation._validate_import(capsule["archive"], connection)
+        return normalized
+
+    @staticmethod
+    def _preserve_recovery_payloads(normalized, archive):
+        # Validation supplies safe identities and timestamps. Historical payloads
+        # must retain their original optional fields, just as browser sync does.
+        revisions = {item["id"]: item for item in archive["revisions"]}
+        normalized["revisions"] = [{**item, "snapshot": revisions[item["id"]]["snapshot"]}
+                                   for item in normalized["revisions"]]
+        trash = {item["id"]: item for item in archive["trash"]}
+        normalized["trash"] = [{**item, **{key: trash[item["id"]][key] for key in ("shard", "links", "reviews")
+                                                  if key in trash[item["id"]]}}
+                               for item in normalized["trash"]]
+
+    def _repair_recovery_payloads(self, remote, expected_fingerprint):
+        """Repair older normalization only when no knowledge differs from base."""
+        normalized = self._validated_archive(remote)
+        def records(archive, kind):
+            return {item["id"]: item for item in archive[kind]}
+        with self.editing_lock, self.store.lock:
+            local = self.capsule()
+            if self._editing() or fingerprint(local) != expected_fingerprint:
+                raise SyncError("Your collection changed while checking recovery records. Synchronization will retry safely.", "local_changed")
+            if local.get("contributionReceipts", []) != remote.get("contributionReceipts", []):
+                return None
+            for kind in RECORDS:
+                current, original = records(local["archive"], kind), records(remote["archive"], kind)
+                if current.keys() != original.keys():
+                    return None
+                validated = records(normalized, kind)
+                for identity, item in current.items():
+                    if item != original[identity] and (kind not in ("revisions", "trash") or item != validated[identity]):
+                        return None
+            if all(records(local["archive"], kind) == records(remote["archive"], kind) for kind in ("revisions", "trash")):
+                return expected_fingerprint
+            self.store.backup()
+            with self.store.connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                if fingerprint(self._capsule(connection)) != expected_fingerprint:
+                    raise SyncError("Your collection changed while checking recovery records. Synchronization will retry safely.", "local_changed")
+                for item in remote["archive"]["revisions"]:
+                    connection.execute("UPDATE revisions SET snapshot=? WHERE id=?", (canonical(item["snapshot"]).decode("utf-8"), item["id"]))
+                for item in remote["archive"]["trash"]:
+                    payload = {key: item[key] for key in ("shard", "links", "reviews") if key in item}
+                    connection.execute("UPDATE trash SET payload=? WHERE id=?", (canonical(payload).decode("utf-8"), item["id"]))
+                result = fingerprint(self._capsule(connection))
+            self.store._dirty = True
+            self.store.backup_tick()
+            return result
+
+    def _apply(self, capsule, expected_fingerprint):
+        normalized = self._validated_archive(capsule)
+        self._preserve_recovery_payloads(normalized, capsule["archive"])
         with self.editing_lock, self.store.lock:
             if self._editing():
                 raise SyncError("Finish your current edit before applying shared library changes.", "editing")
@@ -608,6 +661,13 @@ class LibrarySync:
                 pending, data = self._stage(local, state["baseRevision"], local_fingerprint)
                 self._publish(client, state, pending, data)
             else:
+                # One check per accepted base upgrades older Mac clients without
+                # replacing live notes, publishing, or bypassing conflict review.
+                if revision and state.get("recoveryCheckedRevision") != revision:
+                    repaired = self._repair_recovery_payloads(client.download(head.get("commit")), local_fingerprint)
+                    if repaired is not None:
+                        state["baseLocalFingerprint"] = repaired
+                    state["recoveryCheckedRevision"] = revision
                 state.update(status="synced", message="Your library is synchronized.", lastSyncedAt=timestamp())
                 self._save(state)
             return self.status()

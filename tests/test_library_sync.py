@@ -181,6 +181,69 @@ class LibrarySyncTests(unittest.TestCase):
             self.assertEqual(conn.execute("SELECT value FROM metadata WHERE key='device-setting'").fetchone()[0], "preserve")
             self.assertEqual(conn.execute("SELECT count(*) FROM imports WHERE id='local-import'").fetchone()[0], 1)
 
+    def legacy_recovery_capsule(self):
+        other = self.new_store("legacy-recovery")
+        self.add(other, codeSolution={"role": "snippet", "code": "\r\nint f() {\r\n\treturn 3; // α\r\n}\r\n"})
+        deleted = self.add(other, title="Legacy deleted")
+        other.delete_shard(deleted["id"])
+        capsule = LibrarySync(other, config_path=self.root / "absent").capsule()
+        for snapshot in [item["snapshot"] for item in capsule["archive"]["revisions"]] + [item["shard"] for item in capsule["archive"]["trash"]]:
+            for key in ("experiments", "verification", "learningLog", "comparisons", "perspectives", "walkthroughs", "courses", "notation", "assumptions", "subjects"):
+                snapshot.pop(key, None)
+            if not snapshot["codeSolution"]["role"]:
+                snapshot.pop("codeSolution")
+        capsule["archive"]["revisions"][0]["snapshot"]["legacyExtension"] = {"retain": True}
+        return capsule
+
+    def simulate_older_normalizing_client(self, capsule):
+        self.cloud.seed(capsule)
+        self.store.import_data(capsule["archive"])
+        self.sync._save({"version": 1, "baseRevision": self.cloud.revision, "viewRevision": self.cloud.revision,
+                         "baseLocalFingerprint": fingerprint(self.sync.capsule()), "status": "synced"})
+
+    def test_download_retains_exact_legacy_revisions_and_trash(self):
+        capsule = self.legacy_recovery_capsule()
+        self.cloud.seed(capsule)
+        self.assertEqual(self.sync.run()["status"], "synced")
+        self.assertEqual(self.sync.capsule(), capsule)
+
+    def test_clean_older_client_repairs_only_recovery_payloads_without_publishing(self):
+        capsule = self.legacy_recovery_capsule()
+        self.simulate_older_normalizing_client(capsule)
+        self.assertNotEqual(self.sync.capsule(), capsule)
+        before = self.store.export_data()
+        publishes = len(self.cloud.publishes)
+        self.assertEqual(self.sync.run()["status"], "synced")
+        self.assertEqual(self.sync.capsule(), capsule)
+        for kind in ("shards", "links", "assets", "boards", "reviews"):
+            self.assertEqual(self.store.export_data()[kind], before[kind])
+        self.assertEqual(len(self.cloud.publishes), publishes)
+        self.assertTrue(list(self.store.backup_dir.glob("*.sqlite3")))
+        with mock.patch.object(self.cloud, "download", side_effect=AssertionError("Base already checked")):
+            self.assertEqual(self.sync.run()["status"], "synced")
+
+    def test_recovery_repair_refuses_semantically_different_history(self):
+        capsule = self.legacy_recovery_capsule()
+        self.simulate_older_normalizing_client(capsule)
+        with self.store.connect() as connection:
+            row = connection.execute("SELECT id,snapshot FROM revisions LIMIT 1").fetchone()
+            snapshot = json.loads(row[1]); snapshot["content"] = "Distinct local history"
+            connection.execute("UPDATE revisions SET snapshot=? WHERE id=?", (json.dumps(snapshot), row[0]))
+        before = self.sync.capsule()
+        self.assertIsNone(self.sync._repair_recovery_payloads(capsule, fingerprint(before)))
+        self.assertEqual(self.sync.capsule(), before)
+
+    def test_local_edit_during_recovery_check_is_retained_and_not_acknowledged(self):
+        capsule = self.legacy_recovery_capsule()
+        self.simulate_older_normalizing_client(capsule)
+        before_base = self.sync._state()["baseLocalFingerprint"]
+        self.cloud.on_download = lambda: self.add(title="New during recovery check")
+        self.assertEqual(self.sync.run()["status"], "local_changed")
+        self.assertEqual(self.sync._state()["baseLocalFingerprint"], before_base)
+        self.assertTrue(any(item["title"] == "New during recovery check" for item in self.store.state()["shards"]))
+        self.assertEqual(self.sync.run()["status"], "synced")
+        self.assertTrue(any(item["title"] == "New during recovery check" for item in self.cloud.download(self.cloud.head()["commit"])["archive"]["shards"]))
+
     def test_remote_receipts_prevent_deleted_inbox_resurrection(self):
         other = self.new_store("remote")
         batch = {"requestId": "immutable-inbox", "shards": [{"id": "from-inbox", "title": "Imported"}], "links": []}
