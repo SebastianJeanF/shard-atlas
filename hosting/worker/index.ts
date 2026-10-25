@@ -4,9 +4,12 @@ import type { ConnectorBinding } from "../lib/connector-contract.mjs";
 import { handleLibraryRequest } from "../../sync/worker.mjs";
 import { handleReleaseRequest } from "../../sync/release.mjs";
 import releaseManifest from "./release-manifest.json";
+import { handleSiteMcpRequest } from "../lib/site-mcp.mjs";
 
 const worker = {
   async fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext<{ CONNECTORS?: ConnectorBinding }>) {
+    const mcp = await handleSiteMcpRequest(request, env);
+    if (mcp) return mcp;
     const release = await handleReleaseRequest(request, env, releaseManifest);
     if (release) return release;
     const library = await handleLibraryRequest(request, env);
