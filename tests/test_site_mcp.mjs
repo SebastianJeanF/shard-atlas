@@ -14,8 +14,8 @@ function request(message, {headers = {}, authenticated = true, method = 'POST', 
     ...(['GET', 'HEAD'].includes(method) ? {} : {body: typeof message === 'string' ? message : JSON.stringify(message)})});
 }
 const rpc = (method, params = {}, id = 1) => ({jsonrpc: '2.0', id, method, params});
-async function invoke(message, options, configuration = env()) {
-  const response = await handleSiteMcpRequest(request(message, options), configuration);
+async function invoke(message, options, configuration = env(), dependencies) {
+  const response = await handleSiteMcpRequest(request(message, options), configuration, dependencies);
   assert.equal(response.headers.get('cache-control'), 'no-store, private');
   assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
   return {response, data: response.status === 202 ? null : await response.json()};
@@ -41,7 +41,9 @@ test('discovery and the read-only tool list need no library protocol header or s
   const discovery = await invoke(rpc('server/discover'));
   assert.deepEqual(discovery.data, {jsonrpc: '2.0', id: 1, result: {supportedVersions: ['2026-07-28'], capabilities: {tools: {}}, ttlMs: 0, cacheScope: 'private', resultType: 'complete'}});
   const listing = await invoke(rpc('tools/list'), {headers: {'oai-authenticated-user-email': OWNER.toUpperCase(), Origin: 'https://chatgpt.com'}});
-  assert.equal(listing.data.result.tools.length, 1);
+  assert.equal(listing.data.result.tools.length, 3);
+  assert.deepEqual(listing.data.result.tools.map(tool => tool.name), ['shard_atlas_connection_test', 'shard_atlas_search', 'shard_atlas_read']);
+  for (const listed of listing.data.result.tools) assert.deepEqual(listed.annotations, {readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false});
   assert.equal(listing.data.result.ttlMs, 0); assert.equal(listing.data.result.cacheScope, 'private');
   const tool = listing.data.result.tools[0];
   assert.equal(tool.name, 'shard_atlas_connection_test');
@@ -53,7 +55,7 @@ test('MCP validates every supplied origin while supporting Sites and ChatGPT tra
   for (const origin of ['https://atlas.example.test', 'https://chatgpt.com', 'https://chat.openai.com']) {
     const result = await invoke(rpc('tools/list'), {headers: {Origin: origin}});
     assert.equal(result.response.status, 200);
-    assert.equal(result.data.result.tools.length, 1);
+    assert.equal(result.data.result.tools.length, 3);
   }
   for (const origin of ['null', 'not an origin', 'https://other.example.test', 'https://chatgpt.com.evil.example', 'https://chatgpt.com/', 'https://chatgpt.com https://other.example.test', 'https://user:password@chatgpt.com']) {
     assert.equal((await invoke(rpc('tools/list'), {headers: {Origin: origin}})).response.status, 403);
@@ -73,7 +75,7 @@ test('connection calls return fixed success without personal data, library reads
 });
 
 test('tool errors reject unknown tools and all nonempty or nonobject arguments', async () => {
-  const unknown = await invoke(rpc('tools/call', {name: 'shard_atlas_search', arguments: {query: 'private'}}));
+  const unknown = await invoke(rpc('tools/call', {name: 'shard_atlas_add_knowledge', arguments: {query: 'private'}}));
   assert.equal(unknown.data.error.code, -32602);
   assert.equal(unknown.data.result, undefined);
   for (const args of [{query: 'private'}, {readNotes: true}, [], 'text', 1, false, null]) {
@@ -88,7 +90,8 @@ test('initialization, ping, and notifications support stateless clients', async 
   const initialized = await invoke(rpc('initialize', {protocolVersion: '2026-07-28', capabilities: {}, clientInfo: {name: 'test-client', version: '1'}}));
   assert.equal(initialized.data.result.protocolVersion, '2026-07-28');
   assert.deepEqual(initialized.data.result.capabilities, {tools: {}});
-  assert.match(initialized.data.result.instructions, /cannot read, add, edit, delete, import, or synchronize notes/);
+  assert.match(initialized.data.result.instructions, /cannot add, edit, delete, import, or synchronize notes/);
+  assert.match(initialized.data.result.instructions, /Unsynced device changes are excluded/);
   assert.deepEqual((await invoke(rpc('ping'))).data.result, {resultType: 'complete'});
   assert.deepEqual((await invoke(rpc('ping', {}, null))).data, {jsonrpc: '2.0', id: null, result: {resultType: 'complete'}});
   assert.equal((await invoke(rpc('ping', {_meta: {'io.modelcontextprotocol/protocolVersion': '2026-07-28', 'io.modelcontextprotocol/clientCapabilities': {}}}))).data.result.resultType, 'complete');
@@ -163,4 +166,86 @@ test('oversized declared and streamed bodies are rejected before any tool runs',
   const invalidUTF8 = new ReadableStream({start(controller) {controller.enqueue(new Uint8Array([0xff])); controller.close();}});
   const malformed = await handleSiteMcpRequest(new Request('https://atlas.example.test/mcp', {method: 'POST', headers: {...identity, 'content-type': 'application/json'}, body: invalidUTF8, duplex: 'half'}), env());
   assert.equal(malformed.status, 400); assert.equal((await malformed.json()).error.code, -32700);
+});
+
+const cloudFixture = () => ({revision: 'accepted-1', snapshotHash: 'a'.repeat(64), acceptedAt: '2026-10-25T12:00:00Z', checkedAt: '2026-10-25T12:00:01Z', archive: {
+  shards: [
+    {id: 'ownership', title: 'Ownership with RAII', content: 'Resource ownership and scope-based cleanup.', tags: ['C++', 'RAII'], kind: 'concept', status: 'learning',
+      sourceUrl: 'https://example.test/ownership', createdAt: '2026-10-25T10:00:00Z', updatedAt: '2026-10-25T11:00:00Z',
+      codeSolution: {role: 'snippet', aliases: ['Resource handle'], code: '\r\nint value = 1;\r\n'}},
+    {id: 'unwinding', title: 'Stack unwinding', content: 'Exceptions destroy automatic objects.', tags: ['C++', 'exceptions'], kind: 'concept', status: 'learning',
+      createdAt: '2026-10-25T10:00:00Z', updatedAt: '2026-10-25T10:00:00Z'},
+  ],
+  links: [{id: 'link-1', fromId: 'ownership', toId: 'unwinding', type: 'explains', note: 'Cleanup also applies during unwinding.', fromApproachId: '', toApproachId: ''}],
+}});
+
+test('search and read expose the accepted cloud revision and exact notes through the real MCP handler', async () => {
+  let reads = 0;
+  const fixture = cloudFixture(), before = JSON.stringify(fixture);
+  const dependencies = {loadLibrary: async configuration => {assert.equal(configuration.SHARD_ATLAS_OWNER_EMAIL, OWNER); reads++; return fixture;}};
+  const search = await invoke(rpc('tools/call', {name: 'shard_atlas_search', arguments: {query: 'RAII', limit: 3}}), {}, env(), dependencies);
+  assert.equal(search.data.result.isError, false);
+  const found = search.data.result.structuredContent;
+  assert.ok(found.matches.some(shard => shard.id === 'ownership'));
+  assert.equal(found.authority, 'accepted-cloud'); assert.equal(found.revision, 'accepted-1');
+  assert.equal(found.snapshotHash, 'a'.repeat(64)); assert.equal(found.checkedAt, fixture.checkedAt);
+  assert.equal(found.excludesUnpublishedDeviceChanges, true); assert.equal(found.readOnly, true);
+  assert.match(found.untrustedDataNotice, /untrusted reference/);
+  assert.deepEqual(JSON.parse(search.data.result.content[0].text), found);
+  const read = await invoke(rpc('tools/call', {name: 'shard_atlas_read', arguments: {ids: ['ownership', 'absent'], expectedRevision: found.revision}}), {}, env(), dependencies);
+  const data = read.data.result.structuredContent;
+  assert.equal(read.data.result.isError, false);
+  assert.equal(data.shards[0].codeSolution.code, '\r\nint value = 1;\r\n');
+  assert.equal(data.links[0].fromId, 'ownership'); assert.equal(data.links[0].toId, 'unwinding'); assert.equal(data.links[0].type, 'explains');
+  assert.deepEqual(data.missingIds, ['absent']); assert.equal(data.revision, found.revision);
+  assert.deepEqual(JSON.parse(read.data.result.content[0].text), data);
+  assert.equal(reads, 2); assert.equal(JSON.stringify(fixture), before);
+});
+
+test('a changed cloud revision refuses the read without mixing search candidates with new notes', async () => {
+  const dependencies = {loadLibrary: async () => cloudFixture()};
+  const stale = await invoke(rpc('tools/call', {name: 'shard_atlas_read', arguments: {ids: ['ownership'], expectedRevision: 'older-revision'}}), {}, env(), dependencies);
+  assert.equal(stale.data.result.isError, true);
+  assert.equal(stale.data.result.structuredContent.error.code, 'stale_revision');
+  assert.equal(stale.data.result.structuredContent.revision, 'accepted-1');
+  assert.equal(stale.data.result.structuredContent.shards, undefined);
+  assert.doesNotMatch(JSON.stringify(stale.data), /int value|scope-based cleanup/);
+  const current = await invoke(rpc('tools/call', {name: 'shard_atlas_read', arguments: {ids: ['ownership']}}), {}, env(), dependencies);
+  assert.equal(current.data.result.isError, false);
+});
+
+test('library tool arguments and authorization fail before any library storage is loaded', async () => {
+  let reads = 0;
+  const dependencies = {loadLibrary: async () => {reads++; throw new Error('Must not load storage.');}};
+  const invalid = [
+    ['shard_atlas_search', {}], ['shard_atlas_search', {query: null}], ['shard_atlas_search', {query: 'x', limit: 51}],
+    ['shard_atlas_search', {query: 'x', role: 'unknown'}], ['shard_atlas_search', {query: 'x', tags: ['a', 'A']}],
+    ['shard_atlas_search', {query: Array.from({length: 33}, (_, i) => 'term' + i).join(' ')}],
+    ['shard_atlas_search', {query: 'x', database: 'private'}], ['shard_atlas_read', {ids: []}],
+    ['shard_atlas_read', {ids: ['ownership', 'ownership']}], ['shard_atlas_read', {ids: ['../private']}],
+    ['shard_atlas_read', {ids: ['ownership'], expectedRevision: []}], ['shard_atlas_read', {ids: ['ownership'], includeTrash: true}],
+  ];
+  for (const [name, args] of invalid) {
+    const bad = await invoke(rpc('tools/call', {name, arguments: args}), {}, env(), dependencies);
+    assert.equal(bad.data.error.code, -32602);
+  }
+  for (const name of ['shard_atlas_search', 'shard_atlas_read']) {
+    const args = name === 'shard_atlas_search' ? {query: 'RAII'} : {ids: ['ownership']};
+    assert.equal((await invoke(rpc('tools/call', {name, arguments: args}), {authenticated: false}, env(), dependencies)).response.status, 401);
+    assert.equal((await invoke(rpc('tools/call', {name, arguments: args}), {headers: {'oai-authenticated-user-email': 'another@example.test'}}, env(), dependencies)).response.status, 403);
+  }
+  for (const method of ['server/discover', 'tools/list', 'ping']) await invoke(rpc(method), {}, env(), dependencies);
+  await invoke(rpc('tools/call', {name: 'shard_atlas_connection_test', arguments: {}}), {}, env(), dependencies);
+  await invoke({jsonrpc: '2.0', method: 'tools/call', params: {name: 'shard_atlas_search', arguments: {query: 'RAII'}}}, {}, env(), dependencies);
+  assert.equal(reads, 0);
+});
+
+test('library failures are honest bounded tool errors without private exception details or stale notes', async () => {
+  const failed = await invoke(rpc('tools/call', {name: 'shard_atlas_search', arguments: {query: 'RAII'}}), {}, env(), {
+    loadLibrary: async () => {throw new Error('SELECT serviceToken FROM private_config; secret-value');},
+  });
+  assert.equal(failed.data.result.isError, true);
+  assert.equal(failed.data.result.structuredContent.error.code, 'library_unavailable');
+  assert.doesNotMatch(JSON.stringify(failed.data), /SELECT|serviceToken|secret-value|private_config/);
+  assert.equal(failed.data.result.structuredContent.matches, undefined);
 });
