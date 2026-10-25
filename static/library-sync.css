@@ -1,9 +1,13 @@
 .library-sync-nav {font-size: .82rem; white-space: normal; text-align: left;}
 .library-sync-nav[data-sync-state="conflict"], .library-sync-nav[data-sync-state="migration_required"] {color: #a84a00;}
+.library-sync-nav[data-sync-state="incoming"], .library-sync-nav[data-sync-state="check_unavailable"], .library-sync-nav[data-sync-state="update_required"], .library-sync-nav[data-sync-state="incompatible_version"] {color: #985311;}
+.library-freshness-banner {border: 0; border-bottom: 1px solid #e5d7ba; background: #fff4dc; color: #70480f; padding: 10px 24px; text-align: left; font: inherit; font-size: .82rem; cursor: pointer;}
+.library-freshness-banner[hidden] {display: none;}
+.library-freshness-banner:focus-visible {outline: 2px solid var(--accent, #526a46); outline-offset: -3px;}
 .library-sync-dialog {width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); overflow: auto;}
 .library-sync-state {font-weight: 650;}
 .library-sync-message, .library-sync-counts, .library-sync-time, .library-sync-footnote {font-size: .88rem; line-height: 1.6;}
-.library-sync-time, .library-sync-footnote {color: var(--muted, #65665f);}
+.library-sync-time, .library-sync-checked, .library-sync-footnote {color: var(--muted, #65665f); font-size: .82rem;}
 .library-sync-actions {display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0;}
 .library-sync-conflict {border-top: 1px solid var(--line, #deded6); padding-top: 12px; margin-top: 20px;}
 .library-sync-conflict p {font-size: .88rem; line-height: 1.6;}

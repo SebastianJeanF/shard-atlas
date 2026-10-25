@@ -15,16 +15,27 @@ import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from release_manifest import DIGEST, generate_manifest, write_embedded_manifest
 
 
 def run(*arguments: str) -> None:
     subprocess.run(arguments, check=True)
 
 
+def compiled_native_source(native_id: str) -> str:
+    """Stamp compiler input, so stale executables retain their own identity."""
+    source = (ROOT / "desktop/ShardAtlas.swift").read_text(encoding="utf-8")
+    marker = "__SHARD_ATLAS_NATIVE_ID__"
+    if not DIGEST.fullmatch(native_id) or source.count(marker) != 1:
+        raise ValueError("The native release stamp must replace exactly one build marker.")
+    return source.replace(marker, native_id)
+
+
 def desktop_configuration(python: Path | None = None, qa_db: Path | None = None,
                           backup_dir: Path | None = None) -> dict:
     """Keep portable builds independent of the machine that compiled them."""
-    config = {"backendVersion": "3.0.0"}
+    config = {"backendVersion": "3.1.0"}
     if python is not None:
         config["pythonCandidates"] = [str(python.expanduser().resolve())]
     if qa_db is not None:
@@ -54,9 +65,11 @@ def build(output: Path, python: Path | None = None, qa_db: Path | None = None,
         runtime = resources / "runtime"
         executable.parent.mkdir(parents=True)
         runtime.mkdir(parents=True)
-        for filename in ("server.py", "library_sync.py", "seed.json"):
+        for filename in ("server.py", "library_sync.py", "release_manifest.py", "release_status.py", "seed.json"):
             shutil.copy2(ROOT / filename, runtime / filename)
         shutil.copytree(ROOT / "static", runtime / "static", ignore=shutil.ignore_patterns(".DS_Store"))
+        release = generate_manifest(ROOT)
+        write_embedded_manifest(runtime / "static", release)
         try:
             revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, stderr=subprocess.DEVNULL).strip()
         except (OSError, subprocess.CalledProcessError):
@@ -66,7 +79,7 @@ def build(output: Path, python: Path | None = None, qa_db: Path | None = None,
             if asset.is_file() and not any(part.startswith('.') for part in asset.relative_to(ROOT / 'static').parts):
                 digest.update(asset.relative_to(ROOT / "static").as_posix().encode())
                 digest.update(asset.read_bytes())
-        (runtime / 'static/build-info.json').write_text(json.dumps({"version": "3.0.0", "sourceRevision": revision, "interfaceFingerprint": digest.hexdigest()}) + '\n', encoding='utf-8')
+        (runtime / 'static/build-info.json').write_text(json.dumps({"version": "3.1.0", "sourceRevision": revision, "interfaceFingerprint": digest.hexdigest(), "release": release}) + '\n', encoding='utf-8')
         config = desktop_configuration(python, qa_db, backup_dir)
         (resources / "desktop-config.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
         info = {
@@ -75,8 +88,9 @@ def build(output: Path, python: Path | None = None, qa_db: Path | None = None,
             "CFBundleDisplayName": "Shard Atlas QA" if qa_db is not None else "Shard Atlas",
             "CFBundleExecutable": "ShardAtlas",
             "CFBundlePackageType": "APPL",
-            "CFBundleShortVersionString": "3.0.0",
-            "CFBundleVersion": "30",
+            "CFBundleShortVersionString": "3.1.0",
+            "CFBundleVersion": "31",
+            "ShardAtlasNativeReleaseId": release["nativeId"],
             "LSMinimumSystemVersion": "12.0",
             "NSHighResolutionCapable": True,
             "NSPrincipalClass": "NSApplication",
@@ -93,7 +107,7 @@ def build(output: Path, python: Path | None = None, qa_db: Path | None = None,
             plistlib.dump(info, target)
         (contents / "PkgInfo").write_bytes(b"APPL????")
         source = Path(staging) / "ShardAtlas.swift"
-        shutil.copy2(ROOT / "desktop" / "ShardAtlas.swift", source)
+        source.write_text(compiled_native_source(release["nativeId"]), encoding="utf-8")
         run("/usr/bin/swiftc", "-swift-version", "5", "-O", "-framework", "Cocoa", "-framework", "WebKit",
             "-target", f"{os.uname().machine}-apple-macos12.0", str(source), "-o", str(executable))
         run("/usr/bin/swiftc", "-swift-version", "5", "-O", "-framework", "Vision", "-framework", "Foundation",

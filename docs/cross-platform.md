@@ -61,7 +61,21 @@ For native testing, use `--output PATH --qa-db PATH` with a temporary database. 
 
 Native sync validates incoming historical snapshots and Trash before retaining their original payload fields. Older clients may have inserted empty modern fields into legacy recovery records. A guarded check can reconcile that representation with the current cloud base only when live records match exactly, each differing recovery record equals the validated cloud record, no edit is open, and the local fingerprint remains unchanged. It makes a safety backup, changes only recovery payloads, and does not publish or advance the cloud base. A real content difference is never repaired by guessing.
 
-## Library content and device state
+## Data and app freshness
+
+**Library sync and App updates answer separate questions.** Library sync checks saved knowledge against the accepted cloud revision. App updates compares loaded software with the release actually published by the private website. A newer Git commit alone does not establish a newer published app.
+
+The sidebar reports pending changes, incoming saved data, offline or unavailable checks, unconnected devices, incompatible versions, and conflicts. Cheap head checks continue while an editor is protected. Incoming knowledge is applied only after the existing save and draft guards permit it. A failed or expired check does not remain labeled synchronized.
+
+App updates checks at startup, every 60 seconds, on focus, and on connectivity changes. Its states include **Up to date**, **Update available**, **Restart required**, **Mac app update required**, **Versions differ**, and unavailable or offline states. Reloading requires saved work. The native window carries a compiled identity, so matching Swift source files alone cannot establish that the installed app was rebuilt.
+
+`release_manifest.py` defines explicit component source allowlists. The generated manifest separates the interface, local backend, hosted runtime, and compiled native sources. Generated output, credentials, personal data, and Git metadata are excluded. Add runtime dependencies to the relevant allowlist and its completeness tests. Rebuild and publish the exact checked source after changes.
+
+Authenticated `/api/release` and `/api/sync/release` return the deployed manifest with `Cache-Control: no-store, private`. Release discovery remains available to authenticated clients with an incompatible data protocol. Native `/api/release-status` also compares the loaded backend with disk and checks the compiled native stamp.
+
+Device service access supports `SHARD_ATLAS_SERVICE_SECRET_SHA256_ALLOWLIST`, a JSON array of SHA-256 digests. When configured, the list is authoritative, including an empty list that revokes every service device. When absent, the legacy single digest remains compatible. Provision a distinct private secret per new device and add only its digest through supported Sites settings. Never copy the Mac connection file to Windows. Browser sign-in does not need a device secret. Preserve current access and existing device digests when adding a device.
+
+## Portable content and local state
 
 Cloud capsules preserve the full portable archive, including current shards, typed relationships, approach identities, exact C++ text, images, revisions, Trash, and legacy recovery records. Contribution receipts travel with the library to prevent old inbox batches from recreating deleted notes.
 

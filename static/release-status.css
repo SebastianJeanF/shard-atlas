@@ -1,0 +1,18 @@
+.app-release-nav {font-size: .82rem; white-space: normal; text-align: left;}
+.app-release-nav[data-release-state="up_to_date"] {color: #426548;}
+.app-release-nav[data-release-state="update_available"], .app-release-nav[data-release-state="restart_required"], .app-release-nav[data-release-state="native_update_required"], .app-release-nav[data-release-state="versions_differ"] {color: #985311;}
+.app-release-nav[data-release-state="unknown"], .app-release-nav[data-release-state="offline"] {color: var(--muted, #65665f);}
+.app-release-banner {border: 0; border-bottom: 1px solid #e5d7ba; background: #fff4dc; color: #70480f; padding: 10px 24px; text-align: left; font: inherit; font-size: .82rem; cursor: pointer;}
+.app-release-banner[hidden] {display: none;}
+.app-release-banner:focus-visible {outline: 2px solid var(--accent, #526a46); outline-offset: -3px;}
+.app-release-dialog {width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); overflow: auto;}
+.app-release-state {font-weight: 650;}
+.app-release-message, .app-release-work, .app-release-footnote {font-size: .88rem; line-height: 1.6;}
+.app-release-time, .app-release-footnote {color: var(--muted, #65665f); font-size: .82rem;}
+.app-release-actions {display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0;}
+.app-release-details {border-top: 1px solid var(--line, #deded6); padding-top: 12px; margin-top: 20px; font-size: .82rem;}
+.app-release-details summary {cursor: pointer;}
+.app-release-details dl {display: grid; gap: 5px;}
+.app-release-details dt {font-weight: 600;}
+.app-release-details dd {margin: 0 0 8px; overflow-wrap: anywhere; font-family: ui-monospace, monospace; font-size: .75rem; color: var(--muted, #65665f);}
+@media (max-width: 600px) {.app-release-banner, .library-freshness-banner {padding: 9px 14px; font-size: .76rem;}}

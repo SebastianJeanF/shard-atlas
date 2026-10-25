@@ -104,9 +104,13 @@ export class BrowserLibrarySync {
   statusFrom(db) {
     const state = db.librarySync || defaultState();
     const pending = state.state === 'synced' && (db.localGeneration || 0) !== (state.syncedGeneration || 0);
+    const observation = state.cloudCheck || {state: 'unknown', checkedAt: null, revision: ''};
+    const recent = observation.checkedAt && this.now() - Date.parse(observation.checkedAt) <= Math.max(60_000, this.pollMs * 2);
+    const cloudCheck = observation.state === 'unavailable' || recent ? observation : {...observation, state: 'unknown'};
     return {configured: state.configured, state: pending ? 'pending' : state.state, message: pending ? 'Your latest changes are waiting to synchronize.' : state.message,
       lastSyncedAt: state.lastSyncedAt, localCount: count(db), remoteCount: state.remoteCount ?? null, revision: state.revision,
-      remoteRevision: state.remoteRevision || '', conflictId: state.conflict?.id || null, pending: !!state.outbox};
+      remoteRevision: state.remoteRevision || '', conflictId: state.conflict?.id || null, pending: !!state.outbox,
+      cloudCheck, incomingAvailable: cloudCheck.state === 'incoming', syncing: !!this.running};
   }
   async status() {return this.statusFrom(await this.read());}
   async markEditing(editing) {
@@ -143,6 +147,12 @@ export class BrowserLibrarySync {
   async setStatus(state, message, extra = {}) {
     await this.owned((db, sync) => Object.assign(sync, {state, message, ...extra}));
   }
+  async observeHead(head) {
+    await this.owned((db, sync) => {
+      sync.cloudCheck = {state: head.revision === sync.revision ? 'current' : 'incoming',
+        checkedAt: new Date(this.now()).toISOString(), revision: head.revision};
+    });
+  }
   async acknowledge(receipt, pending) {
     await this.owned((db, sync) => {
       if (sync.outbox?.mutationId !== pending.mutationId) fail('Pending changes changed while synchronizing. Retry safely.');
@@ -157,6 +167,7 @@ export class BrowserLibrarySync {
         if (pending.resolve) delete sync.forceConflictBase;
         sync.lastSyncedAt = new Date(this.now()).toISOString();
         sync.syncedGeneration = pending.generation;
+        sync.cloudCheck = {state: 'current', checkedAt: sync.lastSyncedAt, revision: receipt.id};
         Object.assign(sync, {state: 'synced', message: 'Your library is synchronized.', configured: true});
       }
     });
@@ -193,7 +204,7 @@ export class BrowserLibrarySync {
       Object.assign(sync, {initialized: true, revision: head.revision, baseFingerprint: remoteFingerprint, outbox: null, conflict: null,
         remoteRevision: head.revision, remoteCount: remote.archive.shards.length, state: 'synced', configured: true,
         message: pendingReceipts ? 'Your local import history is waiting to synchronize.' : 'Your library is synchronized.', lastSyncedAt: new Date(this.now()).toISOString(), syncedGeneration: db.localGeneration,
-        lastBackupFilename: backup.filename});
+        lastBackupFilename: backup.filename, cloudCheck: {state: 'current', checkedAt: new Date(this.now()).toISOString(), revision: head.revision}});
       if (pendingReceipts) sync.state = 'pending';
       return publicState(db);
     });
@@ -206,12 +217,23 @@ export class BrowserLibrarySync {
     // Continue after an accepted retry so later local edits get their own base.
     for (let pass = 0; pass < 3; pass++) {
       let db = await this.read(), state = stateOf(db);
-      if (state.conflict) return;
+      // Check only the accepted revision while an editor or a conflict blocks
+      // replacement. Keep every snapshot, pending mutation and base unchanged.
+      const savedDirty = state.initialized ? fingerprint(libraryCapsule(db)) !== state.baseFingerprint : !!nonempty(db);
+      if (state.conflict || !this.canApply(db) && !state.outbox && !savedDirty) {
+        const head = await this.client.head({summary: true});
+        await this.observeHead(head);
+        if (!state.conflict) await this.setStatus('pending', head.revision !== state.revision
+          ? 'New saved data is available. Finish or save your open edit to receive it.'
+          : 'Your editor is protected. Saved data will synchronize after you finish editing.');
+        return;
+      }
       if (state.outbox) {
         if (await this.acknowledge(await this.client.publish(state.outbox), state.outbox) === 'conflict') return;
         continue;
       }
       const head = await this.client.head();
+      await this.observeHead(head);
       db = await this.read(); state = stateOf(db);
       const localFingerprint = fingerprint(libraryCapsule(db));
       const dirty = state.initialized ? localFingerprint !== state.baseFingerprint : !!nonempty(db);
@@ -230,7 +252,8 @@ export class BrowserLibrarySync {
         if (fingerprint(remote) === localFingerprint) {
           await this.owned((current, sync) => Object.assign(sync, {initialized: true, revision: head.revision, baseFingerprint: localFingerprint,
             state: 'synced', message: 'Your library is synchronized.', remoteCount: remote.archive.shards.length,
-            lastSyncedAt: new Date(this.now()).toISOString(), syncedGeneration: db.localGeneration || 0}));
+            lastSyncedAt: new Date(this.now()).toISOString(), syncedGeneration: db.localGeneration || 0,
+            cloudCheck: {state: 'current', checkedAt: new Date(this.now()).toISOString(), revision: head.revision}}));
           return;
         }
         await this.owned((current, sync) => {sync.remoteCount = remote.archive.shards.length;});
@@ -251,8 +274,12 @@ export class BrowserLibrarySync {
     heartbeat.unref?.();
     try {await operation();}
     catch (error) {
-      const state = error.code === 'sign_in_required' || error.status === 401 ? 'sign-in-required' : error.status === 0 || error.code === 'offline' ? 'offline' : 'pending';
-      await this.setStatus(state, error.message || 'Synchronization could not finish. Your local collection is retained.', {configured: error.code !== 'not_configured'}).catch(() => {});
+      const state = error.code === 'incompatible_version' || error.status === 426 ? 'update_required' : error.code === 'sign_in_required' || error.status === 401 ? 'sign-in-required' : error.status === 0 || error.code === 'offline' ? 'offline' : 'pending';
+      await this.owned((db, sync) => {
+        const preservedState = sync.conflict ? sync.state : state;
+        Object.assign(sync, {state: preservedState, message: error.message || 'Synchronization could not finish. Your local collection is retained.',
+          configured: error.code !== 'not_configured', cloudCheck: {state: 'unavailable', checkedAt: new Date(this.now()).toISOString(), revision: sync.cloudCheck?.revision || '', message: error.message}});
+      }).catch(() => {});
     } finally {clearInterval(heartbeat); await this.release();}
   }
   async run() {

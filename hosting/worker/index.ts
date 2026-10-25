@@ -2,9 +2,13 @@ import handler from "vinext/server/fetch-handler";
 import { runWithConnectorBinding } from "../lib/connector-context";
 import type { ConnectorBinding } from "../lib/connector-contract.mjs";
 import { handleLibraryRequest } from "../../sync/worker.mjs";
+import { handleReleaseRequest } from "../../sync/release.mjs";
+import releaseManifest from "./release-manifest.json";
 
 const worker = {
   async fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext<{ CONNECTORS?: ConnectorBinding }>) {
+    const release = await handleReleaseRequest(request, env, releaseManifest);
+    if (release) return release;
     const library = await handleLibraryRequest(request, env);
     if (library) return library;
     let binding = ctx.props?.CONNECTORS;

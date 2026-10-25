@@ -33,7 +33,9 @@ class FakeCloud:
     def __call__(self, config):
         return self
 
-    def head(self):
+    def head(self, *, summary=False):
+        if summary:
+            return {"protocolVersion": 1, "revision": self.revision}
         return {"protocolVersion": 1, "revision": self.revision,
                 "commit": copy.deepcopy(self.commits.get(self.revision))}
 
@@ -376,6 +378,63 @@ class LibrarySyncTests(unittest.TestCase):
         self.sync.editing(False)
         self.assertEqual(self.sync.run()["status"], "synced")
 
+    def test_editor_checks_incoming_head_without_touching_library_or_base(self):
+        self.add()
+        self.sync.run()
+        before = self.store.export_data()
+        state = self.sync._state()
+        remote = self.sync.capsule()
+        remote["archive"]["shards"][0]["title"] = "Saved on another device"
+        self.cloud.seed(remote)
+        self.sync.editing(True)
+        with mock.patch.object(self.cloud, "download", side_effect=AssertionError("No download during an edit")), \
+             mock.patch.object(self.cloud, "publish", side_effect=AssertionError("No publish during an edit")):
+            result = self.sync.run()
+        self.assertEqual(result["status"], "editing")
+        self.assertEqual(result["cloudCheck"]["state"], "incoming")
+        self.assertTrue(result["incomingAvailable"])
+        self.assertEqual(self.store.export_data(), before)
+        for field in ("baseRevision", "viewRevision", "baseLocalFingerprint"):
+            self.assertEqual(self.sync._state()[field], state[field])
+
+    def test_editor_check_failure_reports_unavailable_and_retains_pending(self):
+        self.add()
+        self.cloud.fail_next_publish = True
+        self.sync.run()
+        pending = self.sync.pending_path.read_bytes()
+        state = self.sync._state()
+        self.sync.editing(True)
+        with mock.patch.object(self.cloud, "head", side_effect=SyncError("Connection unavailable", "offline")):
+            result = self.sync.run()
+        self.assertEqual(result["cloudCheck"]["state"], "unavailable")
+        self.assertFalse(result["incomingAvailable"])
+        self.assertEqual(self.sync.pending_path.read_bytes(), pending)
+        self.assertEqual(self.sync._state()["baseRevision"], state["baseRevision"])
+
+    def test_cloud_freshness_expires_and_restarts_unknown(self):
+        self.add()
+        with mock.patch("library_sync.time.time", return_value=100):
+            self.assertEqual(self.sync.run()["cloudCheck"]["state"], "current")
+        with mock.patch("library_sync.time.time", return_value=161):
+            self.assertEqual(self.sync.status()["cloudCheck"]["state"], "unknown")
+        restarted = LibrarySync(self.store, config_path=self.config, client_factory=self.cloud)
+        self.assertEqual(restarted.status()["cloudCheck"]["state"], "unknown")
+
+    def test_conflict_check_does_not_replace_review_or_retry_outbox(self):
+        self.prepare_conflict()
+        state = self.sync._state()
+        pending = self.sync.pending_path.read_bytes()
+        remote = self.cloud.download(self.cloud.head()["commit"])
+        remote["archive"]["shards"][0]["title"] = "Another later cloud change"
+        self.cloud.seed(remote)
+        with mock.patch.object(self.cloud, "download", side_effect=AssertionError("No download during review")), \
+             mock.patch.object(self.cloud, "publish", side_effect=AssertionError("No publish during review")):
+            result = self.sync.run()
+        self.assertEqual(result["status"], "conflict")
+        self.assertEqual(result["cloudCheck"]["revision"], self.cloud.revision)
+        self.assertEqual(self.sync._state()["conflict"], state["conflict"])
+        self.assertEqual(self.sync.pending_path.read_bytes(), pending)
+
     def test_editor_lease_retains_existing_pending_upload(self):
         self.add()
         self.cloud.fail_next_publish = True
@@ -455,6 +514,17 @@ class LibrarySyncTests(unittest.TestCase):
             with self.assertRaises(SyncError) as caught:
                 client.download({"manifest": manifest})
         self.assertEqual(caught.exception.code, "digest_mismatch")
+
+    def test_incompatible_protocol_response_is_an_update_requirement(self):
+        client = LibraryClient(json.loads(self.config.read_text()))
+        response = mock.MagicMock()
+        response.status = 426
+        response.headers = {"X-Shard-Atlas-Sync": "2"}
+        response.__enter__.return_value = response
+        with mock.patch.object(client.opener, "open", return_value=response):
+            with self.assertRaises(SyncError) as caught:
+                client.head()
+        self.assertEqual(caught.exception.code, "update_required")
 
 
 class LibrarySyncHTTPTests(unittest.TestCase):

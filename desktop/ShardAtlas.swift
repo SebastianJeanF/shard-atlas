@@ -3,6 +3,10 @@ import WebKit
 import UniformTypeIdentifiers
 import Darwin
 
+// The builder substitutes this marker in its temporary compiler input. Reading
+// Info.plist here would let an old executable borrow a newer bundle's identity.
+private let shardAtlasCompiledNativeId = "__SHARD_ATLAS_NATIVE_ID__"
+
 struct DesktopConfiguration {
     let database: URL
     let backups: URL
@@ -230,7 +234,10 @@ final class DesktopDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, 
         settings.websiteDataStore = .default()
         settings.preferences.javaScriptCanOpenWindowsAutomatically = false
         settings.userContentController.add(self, name: "nativeClipboard")
-        settings.userContentController.addUserScript(WKUserScript(source: "window.isShardAtlasDesktop = true;", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        let nativeIdentity = try? JSONSerialization.data(withJSONObject: ["nativeId": shardAtlasCompiledNativeId], options: [.sortedKeys])
+        let identityJSON = nativeIdentity.flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+        let nativeScript = "window.isShardAtlasDesktop = true; window.SHARD_ATLAS_NATIVE = Object.freeze(\(identityJSON));"
+        settings.userContentController.addUserScript(WKUserScript(source: nativeScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         webView = WKWebView(frame: .zero, configuration: settings)
         webView.navigationDelegate = self
         webView.uiDelegate = self

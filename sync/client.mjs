@@ -38,7 +38,8 @@ export class LibraryClient {
         headers: {...this.headers, [SYNC_HEADER]: String(PROTOCOL_VERSION), ...options.headers}});
     } catch (error) {throw new SyncError('Connection unavailable. Your local collection and pending changes are retained.', 0, 'offline');}
     if (response.headers.get(SYNC_HEADER) !== String(PROTOCOL_VERSION)) {
-      throw new SyncError('Sign in to Shard Atlas in this browser, then retry synchronization.', response.status === 426 ? 426 : 401, 'sign_in_required');
+      if (response.status === 426) throw new SyncError('Update Shard Atlas before synchronizing this collection.', 426, 'incompatible_version');
+      throw new SyncError('Sign in to Shard Atlas in this browser, then retry synchronization.', 401, 'sign_in_required');
     }
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
@@ -47,7 +48,7 @@ export class LibraryClient {
     }
     return response;
   }
-  async head() {return (await this.request('/head')).json();}
+  async head({summary = false} = {}) {return (await this.request(`/head${summary ? '?summary=1' : ''}`)).json();}
   async history(cursor = '') {return (await this.request(`/history${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`)).json();}
   async conflicts(cursor = '') {return (await this.request(`/conflicts${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`)).json();}
   async commit(id) {return (await this.request(`/commits/${encodeURIComponent(id)}`)).json();}

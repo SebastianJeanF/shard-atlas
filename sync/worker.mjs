@@ -5,7 +5,7 @@ const prefix = '/api/library';
 const commonHeaders = {'cache-control': 'no-store, private', 'x-content-type-options': 'nosniff', [SYNC_HEADER]: String(PROTOCOL_VERSION)};
 const json = (value, status = 200) => Response.json(value, {status, headers: commonHeaders});
 
-async function authorize(request, env) {
+export async function authorizeLibraryRequest(request, env, {requireProtocol = true} = {}) {
   // This endpoint deliberately serves one shared owner library. The Sites
   // dispatch gate MUST remain owner-private, including when service access is
   // enabled: dispatch consumes its own bearer token before invoking the Worker.
@@ -16,14 +16,27 @@ async function authorize(request, env) {
     if (expected && request.headers.get('oai-authenticated-user-email')?.trim().toLowerCase() !== expected) throw new SyncError('This account cannot access the library.', 403, 'forbidden');
   } else {
     const serviceSecret = request.headers.get('X-Shard-Atlas-Service');
-    const expectedHash = env.SHARD_ATLAS_SERVICE_SECRET_SHA256;
-    if (env.SHARD_ATLAS_ALLOW_SERVICE_ACCESS !== 'true' || !serviceSecret || serviceSecret.length > 1024 || !HASH_PATTERN.test(expectedHash || '')) throw new SyncError('Sign in to synchronize your library.', 401, 'sign_in_required');
+    // An explicitly configured list is authoritative, including an empty list.
+    // This lets a lost device be revoked without rotating every other device.
+    let expectedHashes;
+    if (env.SHARD_ATLAS_SERVICE_SECRET_SHA256_ALLOWLIST !== undefined) {
+      try {expectedHashes = JSON.parse(env.SHARD_ATLAS_SERVICE_SECRET_SHA256_ALLOWLIST);}
+      catch {throw new SyncError('Private device access has not been configured correctly.', 503, 'not_configured');}
+      if (!Array.isArray(expectedHashes) || expectedHashes.length > 64 || expectedHashes.some(hash => typeof hash !== 'string' || !HASH_PATTERN.test(hash))) throw new SyncError('Private device access has not been configured correctly.', 503, 'not_configured');
+    } else {
+      expectedHashes = HASH_PATTERN.test(env.SHARD_ATLAS_SERVICE_SECRET_SHA256 || '') ? [env.SHARD_ATLAS_SERVICE_SECRET_SHA256] : [];
+    }
+    if (env.SHARD_ATLAS_ALLOW_SERVICE_ACCESS !== 'true' || !serviceSecret || serviceSecret.length > 1024) throw new SyncError('Sign in to synchronize your library.', 401, 'sign_in_required');
     const actualHash = await sha256(new TextEncoder().encode(serviceSecret));
-    let difference = 0;
-    for (let index = 0; index < expectedHash.length; index++) difference |= expectedHash.charCodeAt(index) ^ actualHash.charCodeAt(index);
-    if (difference) throw new SyncError('This device cannot access the library.', 403, 'forbidden');
+    let matched = 0;
+    for (const expectedHash of expectedHashes) {
+      let difference = 0;
+      for (let index = 0; index < 64; index++) difference |= expectedHash.charCodeAt(index) ^ actualHash.charCodeAt(index);
+      matched |= Number(difference === 0);
+    }
+    if (!matched) throw new SyncError('This device cannot access the library.', 403, 'forbidden');
   }
-  if (request.headers.get(SYNC_HEADER) !== String(PROTOCOL_VERSION)) throw new SyncError('Update Shard Atlas before synchronizing this library.', 426, 'incompatible_version');
+  if (requireProtocol && request.headers.get(SYNC_HEADER) !== String(PROTOCOL_VERSION)) throw new SyncError('Update Shard Atlas before synchronizing this library.', 426, 'incompatible_version');
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     const origin = request.headers.get('origin');
     if (origin && origin !== new URL(request.url).origin) throw new SyncError('Cross-origin library changes are not allowed.', 403, 'forbidden');
@@ -34,12 +47,13 @@ export async function handleLibraryRequest(request, env, {storage, clock = () =>
   const url = new URL(request.url);
   if (url.pathname !== prefix && !url.pathname.startsWith(`${prefix}/`)) return null;
   try {
-    await authorize(request, env);
+    await authorizeLibraryRequest(request, env);
     if (!storage && (!env.DB || !env.BUCKET)) throw new SyncError('Shared library storage is unavailable.', 503, 'not_configured');
     storage ||= new LibraryStorage(env.DB, env.BUCKET);
     const path = url.pathname.slice(prefix.length), method = request.method;
     if (path === '/head' && method === 'GET') {
       const revision = await storage.head();
+      if (url.searchParams.get('summary') === '1') return json({protocolVersion: PROTOCOL_VERSION, revision});
       return json({protocolVersion: PROTOCOL_VERSION, revision, commit: revision ? publicCommit(await storage.commit(revision), true) : null});
     }
     if ((path === '/history' || path === '/conflicts') && method === 'GET') {

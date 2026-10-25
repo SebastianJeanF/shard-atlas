@@ -178,6 +178,55 @@ test('open unsaved UI prevents a pull, while a retained closed draft survives th
   assert.equal((await read(b.store)).drafts.editor.title, 'Unfinished local draft');
 });
 
+test('an open browser editor observes incoming data through the revision summary without downloading it', async t => {
+  const service = cloud(), a = device(t, service);
+  let canApply = true;
+  const b = device(t, service, {canApplyRemote: () => canApply});
+  await add(a.store, 'Original'); await a.sync.run(); await b.sync.run();
+  const before = await read(b.store), originalBase = before.librarySync.revision;
+  await add(a.store, 'Saved on another device'); await a.sync.run();
+  canApply = false;
+  const requests = [];
+  service.setAfterRequest(request => {requests.push(new URL(request.url).pathname + new URL(request.url).search);});
+  await b.sync.run();
+  assert.deepEqual(requests, ['/api/library/head?summary=1']);
+  const waiting = await b.sync.status();
+  assert.equal(waiting.cloudCheck.state, 'incoming'); assert.equal(waiting.incomingAvailable, true);
+  assert.equal((await read(b.store)).librarySync.revision, originalBase);
+  assert.deepEqual((await read(b.store)).archive, before.archive);
+  canApply = true; service.setAfterRequest(null); await b.sync.run();
+  assert.equal((await b.sync.status()).cloudCheck.state, 'current');
+  assert.equal((await b.sync.status()).incomingAvailable, false);
+});
+
+test('failed and expired browser data observations cannot report a current cloud copy', async t => {
+  const service = cloud(); let now = Date.now(), canApply = true;
+  const a = device(t, service, {now: () => now, canApplyRemote: () => canApply});
+  await add(a.store); await a.sync.run();
+  assert.equal((await a.sync.status()).cloudCheck.state, 'current');
+  now += 60_001;
+  assert.equal((await a.sync.status()).cloudCheck.state, 'unknown');
+  canApply = false; service.setOnline(false); await a.sync.run();
+  assert.equal((await a.sync.status()).cloudCheck.state, 'unavailable');
+  assert.equal((await a.sync.status()).state, 'offline');
+  service.setOnline(true); await a.sync.run();
+  assert.equal((await a.sync.status()).cloudCheck.state, 'current');
+});
+
+test('conflict summary observations preserve both snapshots and the original durable outbox', async t => {
+  const service = cloud(), a = device(t, service), b = device(t, service);
+  await add(a.store, 'Cloud'); await a.sync.run(); await add(b.store, 'Device'); await b.sync.run();
+  const before = await read(b.store), requests = [];
+  assert.equal(before.librarySync.state, 'conflict');
+  service.setAfterRequest(request => {requests.push(new URL(request.url).pathname + new URL(request.url).search);});
+  await b.sync.run();
+  const after = await read(b.store);
+  assert.deepEqual(requests, ['/api/library/head?summary=1']);
+  assert.deepEqual(after.archive, before.archive);
+  for (const key of ['revision', 'baseFingerprint', 'outbox', 'conflict']) assert.deepEqual(after.librarySync[key], before.librarySync[key]);
+  assert.equal((await b.sync.status()).state, 'conflict');
+});
+
 test('independent preexisting collections require a choice and preserve a cloud conflict snapshot', async t => {
   const service = cloud(), a = device(t, service), b = device(t, service);
   await add(a.store, 'Mac'); await a.sync.run(); await add(b.store, 'Windows'); await b.sync.run();

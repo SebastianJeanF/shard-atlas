@@ -27,12 +27,12 @@ import zipfile
 from contextlib import closing, contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 
 SCHEMA_VERSION = 1
 DATABASE_VERSION = 5
-BACKEND_VERSION = "3.0.0"  # Keep the additive API compatible with already-running contribution clients.
+BACKEND_VERSION = "3.1.0"  # Keep the additive API compatible with already-running contribution clients.
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DB = Path.home() / "Library/Application Support/Shard Atlas/shards.sqlite3"
 KINDS = {"concept", "fact", "example", "mistake", "event", "idea"}
@@ -2454,6 +2454,13 @@ class LocalServer(ThreadingHTTPServer):
         self.static_dir = Path(static_dir or store.root / "static").resolve()
         from library_sync import LibrarySync
         self.library_sync = LibrarySync(store, config_path=library_sync_config)
+        from release_status import ReleaseStatus, ReleaseUnavailable
+        def published_release():
+            config = self.library_sync._config()
+            if config is None:
+                raise ReleaseUnavailable("unpaired", "Connect this installation to check the published app release.")
+            return self.library_sync.client_factory(config).release()
+        self.release_status = ReleaseStatus(ROOT, fetch_published=published_release)
         super().__init__(address, Handler)
         store.start_backup_worker()
         self.library_sync.start()
@@ -2511,7 +2518,7 @@ class Handler(BaseHTTPRequestHandler):
             raise AppError("Request body must be a JSON object.")
         return data
 
-    def _send(self, status, body, content_type="application/json; charset=utf-8", *, filename=None):
+    def _send(self, status, body, content_type="application/json; charset=utf-8", *, filename=None, headers=None):
         if (200 <= status < 300 and self.command in ("POST", "PUT", "DELETE")
                 and not urlsplit(self.path).path.startswith("/api/library-sync/")):
             self.server.library_sync.changed()
@@ -2522,7 +2529,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", "no-store, private" if urlsplit(self.path).path in ("/api/release", "/api/sync/release", "/api/release-status") else "no-store")
+        for key, value in (headers or {}).items():
+            self.send_header(key, value)
         self.send_header("X-Content-Type-Options", "nosniff")
         if hasattr(self, "_library_view_revision"):
             self.send_header("X-Shard-Atlas-Library-Revision", self._library_view_revision)
@@ -2561,6 +2570,19 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, store.health())
                 if path == "/api/library-sync/status":
                     return self._send(200, self.server.library_sync.status())
+                if path == "/api/release-status":
+                    query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
+                    for key in ("frontendId", "nativeId"):
+                        if key in query and (len(query[key]) != 1 or len(query[key][0]) > 128):
+                            raise AppError("Invalid app version check.")
+                    return self._send(200, self.server.release_status.status(
+                        frontend_id=query.get("frontendId", [None])[0], native_id=query.get("nativeId", [None])[0]))
+                if path in ("/api/release", "/api/sync/release"):
+                    from release_status import ReleaseUnavailable
+                    try:
+                        return self._send(200, self.server.release_status.published_manifest(), headers={"X-Shard-Atlas-Sync": "1"})
+                    except ReleaseUnavailable as error:
+                        return self._send(503, {"error": str(error), "code": error.code}, headers={"X-Shard-Atlas-Sync": "1"})
                 if path == "/api/export/markdown":
                     return self._send(200, store.markdown_export(), "application/zip", filename="shard-atlas-markdown.zip")
                 if path == "/api/trash":

@@ -75,6 +75,30 @@ test('identity-less service calls require a nonempty matching app-specific secre
   }
 });
 
+test('device allowlist supports independent access and revocation without legacy bypass', async () => {
+  const hash = async value => sha256(new TextEncoder().encode(value));
+  const {env} = setup({SHARD_ATLAS_ALLOW_SERVICE_ACCESS: 'true', SHARD_ATLAS_SERVICE_SECRET_SHA256: await hash('revoked-device'),
+    SHARD_ATLAS_SERVICE_SECRET_SHA256_ALLOWLIST: JSON.stringify([await hash('mac-device'), await hash('windows-device')])});
+  const request = secret => handleLibraryRequest(new Request('https://atlas.example.test/api/library/head', {headers: {[SYNC_HEADER]: '1', 'X-Shard-Atlas-Service': secret}}), env);
+  assert.equal((await request('mac-device')).status, 200);
+  assert.equal((await request('windows-device')).status, 200);
+  assert.equal((await request('revoked-device')).status, 403);
+  env.SHARD_ATLAS_SERVICE_SECRET_SHA256_ALLOWLIST = JSON.stringify([await hash('windows-device')]);
+  assert.equal((await request('mac-device')).status, 403);
+  assert.equal((await request('windows-device')).status, 200);
+  env.SHARD_ATLAS_SERVICE_SECRET_SHA256_ALLOWLIST = '[]';
+  assert.equal((await request('windows-device')).status, 403);
+});
+
+test('invalid explicit device allowlists fail closed', async () => {
+  for (const value of ['bad-json', '{}', '["bad-hash"]', JSON.stringify(new Array(65).fill('a'.repeat(64)))]) {
+    const {env} = setup({SHARD_ATLAS_ALLOW_SERVICE_ACCESS: 'true', SHARD_ATLAS_SERVICE_SECRET_SHA256: await sha256(new TextEncoder().encode('legacy-device')),
+      SHARD_ATLAS_SERVICE_SECRET_SHA256_ALLOWLIST: value});
+    const response = await handleLibraryRequest(new Request('https://atlas.example.test/api/library/head', {headers: {[SYNC_HEADER]: '1', 'X-Shard-Atlas-Service': 'legacy-device'}}), env);
+    assert.equal(response.status, 503);
+  }
+});
+
 test('request bodies cannot grant access and all operations require a protocol header', async () => {
   const {env, direct} = setup();
   assert.equal((await direct('/head', {headers: {'oai-authenticated-user-id': 'site-owner', 'oai-authenticated-user-email': 'owner@example.test'}})).status, 426);
@@ -94,6 +118,14 @@ test('fresh library has no head and API responses cannot be cached', async () =>
   assert.match(response.headers.get('cache-control'), /no-store/);
   assert.equal(response.headers.get(SYNC_HEADER), '1');
   assert.deepEqual(await client.head(), {protocolVersion: 1, revision: '', commit: null});
+});
+
+test('summary head checks return only the current revision without snapshot manifest', async () => {
+  const {client, direct} = setup();
+  const receipt = await client.publish(await preparePendingSnapshot(capsule(), '', 'summary-seed'));
+  const response = await direct('/head?summary=1');
+  assert.match(response.headers.get('cache-control'), /no-store/);
+  assert.deepEqual(await response.json(), {protocolVersion: 1, revision: receipt.id});
 });
 
 test('publish and download preserve the complete archive, exact code, attachments, recovery, receipts and unknown fields', async () => {

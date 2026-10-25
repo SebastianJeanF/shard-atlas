@@ -161,13 +161,16 @@ class LibraryClient:
             headers["Content-Type"] = "application/octet-stream" if binary else "application/json"
             if not binary:
                 data = canonical(data)
-        request = urllib.request.Request(self.site_url + "/api/library" + path, data=data, headers=headers, method=method)
+        api_path = path if path.startswith("/api/") else "/api/library" + path
+        request = urllib.request.Request(self.site_url + api_path, data=data, headers=headers, method=method)
         try:
             try:
                 response = self.opener.open(request, timeout=30)
             except urllib.error.HTTPError as error:
                 response = error
             with response:
+                if response.status == 426:
+                    raise SyncError("Update Shard Atlas before synchronizing this library. Your local changes are retained.", "update_required")
                 if response.headers.get(HEADER) != "1":
                     raise SyncError("Reconnect the Mac to the private shared library.", "sign_in_required")
                 body = response.read(maximum + 1)
@@ -188,8 +191,11 @@ class LibraryClient:
         except (urllib.error.URLError, TimeoutError, OSError):
             raise SyncError("Connection unavailable. Your local collection and pending changes are retained.", "offline") from None
 
-    def head(self):
-        head = self.request("/head", maximum=64 * 1024)
+    def release(self):
+        return self.request("/api/sync/release", maximum=64 * 1024)
+
+    def head(self, *, summary=False):
+        head = self.request("/head?summary=1" if summary else "/head", maximum=64 * 1024)
         if (not isinstance(head, dict) or type(head.get("protocolVersion")) is not int or head["protocolVersion"] != 1
                 or not isinstance(head.get("revision"), str)
                 or head["revision"] and not ID.fullmatch(head["revision"])):
@@ -247,6 +253,44 @@ class LibrarySync:
         self.running = False
         self.editing_lock = threading.RLock()
         self.editing_leases = {}
+        # A check is deliberately session-local. A previous successful check
+        # cannot establish freshness after a process restart or long suspension.
+        self.cloud_check = {"state": "unknown", "checkedAt": None, "revision": None}
+        self.cloud_checked_at = None
+
+    def _observe_head(self, client, *, summary=False):
+        try:
+            head = client.head(summary=True) if summary else client.head()
+        except Exception as error:
+            self.cloud_check = {"state": "unavailable", "checkedAt": timestamp(), "revision": None,
+                                "message": str(error) if isinstance(error, SyncError) else "The shared library could not be checked. Your local copy is retained."}
+            self.cloud_checked_at = time.time()
+            raise
+        self._record_head(head["revision"])
+        return head
+
+    def _record_head(self, revision):
+        self.cloud_check = {"state": "checked", "checkedAt": timestamp(), "revision": revision}
+        self.cloud_checked_at = time.time()
+
+    def _cloud_status(self, state, config):
+        if config is None:
+            return {"state": "unknown", "checkedAt": None, "revision": None,
+                    "message": "Connect this device to check the shared library."}
+        check = dict(self.cloud_check)
+        try:
+            maximum_age = max(60, 2 * max(10, min(300, int((config or {}).get("pollSeconds", 30)))))
+        except (ValueError, TypeError):
+            maximum_age = 60
+        age = None if self.cloud_checked_at is None else time.time() - self.cloud_checked_at
+        if age is None or not 0 <= age <= maximum_age:
+            check.update(state="unknown", message="The latest shared library has not been checked recently.")
+        elif check["state"] == "checked":
+            if state["baseRevision"] and not check["revision"]:
+                check.update(state="unavailable", message="The shared library head is unexpectedly missing. Your local copy is retained.")
+            else:
+                check["state"] = "current" if check["revision"] == state["baseRevision"] else "incoming"
+        return check
 
     def editing(self, active, client_id="legacy"):
         with self.editing_lock:
@@ -323,6 +367,8 @@ class LibrarySync:
             state = self._state()
             result = {key: state.get(key) for key in ("status", "message", "baseRevision", "conflict", "lastSyncedAt", "lastAttemptAt")}
             result.update(configured=config is not None, pending=self.pending_path.exists(), syncing=self.running)
+            result["cloudCheck"] = self._cloud_status(state, config)
+            result["incomingAvailable"] = result["cloudCheck"]["state"] == "incoming"
             with self.store.lock, self.store.connect() as connection:
                 result["localCounts"] = {key: connection.execute(f"SELECT count(*) FROM {key}").fetchone()[0] for key in RECORDS}
             if isinstance(state.get("conflict"), dict):
@@ -332,7 +378,8 @@ class LibrarySync:
             return result
         except (SyncError, OSError) as error:
             return {"configured": self.config_path.exists(), "status": getattr(error, "code", "error"),
-                    "message": str(error) if isinstance(error, SyncError) else "The private library connection could not be read.", "pending": self.pending_path.exists(), "syncing": False}
+                    "message": str(error) if isinstance(error, SyncError) else "The private library connection could not be read.", "pending": self.pending_path.exists(), "syncing": False,
+                    "cloudCheck": {"state": "unavailable", "checkedAt": None, "revision": None}, "incomingAvailable": False}
 
     def _stage(self, capsule, base_revision, local_fingerprint):
         validate_capsule(capsule)
@@ -495,6 +542,9 @@ class LibrarySync:
         # Persist the accepted base before clearing the exact-retry outbox.
         with self.store.lock:
             self._save(state)
+        observed = receipt.get("revision", receipt["id"])
+        if isinstance(observed, str) and (not observed or ID.fullmatch(observed)):
+            self._record_head(observed)
         self._clear_pending()
         if fingerprint(self.capsule()) != state["baseLocalFingerprint"]:
             state.update(status="pending", message="New local changes are waiting to synchronize.")
@@ -502,7 +552,7 @@ class LibrarySync:
 
     def _conflict_preview(self, client, state, *, head=None, remote=None):
         local = self.capsule()
-        head = head or client.head()
+        head = head or self._observe_head(client)
         if head["revision"]:
             remote = remote or client.download(head.get("commit"))
         else:
@@ -539,7 +589,7 @@ class LibrarySync:
                 self._save(state)
                 return self.status()
             client = self.client_factory(config)
-            head = client.head()
+            head = self._observe_head(client)
             conflict = state["conflict"]
             local = self.capsule()
             local_fingerprint = fingerprint(local)
@@ -612,20 +662,24 @@ class LibrarySync:
             self.running = True
             state = self._state()
             state["lastAttemptAt"] = timestamp()
+            client = self.client_factory(config)
             if state.get("status") in ("conflict", "migration_required"):
+                # Freshness can be observed without changing either reviewed
+                # copy, the accepted base, or the durable exact-retry outbox.
+                self._observe_head(client, summary=True)
                 return self.status()
             if self._editing():
                 state.update(status="editing", message="Finish your current edit before applying shared library changes.")
                 self._save(state)
+                self._observe_head(client, summary=True)
                 return self.status()
-            client = self.client_factory(config)
             if self.pending_path.exists():
                 pending, data = self._pending()
                 self._publish(client, state, pending, data)
                 return self.status()
             local = self.capsule()
             local_fingerprint = fingerprint(local)
-            head = client.head()
+            head = self._observe_head(client)
             revision = head["revision"]
             initial = state.get("baseLocalFingerprint") is None
             dirty = initial or local_fingerprint != state["baseLocalFingerprint"]

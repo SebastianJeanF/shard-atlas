@@ -31,7 +31,7 @@
     request: nativeRequest,
     acceptState(data) { if (data && stateRevisions.has(data)) viewedRevision = stateRevisions.get(data); },
     imageSource: path => path,
-    canRefreshDialog: dialog => ['ai-dialog', 'library-sync-dialog'].includes(dialog.id),
+    canRefreshDialog: dialog => ['ai-dialog', 'library-sync-dialog', 'app-release-dialog'].includes(dialog.id),
     didSave() {},
     installIntegrations(context) {
       root.DriveInbox?.install(context);

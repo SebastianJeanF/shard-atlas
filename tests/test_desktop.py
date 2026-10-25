@@ -17,6 +17,16 @@ SPEC.loader.exec_module(desktop_build)
 
 
 class BundleConfigurationTests(unittest.TestCase):
+    def test_native_identity_is_compiled_instead_of_borrowed_from_info_plist(self):
+        identity = "a" * 64
+        stamped = desktop_build.compiled_native_source(identity)
+        self.assertIn('private let shardAtlasCompiledNativeId = "' + identity + '"', stamped)
+        self.assertNotIn("__SHARD_ATLAS_NATIVE_ID__", stamped)
+        self.assertIn('["nativeId": shardAtlasCompiledNativeId]', stamped)
+        self.assertNotIn('object(forInfoDictionaryKey: "ShardAtlasNativeReleaseId")', stamped)
+        with self.assertRaises(ValueError):
+            desktop_build.compiled_native_source("invalid")
+
     def test_every_view_menu_command_is_accepted_by_the_native_dispatcher(self):
         source = (ROOT / "desktop/ShardAtlas.swift").read_text()
         view_menu = source.split('let view = NSMenu(title: "View")', 1)[1].split('addMenu(view', 1)[0]

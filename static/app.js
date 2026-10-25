@@ -1223,6 +1223,7 @@ window.ShardAtlasCanApplyLibrary=()=>canRefreshAtlas(true);
 window.ShardAtlasHasUnsavedLibraryChanges=hasUnsavedLibraryChanges;
 if(window.ShardAtlasPlatform)window.ShardAtlasPlatform.installIntegrations({api,writeRequest,withBusy,refreshAtlas,canRefreshAtlas});else window.DriveInbox?.install({api,writeRequest,withBusy,refreshAtlas});
 window.ShardAtlasLibraryUI?.install();
+window.ShardAtlasReleaseUI?.install();
 initialize();
 loadReleaseCatalog();
 loadSpiralCatalog();

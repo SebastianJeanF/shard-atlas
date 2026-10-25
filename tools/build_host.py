@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from release_manifest import generate_manifest
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -26,6 +28,10 @@ def main():
     hosting = ROOT / 'hosting/.openai/hosting.json'
     hosting.parent.mkdir(exist_ok=True)
     shutil.copy2(ROOT / '.openai/hosting.json', hosting)
+    # This reference is compiled into the Worker, rather than fetched through a
+    # potentially cached browser asset. It contains only allowlisted source IDs.
+    (ROOT / 'hosting/worker/release-manifest.json').write_text(
+        json.dumps(generate_manifest(ROOT), sort_keys=True, separators=(',', ':')) + '\n', encoding='utf-8')
     if args.sites_plugin:
         build = ['node', str(args.sites_plugin.resolve() / 'scripts/build-site.mjs')]
     else:
