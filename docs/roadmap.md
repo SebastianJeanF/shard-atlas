@@ -4,6 +4,23 @@ Shard Atlas is expanding its existing technical collection to connect computer s
 
 [Project overview](../README.md) · [User guide](guide.md) · [Development](development.md)
 
+## Browser ChatGPT integration
+
+**Direct browser ChatGPT saves are the primary capture route. Google Drive is an emergency manual fallback.** This plan was clarified on October 25, 2026. Its milestone numbers are separate from the code-reference rollout below.
+
+| Milestone | State | Completion requirement |
+| --- | --- | --- |
+| 1. Private connection | Complete | The owner-private connection works in regular browser ChatGPT. |
+| 2. Library search and read | Complete | ChatGPT can inspect saved shards and connections for duplicate checking and related-shard discovery. |
+| 3. Direct additions | **Next, not implemented** | Authorized, duplicate-safe additions and connections produce verified cloud receipts and appear through existing automatic library sync. |
+| 4. Direct edits | Planned, not implemented | Revision-checked edits preserve saved history, refuse stale changes, and retain explicit conflict review across clients. |
+
+Milestone 3 must reuse the contribution guide and existing search/read tools. Additive saves must check the accepted cloud revision, validate the contribution, support safe retries, and verify the saved result. The Shard Atlas website need not be open for an accepted cloud save. Verification includes the open website and Mac receiving the result through existing library synchronization, plus catch-up after reopening and protection of unfinished edits. Record actual device evidence and remaining Windows checks separately.
+
+**Automatic library synchronization already exists.** A connected Mac service receives cloud changes automatically while running and online. A closed app normally catches up when reopened. Unfinished edits defer incoming changes, and conflicts require review. Routine capture must not depend on pressing **Sync now** or importing a Drive batch.
+
+The previously proposed milestone 5, automatic Drive Inbox detection/importing, is removed from the core plan. Keep the existing manual Drive/file import route available for emergencies. Reconsider automation only if that fallback becomes useful enough to justify it. Deduplicating backups and source/app relocation remain separate, parked maintenance work. This roadmap update changes documentation only and does not begin milestone 3 implementation.
+
 ## Cross-platform library: version 3.0.0
 
 The shared interface and Mac/browser adapters now live in one repository. A private hosted library synchronizes complete portable records and contribution receipts, with offline local copies, durable retries, safety backups, and explicit whole-collection conflict review. The Mac 3.0.0 app has been rebuilt from `178d4a5`, with native workflows, all macOS checks, and exact production Mac/Opera/cloud export comparisons verified. Isolated native and browser process restarts passed on one physical Mac. Physical network recovery and second-device mutation scenarios remain pending. Earlier actual Windows loading and the owner's phone confirmation remain accepted. See [verification scope](sync-verification.md), [release evidence and remaining checks](handoff.md), and [the development workflow](cross-platform.md).

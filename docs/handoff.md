@@ -2,6 +2,14 @@
 
 **Goal:** maintain one source workflow and one private technical library across the Mac app, Windows browsers, and phones.
 
+## Current browser ChatGPT priorities, October 25, 2026
+
+**Milestone 3, direct additions, is next.** Milestones 1 (private connection) and 2 (search/read) are complete. Milestone 4 adds revision-checked direct edits with preserved history and conflict review. Use the [current milestone plan](roadmap.md#browser-chatgpt-integration) for requirements and device verification.
+
+Direct browser ChatGPT saves should publish accepted cloud revisions and use the existing automatic library synchronization. The website need not be open for the save, and the Mac should receive it automatically while its connected service is running and online. Closed apps normally catch up when reopened. Unsaved edits and conflicts retain their existing protections.
+
+**Google Drive is an emergency manual fallback.** The previously proposed milestone 5 for automatic Inbox detection/importing is removed from the core plan. No new Inbox automation is planned unless requested later. Deduplicating backups and source/app relocation remain separate, parked work. This is a documentation-only planning update, with no application changes, deployment, synchronization run, or knowledge import.
+
 ## Browser ChatGPT integration milestone 2, October 25, 2026
 
 **Private cloud search and read are published and verified in regular browser ChatGPT.** The existing personal Shard Atlas plugin now exposes `shard_atlas_search` and `shard_atlas_read` alongside the storage-free connection probe. Search ranks current notes by title, aliases, topics, explanations, code, and saved relationship context. Read returns complete candidate notes with exact code, source metadata, approach identities, and incident typed connections. Missing and omitted records are explicit. Shared topics do not become saved connections.
@@ -14,7 +22,7 @@ Verification passed **203 JavaScript test entries in 318.7 seconds**, including 
 
 The actual regular ChatGPT browser chat searched RAII with limit 3, read its first result at the returned revision, and reported the correct saved title and four connections. The browser interaction used tab-specific Opera control. The cloud head was identical before deployment and after the native connector and browser read tests. No notes were changed or imported. Private screenshots, the verification chat reference, sanitized request metadata, and build logs are under `Documents/Codex/2026-10-25/shard-atlas-browser-mcp-m2/`, outside Git.
 
-The read-only snapshot limit is **16 MiB**, separate from the unchanged 256 MiB synchronization limit. Search and read data payloads are bounded to 128 KiB and 256 KiB. An oversized full note is omitted with a reason rather than returning partial code. Larger image-heavy libraries will need a separate read-index strategy. Direct additions and edits, and automatic inbox importing, remain later milestones.
+The read-only snapshot limit is **16 MiB**, separate from the unchanged 256 MiB synchronization limit. Search and read data payloads are bounded to 128 KiB and 256 KiB. An oversized full note is omitted with a reason rather than returning partial code. Larger image-heavy libraries will need a separate read-index strategy. Direct additions and edits remain unimplemented. The current plan above makes Drive an emergency manual fallback and removes automatic Inbox importing from the core milestones.
 
 ## Browser ChatGPT integration milestone 1, October 25, 2026
 
@@ -24,7 +32,7 @@ Application source is `60137d64c7f029ff2506457136a02a20e06d55df`, mirrored to Si
 
 Verification passed **146 JavaScript test entries in 40.7 seconds**, including 11 MCP test groups, plus 18 focused Python release, browser-build, and source-transfer tests. The hosted production build succeeded. Existing native and synchronization evidence remains applicable because those implementation inputs are unchanged. Tests cover owner-only authorization, service-only denial, origin validation, bounded JSON parsing, modern protocol metadata, and fixed output without storage access. Live anonymous and forged-identity requests returned 403. A service bearer without visitor identity returned 401. The actual browser ChatGPT `tools/call` request returned 200 at 20:06:54 UTC. The cloud head was identical before deployment and after the browser tool call, and no inbox batch was imported.
 
-Private evidence, the successful browser chat, screenshot, sanitized request metadata, and build logs are recorded under `Documents/Codex/2026-10-25/shard-atlas-browser-mcp-m1/`, outside Git. The next browser ChatGPT integration milestone is authenticated library search and reads for duplicate checking and related-shard discovery. Direct changes and automatic inbox importing remain separate later milestones.
+Private evidence, the successful browser chat, screenshot, sanitized request metadata, and build logs are recorded under `Documents/Codex/2026-10-25/shard-atlas-browser-mcp-m1/`, outside Git. At this checkpoint, the next milestone was authenticated library search and reads for duplicate checking and related-shard discovery. That work is now complete as milestone 2 above. The current plan makes direct additions milestone 3, followed by direct edits, with Drive retained for emergency manual imports.
 
 ## App and data freshness release, October 25, 2026
 
