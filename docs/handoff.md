@@ -2,6 +2,20 @@
 
 **Goal:** maintain one source workflow and one private technical library across the Mac app, Windows browsers, and phones.
 
+## App and data freshness release, October 25, 2026
+
+**Version 3.1.0 is installed on the Mac and the matching website is published.** Application source is `2ef8417b5a2797d882ad740153b4e8da45c2e1a2`. The matching Sites source is `51f8228ad10f60848515b259aaae259a3338b2d0`. Owner-private deployment `appgdep_6ade4fafbf9481919272a436acbf5f0e` succeeded with environment revision 1 at the existing website URL. Existing access, storage bindings, device credentials, and deployed Drive settings were preserved.
+
+The published deterministic release identity is `8bb7961e3c58c78d3c33f208968675beb5dc60e4ca0ad5e0fce122a3d830a336`. Both authenticated release endpoint aliases returned the exact expected manifest. Native release status checked the loaded interface, loaded and on-disk backend, and the identity embedded in the compiled executable. The reopened installed app reported **App up to date** and **Library synced**, with a current cloud check. Publishing the website and replacing the native bundle remain separate operations.
+
+Separate app and library controls now show stale software, required restarts or native builds, version differences, unavailable checks, pending saves, incoming saved data, and incompatible data clients honestly. App checks run every minute and on focus/connectivity changes. Cheap library head checks continue while editors or conflict reviews are protected, without replacing reviewed bases or pending retries. The website update flow retains normal service-worker activation and protects unsaved work. Device service authentication supports an authoritative digest allowlist for independent revocation, retaining the existing legacy digest when no list is configured.
+
+Verification passed **271 Python tests**, **135 JavaScript test entries**, Swift checks, and signed QA and working Mac builds. A final wording-only backend edit passed all 10 release identity/status tests after the full suite. Focused frontend checks covered offline Mac requests and retained drafts. The actual isolated Opera UI displayed a matching release, a visible update banner, unavailable status, phone-width version details, and a blocked reload with the draft unchanged. An isolated WKWebView displayed current, native-update-required, and restart-required states. Ten controlled native release scenarios exercised differing components, absent stamps, unknown/invalid/offline references, and an actually changed QA backend file. QA used disposable state, with no production library connection. A File Provider signing-metadata race was avoided by building outside synchronized folders before installing and verifying the signed working bundle.
+
+The real Mac app quit normally through its application menu. A consistent SQLite backup, private sync state, and the previous app were retained before replacement. Fresh Mac and cloud records matched the preupdate library exactly, including **251 shards, 280 links, 43 assets, 871 revisions, 149 Trash records, 2 legacy boards, and 0 reviews**. The accepted cloud revision was unchanged. The signed-in production Opera website retained its 251 shards, activated the waiting website update after all its Shard Atlas tabs were closed, and displayed **App up to date**, **Library synced**, and offline readiness.
+
+Private evidence is under `Documents/Codex/2026-10-25/shard-atlas-freshness/`. Source, deployment archives, personal exports, test screenshots, backups, and credentials remain separate. The Windows handoff is [Check Shard Atlas on Windows](windows-verification-prompt.md). Actual Windows checks for this release and the specific remote-fixture/physical-network scenarios below remain pending. Documentation commits after the application commit do not change its software identity or require another publication.
+
 ## Current execution
 
 | Milestone | State | Completion evidence |
@@ -10,7 +24,7 @@
 | 2. Consolidate source | Complete | Shared UI, both adapters, hosted runtime, builds, checks, and handoff instructions live in this repository. |
 | 3. Private sync foundation | Deployed and verified | D1/R2 bindings and migrations applied. Authenticated readback passed and anonymous access was denied. |
 | 4. Browser sync | Deployed and verified | Live Opera GX downloaded the library, reported synced, and exported records matching the Mac exactly. Phone-width layout and lookup passed. |
-| 5. Mac sync | Updated and verified | Version 3.0.0 rebuilt from `178d4a54f44e4742318ee663af139c592d2fa2a1`, signed, reopened, and reported synced. Native QA and exact Mac/Opera/cloud exports passed. |
+| 5. Mac sync | Updated and verified | Version 3.1.0 rebuilt from `2ef8417b5a2797d882ad740153b4e8da45c2e1a2`, signed, reopened, and reported both app current and library synced. Prior native sync QA and fresh exact Mac/cloud exports passed. |
 | 6. Real migration | Available collections migrated | Every portable record in the browser export matched the Mac. Other devices retain first-connection review for a different existing collection. |
 | 7. Everyday verification | Available checks passed | Actual Windows loading and the owner's phone confirmation are retained. Mac native workflows, isolated Mac/Opera process restarts, and exact production Mac/Opera/cloud exports passed. Physical network and second-device scenarios remain pending. See [verification scope and evidence](sync-verification.md). |
 
@@ -22,7 +36,7 @@ The October 23 Windows verification checkpoint changed contribution tooling and 
 
 ## Code-reference milestones 5–6
 
-The latest website release uses GitHub source `e9231c65120fc1bb64b9c335b346a24f7ac03cab`, mirrored to Sites source `252d0af59165cf4c28a24987dc7ff15a88a3c2ac`. Private deployment `appgdep_6adc0b79ca008191912c02680207c3fc` succeeded with environment revision 1 at the existing URL, <https://shard-atlas.deltamaster64.chatgpt.site>. Owner-only access, D1/R2 bindings, and existing private Drive settings were preserved.
+The preceding code-reference website release used GitHub source `e9231c65120fc1bb64b9c335b346a24f7ac03cab`, mirrored to Sites source `252d0af59165cf4c28a24987dc7ff15a88a3c2ac`. Private deployment `appgdep_6adc0b79ca008191912c02680207c3fc` succeeded with environment revision 1 at the existing URL, <https://shard-atlas.deltamaster64.chatgpt.site>. Owner-only access, D1/R2 bindings, and existing private Drive settings were preserved.
 
 Milestone 5 adds role-aware focused exploration, a retained starting context, clear saved relationship direction and approach names, symmetric alternatives, separate optional dashed shared-topic overlap, and topic browsing. The layout remains deterministic and no collection-wide Connections page or recommendation system was introduced.
 
@@ -34,7 +48,7 @@ Release validation: **118 JavaScript test entries passed**, including **124 main
 
 ## Mac rebuild and verification completed
 
-**The installed Mac app is version 3.0.0 at source `178d4a54f44e4742318ee663af139c592d2fa2a1`.** The clean Mac checkout was fetched and fast-forwarded from `dd0d1c8c55fb6ad179174729ec63fb592864e47e` to `3207e1846564ae09635c760d45e3551d86a83cd3`, preserving the published application release `e9231c65120fc1bb64b9c335b346a24f7ac03cab`. No older handoff commit was restored.
+**The preceding Mac installation was version 3.0.0 at source `178d4a54f44e4742318ee663af139c592d2fa2a1`.** The clean Mac checkout was fetched and fast-forwarded from `dd0d1c8c55fb6ad179174729ec63fb592864e47e` to `3207e1846564ae09635c760d45e3551d86a83cd3`, preserving the published application release `e9231c65120fc1bb64b9c335b346a24f7ac03cab`. No older handoff commit was restored.
 
 The export comparison found that the earlier native sync client expanded optional empty fields in old revision snapshots and Trash payloads. Commit `178d4a5` preserves validated recovery payloads exactly. It also repairs this older normalization only on a clean, unchanged synchronized base, after a safety backup and a second local-change check. The repair updates recovery payloads without replacing live notes or publishing a cloud revision. Distinct local history and edits arriving during the check remain protected.
 

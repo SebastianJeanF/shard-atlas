@@ -1,5 +1,7 @@
 # Synchronization verification
 
+The October 25, 2026 app freshness release is installed as Mac version **3.1.0** and published from source `2ef8417b5a2797d882ad740153b4e8da45c2e1a2`. All **271 Python tests** and **135 JavaScript entries** passed. The final wording-only backend edit then passed all 10 release identity/status checks. New isolated cases cover data checks while editing, freshness expiration, unavailable status replacing stale success, device-secret revocation, authenticated release aliases, software component differences, a compiled native identity, backend restart detection, and guarded browser updates. Actual Opera and WKWebView checks and exact real-library preservation are recorded in the [current handoff](handoff.md#app-and-data-freshness-release-october-25-2026). Physical-network and current Windows checks remain separate pending results, not implied by the automated suite.
+
 The first October 23, 2026 checkpoint began from GitHub main `dd0d1c8c55fb6ad179174729ec63fb592864e47e`. The subsequent Mac continuation safely fast-forwarded to `3207e1846564ae09635c760d45e3551d86a83cd3` and released the native recovery-preservation correction at `178d4a54f44e4742318ee663af139c592d2fa2a1`. No newer source or knowledge was reset. The owner's actual-phone confirmation remains accepted.
 
 ## Evidence and limits
