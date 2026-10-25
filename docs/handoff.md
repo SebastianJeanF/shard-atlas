@@ -2,6 +2,16 @@
 
 **Goal:** maintain one source workflow and one private technical library across the Mac app, Windows browsers, and phones.
 
+## Browser ChatGPT integration milestone 1, October 25, 2026
+
+**The private connection test is published and verified in regular Chat mode at chatgpt.com in Opera GX.** Sites created and connected the owner's personal Shard Atlas plugin. Its only tool, `shard_atlas_connection_test`, accepts empty arguments and returns a fixed successful connection result. This milestone adds no library search, reads, edits, imports, or automatic synchronization. The probe has no database, object storage, or network access.
+
+Application source is `60137d64c7f029ff2506457136a02a20e06d55df`, mirrored to Sites source `3a0fd8cec9d0c67bcc73e13894870ec6f89e162b`. Owner-private deployment `appgdep_6ade60c084c8819194971620fdc8de4d` succeeded with environment revision 1 at the existing website. Site access, storage bindings, device credentials, and Drive settings were preserved. The release identity is `2f3ae4b9db1dbd72115cfc193714848cb7dddbfca8807852c34db54460cacfcc`. Only the hosted component changed. The installed Mac remains version 3.1.0 with matching frontend, backend, and native identities, so no native rebuild or installation was required.
+
+Verification passed **146 JavaScript test entries in 40.7 seconds**, including 11 MCP test groups, plus 18 focused Python release, browser-build, and source-transfer tests. The hosted production build succeeded. Existing native and synchronization evidence remains applicable because those implementation inputs are unchanged. Tests cover owner-only authorization, service-only denial, origin validation, bounded JSON parsing, modern protocol metadata, and fixed output without storage access. Live anonymous and forged-identity requests returned 403. A service bearer without visitor identity returned 401. The actual browser ChatGPT `tools/call` request returned 200 at 20:06:54 UTC. The cloud head was identical before deployment and after the browser tool call, and no inbox batch was imported.
+
+Private evidence, the successful browser chat, screenshot, sanitized request metadata, and build logs are recorded under `Documents/Codex/2026-10-25/shard-atlas-browser-mcp-m1/`, outside Git. The next browser ChatGPT integration milestone is authenticated library search and reads for duplicate checking and related-shard discovery. Direct changes and automatic inbox importing remain separate later milestones.
+
 ## App and data freshness release, October 25, 2026
 
 **Version 3.1.0 is installed on the Mac and the matching website is published.** Application source is `2ef8417b5a2797d882ad740153b4e8da45c2e1a2`. The matching Sites source is `51f8228ad10f60848515b259aaae259a3338b2d0`. Owner-private deployment `appgdep_6ade4fafbf9481919272a436acbf5f0e` succeeded with environment revision 1 at the existing website URL. Existing access, storage bindings, device credentials, and deployed Drive settings were preserved.
