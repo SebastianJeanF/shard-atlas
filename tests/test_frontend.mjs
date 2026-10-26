@@ -447,7 +447,7 @@ try {
   });
   await check('Use with AI is discoverable and failed instruction loading can be retried', async () => {
     assert.ok((html.match(/data-action="use-ai"/g) || []).length >= 2);
-    assert.match(html, /Start a new chat on this Mac/); assert.match(html, /without access to this Mac/);
+    assert.match(html, /Use a chat connected to Shard Atlas/); assert.match(html, /Need an emergency fallback/);
     const originalCount = t.state.data.shards.length; $('#help-dialog').showModal(); failAiInstructions = true;
     await t.runAction('use-ai', { dataset: {} }); assert.ok($('#ai-dialog').open); assert.ok(!$('#help-dialog').open);
     assert.match($('#ai-instructions-status').textContent, /could not be opened/); assert.equal($('#ai-instructions-text').value, '');

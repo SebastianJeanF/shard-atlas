@@ -1,4 +1,5 @@
 import vinext from "vinext";
+import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 import hostingConfig from "./.openai/hosting.json";
 import { readExecutionProfile } from "./scripts/execution-profile.mjs";
@@ -44,6 +45,11 @@ export default defineConfig(async ({ command }) => {
   const { cloudflare } = await import("@cloudflare/vite-plugin");
 
   return {
+    define: {
+      __SHARD_ATLAS_CONTRIBUTION_GUIDE__: JSON.stringify(
+        readFileSync(new URL("../static/ai-instructions.md", import.meta.url), "utf8"),
+      ),
+    },
     server: {
       ...(managedLinux
         ? { host: "0.0.0.0", allowedHosts: ["terminal.local"] }

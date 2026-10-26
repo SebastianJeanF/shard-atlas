@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {handleSiteMcpRequest} from '../hosting/lib/site-mcp.mjs';
 
 const OWNER = 'owner@example.test';
@@ -37,13 +38,13 @@ test('private MCP fails closed without owner configuration, identity, or the mat
   assert.equal((await invoke({...rpc('tools/list'), owner: OWNER}, {authenticated: false})).response.status, 401);
 });
 
-test('discovery and the read-only tool list need no library protocol header or storage bindings', async () => {
+test('discovery and the tool list need no library protocol header or storage bindings', async () => {
   const discovery = await invoke(rpc('server/discover'));
   assert.deepEqual(discovery.data, {jsonrpc: '2.0', id: 1, result: {supportedVersions: ['2026-07-28'], capabilities: {tools: {}}, ttlMs: 0, cacheScope: 'private', resultType: 'complete'}});
   const listing = await invoke(rpc('tools/list'), {headers: {'oai-authenticated-user-email': OWNER.toUpperCase(), Origin: 'https://chatgpt.com'}});
-  assert.equal(listing.data.result.tools.length, 3);
-  assert.deepEqual(listing.data.result.tools.map(tool => tool.name), ['shard_atlas_connection_test', 'shard_atlas_search', 'shard_atlas_read']);
-  for (const listed of listing.data.result.tools) assert.deepEqual(listed.annotations, {readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false});
+  assert.equal(listing.data.result.tools.length, 5);
+  assert.deepEqual(listing.data.result.tools.map(tool => tool.name), ['shard_atlas_connection_test', 'shard_atlas_search', 'shard_atlas_read', 'shard_atlas_get_instructions', 'shard_atlas_add_knowledge']);
+  for (const listed of listing.data.result.tools) assert.deepEqual(listed.annotations, {readOnlyHint: listed.name !== 'shard_atlas_add_knowledge', destructiveHint: false, idempotentHint: true, openWorldHint: false});
   assert.equal(listing.data.result.ttlMs, 0); assert.equal(listing.data.result.cacheScope, 'private');
   const tool = listing.data.result.tools[0];
   assert.equal(tool.name, 'shard_atlas_connection_test');
@@ -55,7 +56,7 @@ test('MCP validates every supplied origin while supporting Sites and ChatGPT tra
   for (const origin of ['https://atlas.example.test', 'https://chatgpt.com', 'https://chat.openai.com']) {
     const result = await invoke(rpc('tools/list'), {headers: {Origin: origin}});
     assert.equal(result.response.status, 200);
-    assert.equal(result.data.result.tools.length, 3);
+    assert.equal(result.data.result.tools.length, 5);
   }
   for (const origin of ['null', 'not an origin', 'https://other.example.test', 'https://chatgpt.com.evil.example', 'https://chatgpt.com/', 'https://chatgpt.com https://other.example.test', 'https://user:password@chatgpt.com']) {
     assert.equal((await invoke(rpc('tools/list'), {headers: {Origin: origin}})).response.status, 403);
@@ -75,7 +76,7 @@ test('connection calls return fixed success without personal data, library reads
 });
 
 test('tool errors reject unknown tools and all nonempty or nonobject arguments', async () => {
-  const unknown = await invoke(rpc('tools/call', {name: 'shard_atlas_add_knowledge', arguments: {query: 'private'}}));
+  const unknown = await invoke(rpc('tools/call', {name: 'shard_atlas_edit_knowledge', arguments: {query: 'private'}}));
   assert.equal(unknown.data.error.code, -32602);
   assert.equal(unknown.data.result, undefined);
   for (const args of [{query: 'private'}, {readNotes: true}, [], 'text', 1, false, null]) {
@@ -90,7 +91,7 @@ test('initialization, ping, and notifications support stateless clients', async 
   const initialized = await invoke(rpc('initialize', {protocolVersion: '2026-07-28', capabilities: {}, clientInfo: {name: 'test-client', version: '1'}}));
   assert.equal(initialized.data.result.protocolVersion, '2026-07-28');
   assert.deepEqual(initialized.data.result.capabilities, {tools: {}});
-  assert.match(initialized.data.result.instructions, /cannot add, edit, delete, import, or synchronize notes/);
+  assert.match(initialized.data.result.instructions, /cannot edit or delete existing records/);
   assert.match(initialized.data.result.instructions, /Unsynced device changes are excluded/);
   assert.deepEqual((await invoke(rpc('ping'))).data.result, {resultType: 'complete'});
   assert.deepEqual((await invoke(rpc('ping', {}, null))).data, {jsonrpc: '2.0', id: null, result: {resultType: 'complete'}});
@@ -248,4 +249,93 @@ test('library failures are honest bounded tool errors without private exception 
   assert.equal(failed.data.result.structuredContent.error.code, 'library_unavailable');
   assert.doesNotMatch(JSON.stringify(failed.data), /SELECT|serviceToken|secret-value|private_config/);
   assert.equal(failed.data.result.structuredContent.matches, undefined);
+});
+
+const guideText = readFileSync(new URL('../static/ai-instructions.md', import.meta.url), 'utf8');
+const contributionEnv = () => env({SHARD_ATLAS_GUIDE_RECEIPT_SECRET: 'a'.repeat(64)});
+const batch = () => ({requestId: 'cloud-request-1', shards: [{id: 'new-concept', title: 'A new concept', content: 'A self-contained technical explanation.', tags: ['CS']}], links: []});
+async function guideArguments(configuration = contributionEnv()) {
+  const delivered = await invoke(rpc('tools/call', {name: 'shard_atlas_get_instructions', arguments: {}}), {}, configuration, {guideText});
+  assert.equal(delivered.data.result.isError, false);
+  const guide = delivered.data.result.structuredContent;
+  return {batch: batch(), expectedRevision: 'accepted-1', instructionsVersion: guide.version, instructionsReceipt: guide.readReceipt};
+}
+
+test('the MCP guide delivers the full current canonical text without library access', async () => {
+  const result = await invoke(rpc('tools/call', {name: 'shard_atlas_get_instructions', arguments: {}}), {}, contributionEnv(), {guideText});
+  assert.equal(result.data.result.isError, false);
+  assert.equal(result.data.result.structuredContent.content, guideText);
+  assert.match(result.data.result.structuredContent.version, /^[a-f0-9]{64}$/);
+  assert.match(guideText, /Emergency Google Drive fallback/);
+  assert.deepEqual(JSON.parse(result.data.result.content[0].text), result.data.result.structuredContent);
+  for (const args of [null, [], false, 'text', {database: 'private'}]) {
+    const invalid = await invoke(rpc('tools/call', {name: 'shard_atlas_get_instructions', arguments: args}), {}, contributionEnv(), {guideText});
+    assert.equal(invalid.data.error.code, -32602);
+  }
+});
+
+test('a delivered owner-bound guide permits a revision-checked additive save and verified receipt', async () => {
+  const configuration = contributionEnv(), args = await guideArguments(configuration);
+  let saves = 0;
+  const receipt = {requestId: args.batch.requestId, verified: true, replayed: false, currentContentMatches: true,
+    acceptedRevision: 'accepted-2', currentRevision: 'accepted-2', added: {shards: 1, links: 0}, skipped: {shards: 0, links: 0}};
+  const saved = await invoke(rpc('tools/call', {name: 'shard_atlas_add_knowledge', arguments: args}), {}, configuration, {
+    guideText, saveKnowledge: async (env, input) => {saves++; assert.equal(env, configuration); assert.deepEqual(input, {batch: args.batch, expectedRevision: args.expectedRevision}); return receipt;},
+  });
+  assert.equal(saves, 1); assert.equal(saved.data.result.isError, false);
+  assert.deepEqual(saved.data.result.structuredContent.added, {shards: 1, links: 0});
+  assert.equal(saved.data.result.structuredContent.acceptedRevision, 'accepted-2');
+  assert.equal(saved.data.result.structuredContent.authority, 'accepted-cloud');
+  assert.equal(saved.data.result.structuredContent.readOnly, false);
+  assert.match(saved.data.result.structuredContent.untrustedDataNotice, /Device synchronization is separate/);
+});
+
+test('missing, stale, tampered, or transferred guide acknowledgments stop before any save', async () => {
+  const configuration = contributionEnv(), original = await guideArguments(configuration);
+  let saves = 0;
+  const dependencies = {guideText, saveKnowledge: async () => {saves++; throw new Error('Must not save.');}};
+  for (const changes of [{instructionsVersion: 'b'.repeat(64)}, {instructionsReceipt: 'v1.invalid.invalid'}, {instructionsReceipt: ''}, {instructionsVersion: 1}]) {
+    const result = await invoke(rpc('tools/call', {name: 'shard_atlas_add_knowledge', arguments: {...original, ...changes}}), {}, configuration, dependencies);
+    assert.equal(result.data.result.isError, true);
+    assert.ok(['guide_changed', 'guide_read_required'].includes(result.data.result.structuredContent.error.code));
+  }
+  const transferred = await invoke(rpc('tools/call', {name: 'shard_atlas_add_knowledge', arguments: original}), {headers: {'oai-authenticated-user-id': 'different-owner-session'}}, configuration, dependencies);
+  assert.equal(transferred.data.result.structuredContent.error.code, 'guide_read_required');
+  for (const missing of ['batch', 'expectedRevision', 'instructionsVersion', 'instructionsReceipt']) {
+    const args = {...original}; delete args[missing];
+    assert.equal((await invoke(rpc('tools/call', {name: 'shard_atlas_add_knowledge', arguments: args}), {}, configuration, dependencies)).data.error.code, -32602);
+  }
+  assert.equal((await invoke(rpc('tools/call', {name: 'shard_atlas_add_knowledge', arguments: {...original, overwrite: true}}), {}, configuration, dependencies)).data.error.code, -32602);
+  assert.equal(saves, 0);
+});
+
+test('additions allow useful notes beyond read-request limits but enforce their own bounded batch', async () => {
+  const configuration = contributionEnv(), args = await guideArguments(configuration);
+  let saves = 0;
+  const dependencies = {guideText, saveKnowledge: async () => {saves++; return {verified: true, acceptedRevision: 'accepted-2'};}};
+  args.batch.shards[0].content = 'x'.repeat(20_000);
+  const accepted = await invoke(rpc('tools/call', {name: 'shard_atlas_add_knowledge', arguments: args}), {}, configuration, dependencies);
+  assert.equal(accepted.data.result.isError, false); assert.equal(saves, 1);
+  args.batch.shards = Array.from({length: 3}, (_, i) => ({...batch().shards[0], id: 'large-' + i, content: 'x'.repeat(88_000)}));
+  const tooLarge = await invoke(rpc('tools/call', {name: 'shard_atlas_add_knowledge', arguments: args}), {}, configuration, dependencies);
+  assert.equal(tooLarge.data.result.structuredContent.error.code, 'contribution_too_large');
+  assert.equal(saves, 1);
+  args.batch.shards = Array.from({length: 21}, (_, i) => ({...batch().shards[0], id: 'too-many-' + i}));
+  assert.equal((await invoke(rpc('tools/call', {name: 'shard_atlas_add_knowledge', arguments: args}), {}, configuration, dependencies)).data.result.structuredContent.error.code, 'invalid_contribution');
+  assert.equal(saves, 1);
+});
+
+test('duplicate JSON keys, unauthorized writes, notifications, and unknown errors cannot silently save', async () => {
+  const configuration = contributionEnv(), args = await guideArguments(configuration);
+  let saves = 0;
+  const dependencies = {guideText, saveKnowledge: async () => {saves++; throw new Error('private SQL serviceToken=secret-value');}};
+  const duplicate = JSON.stringify(rpc('tools/call', {name: 'shard_atlas_add_knowledge', arguments: args})).replace('"requestId":"cloud-request-1"', '"requestId":"other","requestId":"cloud-request-1"');
+  assert.equal((await invoke(duplicate, {}, configuration, dependencies)).response.status, 400);
+  assert.equal((await invoke(rpc('tools/call', {name: 'shard_atlas_add_knowledge', arguments: args}), {authenticated: false}, configuration, dependencies)).response.status, 401);
+  const notification = await invoke({jsonrpc: '2.0', method: 'tools/call', params: {name: 'shard_atlas_add_knowledge', arguments: args}}, {}, configuration, dependencies);
+  assert.equal(notification.response.status, 202); assert.equal(saves, 0);
+  const failed = await invoke(rpc('tools/call', {name: 'shard_atlas_add_knowledge', arguments: args}), {}, configuration, dependencies);
+  assert.equal(failed.data.result.structuredContent.error.code, 'save_outcome_unknown');
+  assert.match(failed.data.result.content[0].text, /Retry the identical batch and requestId/);
+  assert.doesNotMatch(JSON.stringify(failed.data), /SQL|serviceToken|secret-value|Nothing was saved/);
 });

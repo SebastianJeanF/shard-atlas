@@ -93,11 +93,7 @@ function customizeShell() {
       option.querySelector('button').textContent = 'Save snapshot';
     }
   }
-  const ai = $('#ai-dialog');
-  ai.querySelector('.ai-steps').innerHTML = '<li><strong>Say “Add this to Shard Atlas.”</strong><span>A chat with Google Drive access can queue an immutable batch in your shared inbox, even while your Mac is off.</span></li><li><strong>Share an export when useful.</strong><span>A chat can check your existing notes only when you provide a current export or a connected local integration.</span></li><li><strong>Open Google Drive and sync the inbox.</strong><span>Connect your account, then choose Sync inbox to save the queued additions on this device. Repeating a sync preserves later edits and deletions.</span></li>';
-  ai.querySelector('.ai-other-chats h3').textContent = 'Capture from a phone or another computer';
-  ai.querySelector('.ai-other-chats p').textContent = 'Copy these instructions into your chat. With Drive access it can queue an inbox batch for every device. Without Drive access it can prepare a portable file for Preview a file. Inbox sync supports additions; use portable archives for embedded images and recovery data.';
-  $('#ai-refresh-status').textContent = 'Refresh reads changes saved in another tab on this device.';
+  $('#ai-refresh-status').textContent = 'Cloud saves arrive automatically while connected. Refresh checks this device’s copy.';
 
   const install = document.createElement('dialog');
   install.id = 'phone-install'; install.className = 'small-dialog';

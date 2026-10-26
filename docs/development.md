@@ -135,7 +135,21 @@ The Python discovery command includes `tests/test_code_solutions.py`, which chec
 
 ## Optional AI integration
 
-The app works without an LLM, subscription, or API key. Direct capture from another chat is optional and depends on that client's support for local tools.
+The app works without an LLM, subscription, or API key. Direct capture from another chat is optional and depends on its private cloud connection or local tools.
+
+### Private browser ChatGPT connection
+
+The existing owner-private Site exposes connection testing, library search/read, `shard_atlas_get_instructions`, and additive-only `shard_atlas_add_knowledge`. The save tool accepts an immutable `batch`, the reviewed cloud `expectedRevision`, and the guide's `instructionsVersion` and `instructionsReceipt`. Read the complete current guide before preparing a contribution. Guide reads have no database or network access. A one-hour HMAC receipt binds guide delivery to the authenticated owner, Site origin, and exact guide bytes. It verifies delivery and freshness, not understanding or compliance with the authoring rules.
+
+Configure `SHARD_ATLAS_GUIDE_RECEIPT_SECRET` as a dedicated 32-byte hex secret through Sites runtime settings. Keep it separate from device/service credentials and out of source, logs, and browser assets. The build compiles the exact canonical guide through Vite. The hosted release identity includes that guide and the shared validation dependencies.
+
+Cloud batches are limited to 256 KiB, 20 shards, and 100 relationships. Every record needs a stable ID. Edits, deletions, and new image uploads are excluded. The full snapshot limit for these cloud tools is 16 MiB, separate from the 256 MiB library synchronization limit. Per-binding write serialization bounds concurrent snapshot allocation. A busy response requires retrying the unchanged request.
+
+The engine preserves the complete accepted capsule, appends new records and portable contribution receipts, and conditionally publishes against the reviewed revision. The previous immutable cloud revision remains the safety copy. Durable request receipts are checked before stale-revision rejection, so an exact retry can confirm an earlier save after a lost response. Changed payloads with the same request ID are rejected. Later edits and deletions remain intact on replay. A concurrent winner leaves the losing proposal explicitly conflicted rather than silently rebasing it.
+
+A verified cloud receipt is separate from device delivery. Existing library sync applies accepted changes to connected clients, with editor and conflict protections. The website need not be open for a save. Use isolated databases and object storage for write tests. Keep Drive as an emergency manual fallback.
+
+### Local tool bridge
 
 For an AI client that supports MCP stdio servers, configure a server named `shard_atlas` with an absolute Python interpreter path as its command and an absolute path to `tools/shard_atlas_mcp.py` as its sole argument. For example, replace both placeholder paths in this configuration:
 

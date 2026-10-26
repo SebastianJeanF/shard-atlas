@@ -32,6 +32,7 @@ FRONTEND_ASSET_ROOTS = ("static/vendor/katex", "static/spiral", "web/public")
 BACKEND_FILES = ("server.py", "library_sync.py", "release_manifest.py", "release_status.py", "seed.json")
 NATIVE_FILES = ("desktop/ShardAtlas.swift", "desktop/ImageText.swift", "desktop/build.py", "desktop/ShardAtlas.icns", "static/drive-inbox.js")
 HOSTED_FILES = ("sync/worker.mjs", "sync/storage.mjs", "sync/protocol.mjs", "sync/release.mjs", "sync/schema.sql", "tools/build_host.py", "release_manifest.py",
+                "static/ai-instructions.md", "web/model.mjs", "web/inbox.mjs", "web/archives.mjs", "web/knowledge-validation.mjs", "sync/client.mjs",
                 "hosting/package.json", "hosting/package-lock.json", "hosting/vite.config.ts", "hosting/next.config.ts",
                 "hosting/tsconfig.json", "hosting/postcss.config.mjs", "hosting/cloudflare-env.d.ts", "hosting/drizzle.config.ts",
                 ".openai/hosting.json")

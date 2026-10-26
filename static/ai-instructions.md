@@ -4,9 +4,11 @@
 
 ## Choose the available route
 
+**A chat with the private cloud Shard Atlas connection:** use its search, read, and additive-save tools as the primary route. This includes regular browser ChatGPT. Read the full guide through `shard_atlas_get_instructions`, then search and read duplicate candidates and useful connections. A direct save publishes to the shared cloud library without requiring the website to be open. Connected apps receive the saved change through existing automatic Library sync while running and online, or catch up when reopened. A verified cloud receipt does not prove that every physical device has already received the change. This milestone supports additions and new connections only, not edits or deletions of existing records.
+
 **A chat with access to this Mac:** use the Shard Atlas tools to search, read, and add knowledge. The local integration can start the storage service when the app window is closed. It keeps the collection on this Mac. Start a new chat after installing the integration so its tools and instructions can load.
 
-**A chat with the user's configured Google Drive inbox:** when local access is unavailable, or the user requests capture through Drive, prepare an immutable inbox batch and upload it to that configured folder. This route works on a phone or another computer while the Mac is off. Read [Google Drive capture](#capture-through-google-drive) for the envelope and verification requirements. A successful upload means **queued in Drive**, not saved into a collection. The user imports with **Sync inbox** or **Sync additions**. If private Library sync is connected, that saved addition and its duplicate-safe receipt then synchronize to the other connected devices. Separate collections still import their own copy.
+**Emergency Google Drive fallback:** when direct cloud and local access are unavailable, or the user explicitly requests Drive, prepare an immutable inbox batch and upload it to the configured folder. Drive is an emergency manual route. Automatic Inbox detection/importing is outside the current plan. This route works on a phone or another computer while the Mac is off. Read [Google Drive capture](#capture-through-google-drive) for the envelope and verification requirements. A successful upload means **queued in Drive**, not saved into a collection. The user imports with **Sync inbox** or **Sync additions**. If private Library sync is connected, that saved addition and its duplicate-safe receipt then synchronize to the other connected devices. Separate collections still import their own copy.
 
 **A chat without either connection:** create a downloadable Shard Atlas JSON archive and tell the user to choose **Use with AI → Preview a file** or **Backup & export → Choose JSON**. The user can inspect rendered cards, embedded photos, and connections, select cards, and edit proposed details with **Edit incoming card → Apply to review**. Changes automatically refresh validation. **Use saved card** reuses an existing note without changing its explanation or academic metadata. Adding course context to that saved card requires an explicit edit afterward. The final action is **Save selected to atlas** for a selection or **Save to atlas** for the full archive. Say that the file is ready to preview and import. Do not claim it was saved in the app. If an export or relevant existing notes were supplied, use those to avoid duplicates and connect to existing IDs. Without those notes, do not invent existing IDs or pretend to have checked the collection.
 
@@ -142,6 +144,16 @@ This is one experiment object for a shard's `experiments` array, not a complete 
   "comparisonConfig": null
 }
 ```
+
+## Save directly through the private cloud connection
+
+Use the cloud tools only when the user has asked to save knowledge. First call `shard_atlas_get_instructions` and read its full `content`. It returns the current guide `version`, a short-lived owner-bound `readReceipt`, and its expiry. This receipt verifies guide delivery and freshness, not whether the AI understood or applied the rules. Search and read related notes at the accepted cloud revision before preparing the batch.
+
+Call `shard_atlas_add_knowledge` with `batch`, `expectedRevision`, `instructionsVersion` set to the guide version, and `instructionsReceipt` set to the read receipt. Keep these last three fields outside the immutable batch. Use the exact accepted revision returned by search/read. Cloud batches allow at most 20 shards, 100 relationships, and 256 KiB of encoded batch JSON. Every new shard and relationship needs a stable ID. Image uploads are outside this additive tool. Preserve existing images and use ordinary verified source links when new image bytes cannot be transferred.
+
+A successful save returns the accepted cloud revision, actual added or reused IDs, duplicate outcomes, and content verification. The previous cloud revision remains available for recovery. The tool never edits or deletes existing records. A stale revision or concurrent change stops the save instead of silently overwriting another client's work. Re-read the current library and review the proposal after a conflict. Never invent new IDs just to bypass it.
+
+If a response is lost or the save outcome is unknown, retry the identical batch and request ID. Refresh an expired guide receipt without changing that batch. A verified replay confirms the earlier save and does not add another copy. A replay with changed or missing content reports later edits or deletions and preserves them. Claim a cloud save only from a verified receipt. Read saved IDs at the returned current revision when further inspection is needed. Report device synchronization separately from the accepted cloud save.
 
 ## Use the local tools
 
