@@ -38,9 +38,10 @@ def available(port):
 
 def main():
     if '--browser' not in sys.argv and '--no-browser' not in sys.argv:
-        app = ROOT / 'Shard Atlas.app'
-        if not (app / 'Contents/MacOS/ShardAtlas').is_file():
-            raise SystemExit('The desktop app has not been built. Run python3 desktop/build.py once, then open Shard Atlas again.')
+        candidates = [ROOT / 'Shard Atlas.app', Path.home() / 'Applications/Shard Atlas.app']
+        app = next((candidate for candidate in candidates if (candidate / 'Contents/MacOS/ShardAtlas').is_file()), None)
+        if app is None:
+            raise SystemExit('Shard Atlas was not found in this checkout or ~/Applications. Run python3 desktop/build.py to build it, or install Shard Atlas.app in ~/Applications, then try again.')
         subprocess.run(['open', str(app)], check=True)
         print('Opened Shard Atlas desktop app.')
         return
@@ -53,7 +54,9 @@ def main():
             raise SystemExit("Shard Atlas could not find an available local port. Close another local app and try again.")
         DATA.mkdir(parents=True, exist_ok=True)
         with (DATA / "server.log").open("ab") as log:
-            process = subprocess.Popen([sys.executable, str(ROOT / "server.py"), "--port", str(port)], cwd=ROOT, stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
+            process = subprocess.Popen([sys.executable, str(ROOT / "server.py"), "--db", str(DATA / "shards.sqlite3"),
+                                        "--backup-dir", str(DATA / "backups"), "--port", str(port)],
+                                       cwd=ROOT, stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
         for _ in range(80):
             if health(port):
                 break

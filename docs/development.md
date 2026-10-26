@@ -44,9 +44,19 @@ python3 server.py --db /tmp/shard-atlas-development.sqlite3 --port 48741
 
 Open `http://127.0.0.1:48741` in your browser. Stop the service with Control-C. A new test database starts with the sample collection. Use `--no-seed` to start a new empty database. An already-initialized empty database is never reseeded.
 
-The server and native builder both accept `--backup-dir PATH`. The native app defaults to `~/Library/Application Support/Shard Atlas/backups`. Running the source server directly against the default working database instead uses the checkout's `backups/` folder. Custom databases use an adjacent `<database-stem>-backups` folder unless overridden. The active folder is displayed in **Backup & export**. Preserve an existing installation's custom destination when rebuilding.
+The server and native builder both accept `--backup-dir PATH`. The native app, contribution helper, and browser launcher explicitly select `~/Library/Application Support/Shard Atlas/backups` for the working collection. Running `server.py` directly against the default working database still uses the checkout's `backups/` folder unless overridden. Custom databases use an adjacent `<database-stem>-backups` folder unless overridden. The active folder is displayed in **Backup & export**. Preserve an existing installation's custom destination when rebuilding.
 
 `python3 launch.py --browser` is an optional launcher for the **working collection**. It discovers a matching local service and opens a browser. Use an explicit temporary database when testing behavior that changes or removes data.
+
+### Mac locations outside Drive
+
+The maintained Mac checkout is `~/Developer/shard-atlas`. The installed app is `~/Applications/Shard Atlas.app`. Keep dependencies, Git metadata, builds, source mirrors, and QA artifacts outside folders backed up by Google Drive. The local contribution integration points to this checkout. Its skill remains linked from `~/.codex/skills/add-to-shard-atlas`.
+
+The default launcher uses a complete development app in the checkout when available, then falls back to the app in `~/Applications`. For an installed build, pass `--output "$HOME/Applications/Shard Atlas.app"` to the native builder after quitting the app normally and preserving a consistent library backup. The working database and its local snapshots stay under Application Support regardless of the source location.
+
+The former Drive checkout retains a small temporary compatibility bridge for already-running AI helpers and delayed integration configurations. Its Python forwarders load the maintained checkout, and its guide is an exact copy of the current authoring guide. It contains no development dependencies or personal collection. Refresh that guide when the canonical guide changes, and retire the bridge only after old helper processes and captured configurations have reloaded. Do not replace it with a directory symlink into the local checkout.
+
+Historical snapshots and development evidence are preserved in private compressed recovery archives under `ChatGPT/Shard Atlas/Recovery` in Drive. Their manifests and restore instructions distinguish cold recovery from the active library. Packing these existing files does not implement the separate recurring, encrypted, deduplicating backup plan or change library synchronization. The emergency `ChatGPT/Shard Atlas/Inbox` remains available.
 
 ## Source map and storage boundaries
 

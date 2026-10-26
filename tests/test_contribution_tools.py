@@ -139,6 +139,11 @@ class ContributionToolsTests(unittest.TestCase):
             self.assertEqual(len(processes), 1)
             self.assertEqual(found[0][0], found[1][0])
             self.assertEqual(Path(found[0][1]["dbPath"]).resolve(), database.resolve())
+            backups = database.parent / "backups"
+            self.assertEqual(Path(found[0][1]["backupDirectory"]).resolve(), backups.resolve())
+            self.assertTrue(any(backups.glob("shards-*.sqlite3")))
+            self.assertFalse((source / "backups").exists())
+            self.assertFalse((database.parent / "shards-backups").exists())
             self.assertIsNone(processes[0].poll())
             self.assertIn("--no-seed", processes[0].args)
             self.assertTrue((database.parent / "contributor-server.log").is_file())

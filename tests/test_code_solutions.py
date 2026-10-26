@@ -48,8 +48,11 @@ class CodeSolutionsTests(unittest.TestCase):
         return next(item for item in state["shards"] if item["title"] == title)
 
     def connect(self, source, target, approach="kahn", **extra):
+        existing_ids = {item["id"] for item in self.store.state()["links"]}
         state = self.store.create_link({"fromId": source["id"], "toId": target["id"], "type": "uses", "fromApproachId": approach, **extra})
-        return state["links"][-1]
+        created = [item for item in state["links"] if item["id"] not in existing_ids]
+        self.assertEqual(len(created), 1)
+        return created[0]
 
     def test_exact_source_and_metadata_survive_old_patch_reopen_drafts_and_recovery(self):
         original = self.create()
@@ -153,7 +156,8 @@ class CodeSolutionsTests(unittest.TestCase):
         self.assertEqual(target.import_data(archive)["importSummary"]["added"]["links"], 0)
         with zipfile.ZipFile(io.BytesIO(self.store.markdown_export())) as package:
             saved = json.loads(package.read("shard-atlas.json"))
-            self.assertEqual(saved["shards"][0]["codeSolution"]["code"], CODE)
+            saved_problem = next(item for item in saved["shards"] if item["id"] == problem["id"])
+            self.assertEqual(saved_problem["codeSolution"]["code"], CODE)
             markdown = package.read(next(name for name in package.namelist() if name.startswith("shards/Course"))).decode()
             self.assertIn(CODE, markdown)
             self.assertIn("Approach ID: kahn", markdown)

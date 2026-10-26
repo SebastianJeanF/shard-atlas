@@ -159,7 +159,8 @@ def start_backend():
                     continue
             with log_path.open("ab") as log:
                 process = subprocess.Popen(
-                    [sys.executable, str(ROOT / "server.py"), "--db", str(DEFAULT_DB), "--port", str(port), "--no-seed"],
+                    [sys.executable, str(ROOT / "server.py"), "--db", str(DEFAULT_DB),
+                     "--backup-dir", str(DEFAULT_DB.parent / "backups"), "--port", str(port), "--no-seed"],
                     stdin=subprocess.DEVNULL, stdout=log, stderr=log, cwd=ROOT, start_new_session=True,
                 )
             deadline = time.monotonic() + 8
