@@ -42,9 +42,9 @@ test('discovery and the tool list need no library protocol header or storage bin
   const discovery = await invoke(rpc('server/discover'));
   assert.deepEqual(discovery.data, {jsonrpc: '2.0', id: 1, result: {supportedVersions: ['2026-07-28'], capabilities: {tools: {}}, ttlMs: 0, cacheScope: 'private', resultType: 'complete'}});
   const listing = await invoke(rpc('tools/list'), {headers: {'oai-authenticated-user-email': OWNER.toUpperCase(), Origin: 'https://chatgpt.com'}});
-  assert.equal(listing.data.result.tools.length, 6);
-  assert.deepEqual(listing.data.result.tools.map(tool => tool.name), ['shard_atlas_connection_test', 'shard_atlas_search', 'shard_atlas_read', 'shard_atlas_get_instructions', 'shard_atlas_add_knowledge', 'shard_atlas_edit_knowledge']);
-  for (const listed of listing.data.result.tools) assert.deepEqual(listed.annotations, {readOnlyHint: !['shard_atlas_add_knowledge', 'shard_atlas_edit_knowledge'].includes(listed.name), destructiveHint: listed.name === 'shard_atlas_edit_knowledge', idempotentHint: true, openWorldHint: false});
+  assert.equal(listing.data.result.tools.length, 9);
+  assert.deepEqual(listing.data.result.tools.map(tool => tool.name), ['shard_atlas_connection_test', 'shard_atlas_search', 'shard_atlas_read', 'shard_atlas_get_instructions', 'shard_atlas_add_knowledge', 'shard_atlas_edit_knowledge', 'shard_atlas_backup_status', 'shard_atlas_prepare_backup', 'shard_atlas_restore_backup']);
+  for (const listed of listing.data.result.tools) assert.deepEqual(listed.annotations, {readOnlyHint: !['shard_atlas_add_knowledge', 'shard_atlas_edit_knowledge', 'shard_atlas_prepare_backup', 'shard_atlas_restore_backup'].includes(listed.name), destructiveHint: ['shard_atlas_edit_knowledge', 'shard_atlas_restore_backup'].includes(listed.name), idempotentHint: true, openWorldHint: false});
   assert.equal(listing.data.result.ttlMs, 0); assert.equal(listing.data.result.cacheScope, 'private');
   const tool = listing.data.result.tools[0];
   assert.equal(tool.name, 'shard_atlas_connection_test');
@@ -56,7 +56,7 @@ test('MCP validates every supplied origin while supporting Sites and ChatGPT tra
   for (const origin of ['https://atlas.example.test', 'https://chatgpt.com', 'https://chat.openai.com']) {
     const result = await invoke(rpc('tools/list'), {headers: {Origin: origin}});
     assert.equal(result.response.status, 200);
-    assert.equal(result.data.result.tools.length, 6);
+    assert.equal(result.data.result.tools.length, 9);
   }
   for (const origin of ['null', 'not an origin', 'https://other.example.test', 'https://chatgpt.com.evil.example', 'https://chatgpt.com/', 'https://chatgpt.com https://other.example.test', 'https://user:password@chatgpt.com']) {
     assert.equal((await invoke(rpc('tools/list'), {headers: {Origin: origin}})).response.status, 403);
@@ -91,7 +91,7 @@ test('initialization, ping, and notifications support stateless clients', async 
   const initialized = await invoke(rpc('initialize', {protocolVersion: '2026-07-28', capabilities: {}, clientInfo: {name: 'test-client', version: '1'}}));
   assert.equal(initialized.data.result.protocolVersion, '2026-07-28');
   assert.deepEqual(initialized.data.result.capabilities, {tools: {}});
-  assert.equal(initialized.data.result.serverInfo.version, '1.3.0');
+  assert.equal(initialized.data.result.serverInfo.version, '1.4.0');
   assert.match(initialized.data.result.instructions, /a request to add knowledge does not authorize editing/);
   assert.match(initialized.data.result.instructions, /No deletion or image upload/);
   assert.match(initialized.data.result.instructions, /Unsynced device changes are excluded/);
@@ -437,4 +437,33 @@ test('edit bodies receive the bounded write allowance and unknown outcomes never
   assert.equal(unknown.data.result.structuredContent.error.code, 'save_outcome_unknown');
   assert.match(unknown.data.result.content[0].text, /Retry the identical batch and requestId/);
   assert.doesNotMatch(JSON.stringify(unknown.data), /private_token|SECRET_PAYLOAD|No new save was attempted|Nothing was saved/);
+});
+
+test('backup procedure exposes only scoped operational metadata and never runtime secrets', async () => {
+  const response = await invoke(rpc('tools/call', {name: 'shard_atlas_backup_status', arguments: {operation: 'instructions'}}), {}, env({
+    SHARD_ATLAS_BACKUP_SIGNING_SECRET: 'private-test-secret-must-not-leak', SHARD_ATLAS_BACKUP_DRIVE_FOLDER_ID: 'backup-folder',
+  }), {backupRunnerSource: 'checked runner source'});
+  const data = response.data.result.structuredContent;
+  assert.equal(response.data.result.isError, false);
+  assert.equal(data.destination.folderId, 'backup-folder');
+  assert.equal(data.runner.sha256, 'ad0b0bc92c7446b17e32b8b6024eb051ca44f5f485c3d470f9562acc6f836a7c');
+  assert.equal(data.noMacStaging, true);
+  assert.equal(data.permanentDeletion, false);
+  assert.doesNotMatch(JSON.stringify(data), /private-test-secret-must-not-leak/);
+});
+
+test('backup actions preserve owner-only MCP authorization and do not cross tool scopes', async () => {
+  for (const name of ['shard_atlas_backup_status', 'shard_atlas_prepare_backup', 'shard_atlas_restore_backup']) {
+    assert.equal((await invoke(rpc('tools/call', {name, arguments: {operation: 'instructions'}}), {authenticated: false})).response.status, 401);
+  }
+  for (const [name, args] of [
+    ['shard_atlas_backup_status', {operation: 'confirm'}],
+    ['shard_atlas_prepare_backup', {operation: 'confirm', requestId: 'restore'}],
+    ['shard_atlas_restore_backup', {operation: 'prepare'}],
+    ['shard_atlas_backup_status', {operation: 'instructions', siteBearer: 'never-accept-credentials'}],
+  ]) {
+    const response = await invoke(rpc('tools/call', {name, arguments: args}));
+    assert.equal(response.data.result.isError, true);
+    assert.equal(response.data.result.structuredContent.error.code, 'invalid_arguments');
+  }
 });

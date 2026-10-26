@@ -118,7 +118,7 @@ class ContributionToolsTests(unittest.TestCase):
         text = (ROOT / "server.py").read_text(encoding="utf-8")
         text = text.replace('BACKEND_VERSION = "2.1.0"', 'BACKEND_VERSION = "2.2.0"')
         (source / "server.py").write_text(text, encoding="utf-8")
-        for name in ("library_sync.py", "release_manifest.py", "release_status.py", "seed.json"):
+        for name in ("library_sync.py", "cloud_backups.py", "release_manifest.py", "release_status.py", "seed.json"):
             (source / name).write_bytes((ROOT / name).read_bytes())
         (source / "static").mkdir()
         write_embedded_manifest(source / "static", generate_manifest(ROOT))

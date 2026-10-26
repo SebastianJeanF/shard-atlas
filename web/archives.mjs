@@ -287,7 +287,7 @@ function recomputeReview(db, shardId) {
 }
 
 function commit(db, next) {
-  for (const key of ['archive', 'drafts', 'backups', 'imports', 'inboxReceipts', 'driveInbox']) db[key] = next[key];
+  for (const key of ['archive', 'drafts', 'backups', 'imports', 'inboxReceipts', 'driveInbox', 'cloudBackupPolicy']) if (Object.hasOwn(next, key)) db[key] = next[key];
 }
 
 function importData(db, payload) {

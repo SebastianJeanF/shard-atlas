@@ -7,7 +7,7 @@
     const url = new URL(typeof input === 'string' ? input : input.url, root.location?.href || 'http://127.0.0.1');
     const method = (options.method || input?.method || 'GET').toUpperCase();
     const knowledgeWrite = !['GET', 'HEAD'].includes(method) && url.pathname.startsWith('/api/')
-      && !/^\/api\/(?:library-sync(?:\/|$)|drafts(?:\/|$)|import\/preview$|import-preview$|backup$)/.test(url.pathname)
+      && !/^\/api\/(?:library-sync(?:\/|$)|cloud-backups(?:\/|$)|drafts(?:\/|$)|import\/preview$|import-preview$|backup$)/.test(url.pathname)
       && !/^\/api\/assets\/[^/]+\/text$/.test(url.pathname);
     if (knowledgeWrite && viewedRevision !== null) {
       const headers = new Headers(options.headers || {});
@@ -31,7 +31,7 @@
     request: nativeRequest,
     acceptState(data) { if (data && stateRevisions.has(data)) viewedRevision = stateRevisions.get(data); },
     imageSource: path => path,
-    canRefreshDialog: dialog => ['ai-dialog', 'library-sync-dialog', 'app-release-dialog'].includes(dialog.id),
+    canRefreshDialog: dialog => ['ai-dialog', 'library-sync-dialog', 'app-release-dialog', 'cloud-backups-dialog'].includes(dialog.id),
     didSave() {},
     installIntegrations(context) {
       root.DriveInbox?.install(context);

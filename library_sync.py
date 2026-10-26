@@ -154,7 +154,8 @@ class LibraryClient:
         self.service_secret = config["serviceSecret"]
         self.opener = urllib.request.build_opener(NoRedirect())
 
-    def request(self, path, *, method="GET", data=None, binary=False, maximum=MAX_BYTES):
+    def request(self, path, *, method="GET", data=None, binary=False, maximum=MAX_BYTES,
+                success_statuses=(200,)):
         headers = {HEADER: "1", "OAI-Sites-Authorization": "Bearer " + self.token,
                    "X-Shard-Atlas-Service": self.service_secret}
         if data is not None:
@@ -176,7 +177,7 @@ class LibraryClient:
                 body = response.read(maximum + 1)
                 if len(body) > maximum:
                     raise SyncError("The shared response exceeds the synchronization limit.", "invalid_snapshot")
-                if binary and response.status == 200:
+                if binary and response.status in success_statuses:
                     return body
                 try:
                     result = json.loads(body.decode("utf-8"))
@@ -184,7 +185,7 @@ class LibraryClient:
                     raise SyncError("The shared library returned an invalid response.", "invalid_response") from None
                 if response.status == 409 and result.get("status") == "conflict":
                     return result
-                if response.status != 200:
+                if response.status not in success_statuses:
                     code = "update_required" if response.status == 426 else "sign_in_required" if response.status in (401, 403) else "offline"
                     raise SyncError("The shared library could not finish this operation. Your local changes are retained.", code)
                 return result

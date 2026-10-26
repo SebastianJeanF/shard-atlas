@@ -794,7 +794,7 @@ function closeDialog(id){
   $('#'+id).close();if(kind){clearTimeout(draftTimers[kind]);renderDraftShelf();}
 }
 function confirmAction(title,message,label,task,danger=false){$('#confirm-title').textContent=title;$('#confirm-message').textContent=message;$('#confirm-action').textContent=label;$('#confirm-action').className=danger?'danger':'primary';confirmTask=task;$('#confirm-dialog').showModal();}
-function confirmDelete(s){if(!s)return;confirmAction('Move this shard to trash?',`“${s.title}” will leave your atlas. You can recover the shard and its available connections from Recently deleted. A database backup is also made.`, 'Move to trash',async()=>{await mutate('/api/shards/'+encodeURIComponent(s.id),'DELETE');toast('Shard moved to trash.');},true);}
+function confirmDelete(s){if(!s)return;confirmAction('Move this shard to trash?',`“${s.title}” will leave your atlas. You can recover the shard and its available connections from Recently deleted. A recovery copy is also saved.`, 'Move to trash',async()=>{await mutate('/api/shards/'+encodeURIComponent(s.id),'DELETE');toast('Shard moved to trash.');},true);}
 function openTagRename(){const tags=allTags();if(!tags.length){toast('Add a topic to a shard first.');return;}$('#tag-form').reset();$('#rename-from').innerHTML=tags.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');if(state.tags.length)$('#rename-from').value=state.tags[0];$('#tag-error').hidden=true;$('#tag-dialog').showModal();}
 async function showHistory(id){
   historyShardId=id;$('#history-title').textContent=byId(id)?.title||'Saved versions';$('#history-content').innerHTML='<p class="muted">Opening saved versions…</p>';$('#history-dialog').showModal();
@@ -1213,7 +1213,7 @@ window.addEventListener('focus',()=>{void refreshAtlas();});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='hidden')void refreshAtlas();});
 async function initialize(){
   try{const results=await Promise.allSettled([api('/api/state'),api('/api/health')]);if(results[0].status==='rejected')throw results[0].reason;window.ShardAtlasPlatform?.acceptState(results[0].value);state.data=results[0].value;state.selectedId=byId('cpp-raii')?.id||state.data.shards[0]?.id;
-    if(results[1].status==='fulfilled'){const health=results[1].value;localDraftKey='shard-atlas-drafts:'+String(health.dbPath||'default');$('#settings-path').textContent='Notes: '+(health.dbPath||'stored locally')+'\nBackups: '+(health.backupDirectory||'project backups folder');if(health.lastBackupError){$('#save-status').textContent='Notes saved. Backup needs attention.';toast('Your notes are saved, but the daily backup needs attention: '+health.lastBackupError);}}
+    if(results[1].status==='fulfilled'){const health=results[1].value;localDraftKey='shard-atlas-drafts:'+String(health.dbPath||'default');$('#settings-path').textContent='Notes: '+(health.dbPath||'stored locally')+'\nBackups: '+(health.backupMode==='cloud'||window.shardAtlasBackupUI?.active?'Google Drive through the cloud backup service':health.backupDirectory||'project backups folder');if(health.lastBackupError){$('#save-status').textContent='Notes saved. Backup needs attention.';toast('Your notes are saved, but a backup needs attention: '+health.lastBackupError);}}
     loadBoardRecovery();render();await loadDrafts();
   }catch(error){$('#workspace').innerHTML='<div class="error-state"><h1>Your atlas could not open.</h1><p>'+esc(error.message)+'</p><button class="primary" id="retry-open">Try again</button></div>';$('#retry-open').addEventListener('click',initialize);}
 }
@@ -1223,6 +1223,7 @@ window.ShardAtlasCanApplyLibrary=()=>canRefreshAtlas(true);
 window.ShardAtlasHasUnsavedLibraryChanges=hasUnsavedLibraryChanges;
 if(window.ShardAtlasPlatform)window.ShardAtlasPlatform.installIntegrations({api,writeRequest,withBusy,refreshAtlas,canRefreshAtlas});else window.DriveInbox?.install({api,writeRequest,withBusy,refreshAtlas});
 window.ShardAtlasLibraryUI?.install();
+window.ShardAtlasCloudBackupUI?.install({message:toast});
 window.ShardAtlasReleaseUI?.install();
 initialize();
 loadReleaseCatalog();

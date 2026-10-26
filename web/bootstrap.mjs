@@ -2,12 +2,13 @@ import {BrowserStore} from './persistence.mjs';
 import {markdownZip} from './exports.mjs';
 import {mountDriveInbox} from './drive-ui.mjs';
 import {BrowserLibrarySync} from './library-sync.mjs';
+import {BrowserCloudBackups} from './cloud-backups.mjs';
 
 const $ = selector => document.querySelector(selector);
 const originalFetch = window.fetch.bind(window);
 const images = new Map();
 const acceptedStates = new WeakMap();
-let store, librarySync, installationPrompt, downloadUrls = [], reading = false;
+let store, librarySync, cloudBackups, installationPrompt, downloadUrls = [], reading = false;
 const isPhone = () => matchMedia('(max-width: 600px)').matches;
 
 function synchronizeImages(database) {
@@ -34,6 +35,13 @@ async function localFetch(input, options = {}) {
   const url = new URL(typeof input === 'string' ? input : input.url, location.href);
   if (url.origin !== location.origin || !url.pathname.startsWith('/api/')) return originalFetch(input, options);
   if (['/api/release', '/api/sync/release', '/api/release-status'].includes(url.pathname)) return originalFetch(input, options);
+  if (url.pathname.startsWith('/api/cloud-backups/')) {
+    if (url.pathname === '/api/cloud-backups/status' && (options.method || 'GET').toUpperCase() === 'GET') {
+      try {return new Response(JSON.stringify(await cloudBackups.refresh()), {headers: {'Content-Type': 'application/json'}});}
+      catch (error) {return new Response(JSON.stringify({error: error.message}), {status: error.status || 503, headers: {'Content-Type': 'application/json'}});}
+    }
+    return originalFetch(input, options);
+  }
   try {
     const method = (options.method || 'GET').toUpperCase();
     const body = options.body ? JSON.parse(options.body) : {};
@@ -225,12 +233,14 @@ try {
       document.dispatchEvent(new CustomEvent('shard-atlas-library-updated'));
     },
   });
+  cloudBackups = new BrowserCloudBackups(store, {fetch: originalFetch});
+  window.shardAtlasCloudBackups = cloudBackups;
   window.shardAtlasLibrarySync = librarySync;
   window.ShardAtlasPlatform.configure({
     request: localFetch,
     acceptState(data) { const snapshot = acceptedStates.get(data); if (snapshot) store.acceptState(snapshot); },
     imageSource: path => images.get(path.replace(/^\/assets\//, ''))?.url || path,
-    canRefreshDialog: dialog => ['ai-dialog', 'drive-dialog', 'library-sync-dialog', 'app-release-dialog'].includes(dialog.id),
+    canRefreshDialog: dialog => ['ai-dialog', 'drive-dialog', 'library-sync-dialog', 'app-release-dialog', 'cloud-backups-dialog'].includes(dialog.id),
     didSave: detail => document.dispatchEvent(new CustomEvent('shard-atlas-saved', {detail})),
     installIntegrations({refreshAtlas}) {
       document.addEventListener('shard-atlas-library-updated', () => { void refreshAtlas(true).catch(() => {}); });
@@ -247,6 +257,7 @@ try {
   customizeShell();
   await import('./app.js');
   librarySync.start();
+  cloudBackups.start();
   await mountDriveInbox({store, fetch: originalFetch, message});
   void navigator.storage?.persist?.().catch(() => false);
   void prepareOffline();

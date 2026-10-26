@@ -1,5 +1,6 @@
 /* Browser-local Shard Atlas data model. Keep archive records portable with server.py. */
 import {validateRichKnowledge} from './knowledge-validation.mjs';
+import {RECOVERY_APPROVALS, cloudBackupMode, recoveryApproval, recoverySnapshot} from './backup-policy.mjs';
 
 const KINDS = new Set(['concept', 'fact', 'example', 'mistake', 'event', 'idea']);
 const STATUSES = new Set(['learning', 'solid', 'verify']);
@@ -29,7 +30,12 @@ function object(value, message) {
 
 /** Clone JSON archive data, with no references back into storage. */
 export function copy(value) {
-  return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+  if (value === undefined) return undefined;
+  const result = JSON.parse(JSON.stringify(value));
+  // Archive/import transactions work on a copy before committing. Carry their
+  // one-operation approval without serializing it into IndexedDB or exports.
+  if (value?.[RECOVERY_APPROVALS]) Object.defineProperty(result, RECOVERY_APPROVALS, {value: value[RECOVERY_APPROVALS], configurable: true});
+  return result;
 }
 
 export function newId() {
@@ -265,7 +271,13 @@ export function publicState(db) {
 /** Safety snapshots include portable images, legacy records, drafts, and receipts. */
 export function saveBackup(db) {
   const createdAt = now();
-  const snapshot = {archive: copy(db.archive), drafts: copy(db.drafts), imports: copy(db.imports), inboxReceipts: copy(db.inboxReceipts || [])};
+  const snapshot = recoverySnapshot(db);
+  const remote = recoveryApproval(db, snapshot);
+  if (remote) {
+    const entry = {...remote, filename: remote.filename || `cloud-${remote.id}`, createdAt: remote.createdAt || createdAt, remote: true};
+    db.cloudBackupPolicy.lastDeviceCheckpoint = {id: entry.id, filename: entry.filename, createdAt: entry.createdAt};
+    return entry;
+  }
   const entry = {filename: `shards-mobile-${createdAt.replace(/[:.]/g, '-')}-${newId()}.json`, createdAt, size: new TextEncoder().encode(JSON.stringify(snapshot)).length, shardCount: db.archive.shards.length, valid: true, error: null, ...snapshot};
   db.backups.push(entry);
   return entry;
@@ -322,7 +334,7 @@ export function handleCore(db, path, method = 'GET', body = {}) {
   const read = method === 'GET' || method === 'HEAD';
   if (read && ['/api/state', '/api/data'].includes(path)) return publicState(db);
   if (read && path === '/api/export') return copy(archive);
-  if (read && path === '/api/health') return {ok: true, backendVersion: 'mobile-1', dbPath: 'This device', backupDirectory: 'This device', storageMode: 'browser-local', schemaVersion: 1};
+  if (read && path === '/api/health') return {ok: true, backendVersion: 'mobile-1', dbPath: 'This device', backupDirectory: cloudBackupMode(db) ? 'Google Drive through the cloud backup service' : 'This device', backupMode: cloudBackupMode(db) ? 'cloud' : 'local', localBackupHistory: !cloudBackupMode(db), storageMode: 'browser-local', schemaVersion: 1};
   if (read && path === '/api/shards') return {shards: copy(archive.shards)};
   if (read && path === '/api/links') return {links: copy(archive.links)};
   if (read && path === '/api/boards') return {boards: copy(archive.boards)};

@@ -5,11 +5,18 @@ import { handleLibraryRequest } from "../../sync/worker.mjs";
 import { handleReleaseRequest } from "../../sync/release.mjs";
 import releaseManifest from "./release-manifest.json";
 import { handleSiteMcpRequest } from "../lib/site-mcp.mjs";
+import { handleCloudBackupRequest } from "../lib/cloud-backups.mjs";
+import backupRunnerSource from "../../tools/cloud_backup_runner.py?raw";
 
 const worker = {
   async fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext<{ CONNECTORS?: ConnectorBinding }>) {
-    const mcp = await handleSiteMcpRequest(request, env);
+    if (new URL(request.url).pathname === '/cloud-backup-runner.py' && request.method === 'GET') {
+      return new Response(backupRunnerSource, {headers: {'content-type': 'text/x-python; charset=utf-8', 'cache-control': 'no-store, private', 'x-content-type-options': 'nosniff'}});
+    }
+    const mcp = await handleSiteMcpRequest(request, env, {backupRunnerSource});
     if (mcp) return mcp;
+    const backup = await handleCloudBackupRequest(request, env);
+    if (backup) return backup;
     const release = await handleReleaseRequest(request, env, releaseManifest);
     if (release) return release;
     const library = await handleLibraryRequest(request, env);

@@ -32,7 +32,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 SCHEMA_VERSION = 1
 DATABASE_VERSION = 5
-BACKEND_VERSION = "3.3.0"  # Keep the additive API compatible with already-running contribution clients.
+BACKEND_VERSION = "3.4.0"  # Keep the additive API compatible with already-running contribution clients.
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DB = Path.home() / "Library/Application Support/Shard Atlas/shards.sqlite3"
 KINDS = {"concept", "fact", "example", "mistake", "event", "idea"}
@@ -763,7 +763,8 @@ def validate_trash(data, *, imported=False):
 
 class Store:
     def __init__(self, db_path=DEFAULT_DB, *, root=ROOT, seed=True, seed_path=None, backup_on_start=True, backup_dir=None,
-                 automatic_backups=True, backup_interval_seconds=60, backup_poll_seconds=30):
+                 automatic_backups=True, backup_interval_seconds=60, backup_poll_seconds=30,
+                 cloud_backup_config=None, cloud_backup_sync_config=None, cloud_backup_client_factory=None):
         self.db_path = Path(db_path).expanduser().resolve()
         self.root = Path(root).resolve()
         if backup_dir is not None:
@@ -782,6 +783,9 @@ class Store:
         self._backup_stop = threading.Event()
         self._backup_thread = None
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        from cloud_backups import CloudBackups
+        self.cloud_backups = CloudBackups(self, policy_path=cloud_backup_config,
+            sync_config_path=cloud_backup_sync_config, client_factory=cloud_backup_client_factory)
         if self.db_path.exists() and self.db_path.stat().st_size:
             with self.connect() as connection:
                 previous_version = connection.execute("PRAGMA user_version").fetchone()[0]
@@ -868,9 +872,14 @@ class Store:
         if backup_on_start:
             try:
                 today = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d")
-                if not self.backup_dir.exists() or not any(self.backup_dir.glob(f"shards-{today}-*.sqlite3")):
+                if self.cloud_backups.enabled:
+                    # The cloud scheduler owns backup creation. Defer its status
+                    # check until the background worker so an offline connection
+                    # cannot delay opening the native window.
+                    self._dirty = True
+                elif not self.backup_dir.exists() or not any(self.backup_dir.glob(f"shards-{today}-*.sqlite3")):
                     self.backup()
-            except (OSError, sqlite3.Error) as error:
+            except (AppError, OSError, sqlite3.Error) as error:
                 self.backup_error = f"Startup backup failed: {error}"
 
     @contextmanager
@@ -895,23 +904,59 @@ class Store:
         receipt_bytes = connection.execute("SELECT coalesce(sum(length(CAST(payload AS BLOB))),0) FROM imports").fetchone()[0]
         return len(json.dumps(archive, ensure_ascii=False, indent=2).encode("utf-8")) + image_bytes[2] + receipt_bytes, image_bytes[0], image_bytes[1]
 
-    def backup_tick(self):
+    def backup_tick(self, *, background=False):
         if not self.automatic_backups:
+            return
+        if self.cloud_backups.enabled:
+            # changing() calls this synchronously after ordinary note edits.
+            # Network checks belong to the worker and must not hold the store
+            # lock or make offline editing wait for an HTTP timeout.
+            if not background:
+                return
+            with self.lock:
+                due = (self._dirty or self.cloud_backups.has_pending) and time.monotonic() - self._last_backup_time >= self.backup_interval_seconds
+            if due:
+                try:
+                    self._automatic_backup()
+                except (AppError, OSError, sqlite3.Error):
+                    pass
             return
         with self.lock:
             if self._dirty and time.monotonic() - self._last_backup_time >= self.backup_interval_seconds:
                 try:
-                    self.backup()
-                except (OSError, sqlite3.Error):
+                    self._automatic_backup()
+                except (AppError, OSError, sqlite3.Error):
                     pass
+
+    def _automatic_backup(self):
+        if not self.cloud_backups.enabled:
+            return self.backup()
+        from cloud_backups import CloudBackupError
+        try:
+            result = self.cloud_backups.automatic_check()
+        except CloudBackupError as error:
+            with self.lock:
+                self.backup_error = str(error)
+            raise AppError(str(error), error.status) from error
+        except (OSError, sqlite3.Error) as error:
+            with self.lock:
+                self.backup_error = "The temporary cloud recovery state could not be checked. Existing data is retained."
+            raise AppError(self.backup_error, 503) from error
+        with self.lock:
+            self.backup_error = None
+            self._last_backup_time = time.monotonic()
+            self._dirty = False
+        return result
 
     def start_backup_worker(self):
         if not self.automatic_backups or self._backup_thread is not None:
             return
         self._backup_stop.clear()
         def work():
+            if self.cloud_backups.enabled:
+                self.backup_tick(background=True)
             while not self._backup_stop.wait(self.backup_poll_seconds):
-                self.backup_tick()
+                self.backup_tick(background=True)
         self._backup_thread = threading.Thread(target=work, name="shard-atlas-backups", daemon=True)
         self._backup_thread.start()
 
@@ -921,10 +966,10 @@ class Store:
             self._backup_thread.join(timeout=2)
             self._backup_thread = None
         with self.lock:
-            if self.automatic_backups and self._dirty:
+            if self.automatic_backups and self._dirty and not self.cloud_backups.enabled:
                 try:
-                    self.backup()
-                except (OSError, sqlite3.Error):
+                    self._automatic_backup()
+                except (AppError, OSError, sqlite3.Error):
                     pass
 
     @contextmanager
@@ -1166,10 +1211,16 @@ class Store:
 
     def delete_link(self, link_id):
         record_id(link_id)
-        with self.changing() as connection:
-            if connection.execute("DELETE FROM links WHERE id=?", (link_id,)).rowcount == 0:
-                raise AppError("Relationship not found.", 404)
-            return self._state(connection)
+        with self.lock:
+            if self.cloud_backups.enabled:
+                with self.connect() as connection:
+                    if connection.execute("SELECT 1 FROM links WHERE id=?", (link_id,)).fetchone() is None:
+                        raise AppError("Relationship not found.", 404)
+                self.backup()
+            with self.changing() as connection:
+                if connection.execute("DELETE FROM links WHERE id=?", (link_id,)).rowcount == 0:
+                    raise AppError("Relationship not found.", 404)
+                return self._state(connection)
 
     def update_link(self, link_id, data):
         record_id(link_id)
@@ -1347,8 +1398,14 @@ class Store:
     def delete_draft(self, kind):
         if kind not in ("editor", "connection"):
             raise AppError("Unknown draft kind.")
-        with self.lock, self.connect() as connection:
-            connection.execute("DELETE FROM drafts WHERE kind=?", (kind,))
+        with self.lock:
+            if self.cloud_backups.enabled:
+                with self.connect() as connection:
+                    exists = connection.execute("SELECT 1 FROM drafts WHERE kind=?", (kind,)).fetchone()
+                if exists:
+                    self.backup()
+            with self.connect() as connection:
+                connection.execute("DELETE FROM drafts WHERE kind=?", (kind,))
         return {"ok": True}
 
     def create_review(self, data):
@@ -1973,6 +2030,20 @@ class Store:
 
     def backup(self):
         with self.lock:
+            if self.cloud_backups.enabled:
+                from cloud_backups import CloudBackupError
+                try:
+                    result = self.cloud_backups.safety_checkpoint()
+                except CloudBackupError as error:
+                    self.backup_error = str(error)
+                    raise AppError(str(error), error.status) from error
+                except (OSError, sqlite3.Error):
+                    self.backup_error = "The temporary cloud recovery copy could not be completed. Existing data is retained."
+                    raise
+                self.backup_error = None
+                self._last_backup_time = time.monotonic()
+                self._dirty = False
+                return result
             target = None
             try:
                 self.backup_dir.mkdir(parents=True, exist_ok=True)
@@ -2039,6 +2110,8 @@ class Store:
             return len(state["shards"])
 
     def backups(self):
+        if self.cloud_backups.enabled:
+            return self.cloud_backup_request("/catalog")
         items = []
         with self.lock:
             for path in sorted(self.backup_dir.glob("shards-*.sqlite3"), reverse=True):
@@ -2056,6 +2129,15 @@ class Store:
                     item["error"] = str(error)
                 items.append(item)
         return {"backups": items}
+
+    def cloud_backup_request(self, path, *, method="GET", data=None):
+        from cloud_backups import CloudBackupError
+        if path == "/status" and method == "GET":
+            return self.cloud_backups.status()
+        try:
+            return self.cloud_backups.catalog() if path == "/catalog" and method == "GET" else self.cloud_backups.proxy(path, method=method, data=data)
+        except CloudBackupError as error:
+            raise AppError(str(error), error.status) from error
 
     @staticmethod
     def _upgrade_snapshot(connection):
@@ -2102,6 +2184,8 @@ class Store:
             "schemaVersion": SCHEMA_VERSION, "shardCount": count, "backupError": self.backup_error,
             "dbPath": str(self.db_path), "backupDirectory": str(self.backup_dir),
             "lastBackupError": self.backup_error,
+            "backupMode": "cloud" if self.cloud_backups.enabled else "local",
+            "localBackupHistory": not self.cloud_backups.enabled,
         }
 
     def markdown_export(self):
@@ -2454,6 +2538,7 @@ class LocalServer(ThreadingHTTPServer):
         self.static_dir = Path(static_dir or store.root / "static").resolve()
         from library_sync import LibrarySync
         self.library_sync = LibrarySync(store, config_path=library_sync_config)
+        self.store.cloud_backups.library_sync = self.library_sync
         from release_status import ReleaseStatus, ReleaseUnavailable
         def published_release():
             config = self.library_sync._config()
@@ -2570,6 +2655,12 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, store.health())
                 if path == "/api/library-sync/status":
                     return self._send(200, self.server.library_sync.status())
+                if path == "/api/cloud-backups/status":
+                    return self._send(200, store.cloud_backup_request("/status"))
+                if path in ("/api/cloud-backups/catalog", "/api/cloud-backups/restores"):
+                    query = urlsplit(self.path).query
+                    suffix = path.removeprefix("/api/cloud-backups") + ("?" + query if query else "")
+                    return self._send(200, store.cloud_backup_request(suffix))
                 if path == "/api/release-status":
                     query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
                     for key in ("frontendId", "nativeId"):
@@ -2616,6 +2707,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, target.read_bytes(), content_type)
             if self.command == "POST":
                 data = self._json_body()
+                if path in ("/api/cloud-backups/request", "/api/cloud-backups/restore/request",
+                            "/api/cloud-backups/restore/preview", "/api/cloud-backups/restore/confirm"):
+                    return self._send(200, store.cloud_backup_request(path.removeprefix("/api/cloud-backups"), method="POST", data=data))
                 if path == "/api/library-sync/run":
                     if data:
                         raise AppError("Library synchronization accepts an empty object.")

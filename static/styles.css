@@ -1303,3 +1303,8 @@ body[data-saving] dialog form { opacity: .75; }
 .drive-inbox-files { padding-left: 20px; overflow-wrap: anywhere; }
 .drive-inbox-files li { margin: 12px 0; }
 .drive-inbox-files p { margin: 4px 0; }
+.cloud-backups-summary{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1rem;border:1px solid var(--line,#ddd);border-radius:12px;margin:1rem 0;background:var(--panel,#fff)}
+.cloud-backups-summary h3{margin:0 0 .35rem}.cloud-backups-summary p{margin:.2rem 0;color:var(--muted,#687267);font-size:.9rem}.cloud-backups-summary-state{font-weight:600}
+.cloud-backups-summary[data-backup-state="attention"],.cloud-backups-summary[data-backup-state="unavailable"]{border-color:#ae793c}
+.cloud-backups-actions{display:flex;gap:.7rem;flex-wrap:wrap;margin:1rem 0}.cloud-backups-dialog .cloud-backups-state{font-weight:650}.cloud-backups-dialog section{margin-top:1.5rem}.cloud-backups-dialog .recovery-card{align-items:center}.cloud-backups-dialog .recovery-card>div{min-width:0}.cloud-backups-local,.cloud-backups-time{color:var(--muted,#687267);font-size:.9rem}
+@media(max-width:600px){.cloud-backups-summary{align-items:stretch;flex-direction:column}.cloud-backups-actions>button{flex:1}.cloud-backups-dialog .recovery-card{align-items:stretch;flex-direction:column}}

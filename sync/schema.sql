@@ -17,3 +17,47 @@ CREATE TABLE library_commits (
 );
 
 CREATE INDEX library_commits_history ON library_commits (library_id, created_at, id);
+
+CREATE TABLE backup_checkpoints (
+  id TEXT PRIMARY KEY NOT NULL,
+  library_id TEXT NOT NULL,
+  request_id TEXT NOT NULL,
+  source_key TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  device_id TEXT NOT NULL DEFAULT '',
+  source_revision TEXT NOT NULL DEFAULT '',
+  manifest TEXT NOT NULL,
+  fingerprint TEXT NOT NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'staged',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  metadata TEXT NOT NULL DEFAULT '{}',
+  lease_id TEXT NOT NULL DEFAULT '',
+  lease_until TEXT NOT NULL DEFAULT '',
+  drive_file_id TEXT NOT NULL DEFAULT '',
+  compressed_sha256 TEXT NOT NULL DEFAULT '',
+  compressed_bytes INTEGER NOT NULL DEFAULT 0,
+  verified_at TEXT NOT NULL DEFAULT '',
+  last_error TEXT NOT NULL DEFAULT '',
+  archived_folder_id TEXT NOT NULL DEFAULT '',
+  UNIQUE (library_id, request_id),
+  UNIQUE (library_id, source_key)
+);
+CREATE INDEX backup_checkpoints_history ON backup_checkpoints (library_id, created_at, id);
+
+CREATE TABLE backup_restores (
+  id TEXT PRIMARY KEY NOT NULL,
+  library_id TEXT NOT NULL,
+  checkpoint_id TEXT NOT NULL,
+  expected_revision TEXT NOT NULL,
+  manifest TEXT NOT NULL DEFAULT '',
+  fingerprint TEXT NOT NULL DEFAULT '',
+  counts TEXT NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'queued',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  accepted_revision TEXT NOT NULL DEFAULT '',
+  pre_restore_checkpoint_id TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX backup_restores_history ON backup_restores (library_id, created_at, id);

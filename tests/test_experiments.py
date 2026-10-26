@@ -55,7 +55,9 @@ class ExperimentTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def create(self, **changes):
-        return self.store.create_shard({"title": "An iterative method", "content": "An explanation.", **changes})["shards"][-1]
+        existing = {shard["id"] for shard in self.store.state()["shards"]}
+        state = self.store.create_shard({"title": "An iterative method", "content": "An explanation.", **changes})
+        return next(shard for shard in state["shards"] if shard["id"] not in existing)
 
     @contextlib.contextmanager
     def service(self):

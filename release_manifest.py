@@ -21,21 +21,21 @@ FRONTEND_FILES = (
     "static/academic.js", "static/academic.css", "static/code-solutions.js", "static/code-solutions.css",
     "static/experiments.js", "static/experiments.css", "static/learning.js", "static/learning.css",
     "static/import-review.js", "static/library-sync.js", "static/library-sync.css",
-    "static/release-status.js", "static/release-status.css", "static/ai-instructions.md",
+    "static/release-status.js", "static/release-status.css", "static/ai-instructions.md", "static/cloud-backups.js",
     "static/cpp-releases.json", "static/spiral-timeline.json", "static/icon.svg",
     "web/archives.mjs", "web/bootstrap.mjs", "web/drive-client.mjs", "web/drive-ui.mjs",
     "web/entry.html", "web/exports.mjs", "web/head.html", "web/inbox.mjs",
     "web/knowledge-validation.mjs", "web/library-sync.mjs", "web/model.mjs", "web/persistence.mjs",
-    "web/sw.js", "sync/client.mjs", "sync/protocol.mjs", "tools/build_web.py",
+    "web/sw.js", "web/cloud-backups.mjs", "web/backup-policy.mjs", "sync/client.mjs", "sync/protocol.mjs", "tools/build_web.py",
 )
 FRONTEND_ASSET_ROOTS = ("static/vendor/katex", "static/spiral", "web/public")
-BACKEND_FILES = ("server.py", "library_sync.py", "release_manifest.py", "release_status.py", "seed.json")
+BACKEND_FILES = ("server.py", "library_sync.py", "cloud_backups.py", "release_manifest.py", "release_status.py", "seed.json")
 NATIVE_FILES = ("desktop/ShardAtlas.swift", "desktop/ImageText.swift", "desktop/build.py", "desktop/ShardAtlas.icns", "static/drive-inbox.js")
 HOSTED_FILES = ("sync/worker.mjs", "sync/storage.mjs", "sync/protocol.mjs", "sync/release.mjs", "sync/schema.sql", "tools/build_host.py", "release_manifest.py",
                 "static/ai-instructions.md", "web/model.mjs", "web/inbox.mjs", "web/archives.mjs", "web/knowledge-validation.mjs", "sync/client.mjs",
                 "hosting/package.json", "hosting/package-lock.json", "hosting/vite.config.ts", "hosting/next.config.ts",
                 "hosting/tsconfig.json", "hosting/postcss.config.mjs", "hosting/cloudflare-env.d.ts", "hosting/drizzle.config.ts",
-                ".openai/hosting.json")
+                ".openai/hosting.json", "tools/cloud_backup_runner.py")
 HOSTED_ROOTS = ("hosting/app", "hosting/lib", "hosting/worker", "hosting/db", "hosting/drizzle", "hosting/scripts",
                 "hosting/components", "hosting/hooks", "hosting/vendor")
 GENERATED_NAMES = {"release-manifest.json", "release-manifest.js", "build-info.json", ".DS_Store"}

@@ -1,15 +1,17 @@
 import {emptyDatabase, handleCore, saveBackup} from './model.mjs';
 import {fingerprint, handleArchives} from './archives.mjs';
 import {handleInbox} from './inbox.mjs';
+import {RECOVERY_APPROVALS, validateRecoveryReceipt} from './backup-policy.mjs';
 
 // One read/modify/write transaction prevents a second tab from overwriting a
 // change made by this tab. Resolve only after the write commits successfully.
 export class BrowserStore {
-  constructor(indexedDB = globalThis.indexedDB, {deferStateObservation = false} = {}) {
+  constructor(indexedDB = globalThis.indexedDB, {deferStateObservation = false, recoveryUploader = null} = {}) {
     this.listeners = new Set();
     this.observedRevision = null;
     this.observedArchiveFingerprint = null;
     this.deferStateObservation = deferStateObservation;
+    this.recoveryUploader = recoveryUploader;
     if (!indexedDB) throw new Error('This browser cannot store your atlas. Open it in Safari with website storage enabled.');
     this.ready = new Promise((resolve, reject) => {
       const request = indexedDB.open('shard-atlas-phone', 1);
@@ -59,6 +61,24 @@ export class BrowserStore {
   // Mutators must be synchronous: network and hashing run outside the IDB
   // transaction, then generation/lease guards are checked atomically on apply.
   async atomic(mutator, {readonly = false, notify = false} = {}) {
+    const approvals = new Map();
+    for (let attempt = 0; attempt < 8; attempt++) {
+      try {return await this.atomicOnce(mutator, {readonly, notify, approvals});}
+      catch (error) {
+        if (error.code !== 'cloud_backup_required') throw error;
+        if (typeof this.recoveryUploader !== 'function') {
+          throw Object.assign(new Error('Connect to cloud backups before this recovery operation. Your previous data is retained.'), {status: 503});
+        }
+        // The IDB transaction has already aborted. Never await network access
+        // inside a transaction or keep an unverified local recovery history.
+        const receipt = validateRecoveryReceipt(await this.recoveryUploader(error.snapshot));
+        approvals.set(error.recoveryKey, receipt);
+      }
+    }
+    throw Object.assign(new Error('Your collection kept changing while preparing recovery. Try the operation again.'), {status: 409});
+  }
+
+  async atomicOnce(mutator, {readonly = false, notify = false, approvals} = {}) {
     const database = await this.ready;
     return new Promise((resolve, reject) => {
       const transaction = database.transaction('collection', readonly ? 'readonly' : 'readwrite');
@@ -68,7 +88,8 @@ export class BrowserStore {
       request.onsuccess = () => {
         try {
           const data = request.result || emptyDatabase();
-          result = mutator(data);
+          Object.defineProperty(data, RECOVERY_APPROVALS, {value: approvals, configurable: true});
+          try {result = mutator(data);} finally {delete data[RECOVERY_APPROVALS];}
           if (result && typeof result.then === 'function') throw new Error('Storage transactions cannot wait for asynchronous work.');
           saved = data;
           if (!readonly) collection.put(data, 'atlas');
