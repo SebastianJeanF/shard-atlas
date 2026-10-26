@@ -2,6 +2,8 @@
 
 Check that this Windows computer has the complete Shard Atlas synchronization and app freshness features released on October 25, 2026. Use the existing private website at https://shard-atlas.deltamaster64.chatgpt.site and the canonical private repository `SebastianJeanF/shard-atlas`. Read `AGENTS.md`, `docs/cross-platform.md`, `docs/handoff.md`, and `docs/sync-verification.md` first. Compare against the full guide at https://docs.google.com/document/d/1RIb2LmrWU8Y34v0zmrWz138aUAPKAk8zTJvG9_-lkms/edit.
 
+The direct-additions release is application source `d46a313c175ae95337ce19c3307a72af45077f0b`, website version 14, release identity `22f7045402f6509f8599b282a95a47ad57638628db2b2c5659ad06bf24d12a86`. Later documentation commits do not require another application publication. Confirm the current published release before treating these values as current. Regular browser ChatGPT on the Mac already discovered all five tools and read the exact guide; a successful actual ChatGPT save remains unverified.
+
 **Preserve my knowledge and unfinished work.** Inspect the current checkout and browser state before updating. Preserve local changes, safely fetch the latest main, and record the checked commit. Export the current Windows library before any browser update or migration. Use Opera GX unless I specify another browser. Finish or retain open edits before closing all Shard Atlas website windows and reopening. Never clear website storage to update the app.
 
 ## Verify the real Windows installation

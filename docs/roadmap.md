@@ -12,14 +12,16 @@ Shard Atlas is expanding its existing technical collection to connect computer s
 | --- | --- | --- |
 | 1. Private connection | Complete | The owner-private connection works in regular browser ChatGPT. |
 | 2. Library search and read | Complete | ChatGPT can inspect saved shards and connections for duplicate checking and related-shard discovery. |
-| 3. Direct additions | **Next, not implemented** | Authorized, duplicate-safe additions and connections produce verified cloud receipts and appear through existing automatic library sync. |
-| 4. Direct edits | Planned, not implemented | Revision-checked edits preserve saved history, refuse stale changes, and retain explicit conflict review across clients. |
+| 3. Direct additions | Implemented and published; actual ChatGPT save check pending | Additions and connections produce verified cloud receipts. Isolated automatic delivery passed; confirm the next legitimate owner contribution through regular browser ChatGPT and the receiving devices. |
+| 4. Direct edits | **Next implementation milestone**, not implemented | Revision-checked edits preserve saved history, refuse stale changes, and retain explicit conflict review across clients. |
 
-Milestone 3 must reuse the contribution guide and existing search/read tools. Additive saves must check the accepted cloud revision, validate the contribution, support safe retries, and verify the saved result. The Shard Atlas website need not be open for an accepted cloud save. Verification includes the open website and Mac receiving the result through existing library synchronization, plus catch-up after reopening and protection of unfinished edits. Record actual device evidence and remaining Windows checks separately.
+Milestone 3 uses the complete contribution guide, expiring signed guide receipts, existing search/read tools, accepted cloud revision checks, validated atomic additions, stable request IDs, and verified save receipts. Regular browser ChatGPT discovered all five tools and read the exact current guide. Valid saves and automatic delivery passed in isolated libraries using the real hosted handler, Python client, and browser adapter with simulated IndexedDB. A successful actual ChatGPT browser save remains pending; these results do not establish physical Windows or phone behavior. See the [release evidence](handoff.md#browser-chatgpt-integration-milestone-3-october-25-2026).
+
+The Shard Atlas website need not be open for an accepted cloud save. Verification includes receiving changes while open, catch-up after reopening, and protection of unfinished edits. Record actual device evidence and remaining Windows checks separately. The direct tool currently accepts additions and connections without image uploads; direct edits and deletions belong to later work.
 
 **Automatic library synchronization already exists.** A connected Mac service receives cloud changes automatically while running and online. A closed app normally catches up when reopened. Unfinished edits defer incoming changes, and conflicts require review. Routine capture must not depend on pressing **Sync now** or importing a Drive batch.
 
-The previously proposed milestone 5, automatic Drive Inbox detection/importing, is removed from the core plan. Keep the existing manual Drive/file import route available for emergencies. Reconsider automation only if that fallback becomes useful enough to justify it. Deduplicating backups and source/app relocation remain separate, parked maintenance work. This roadmap update changes documentation only and does not begin milestone 3 implementation.
+The previously proposed milestone 5, automatic Drive Inbox detection/importing, is removed from the core plan. Keep the existing manual Drive/file import route available for emergencies. Reconsider automation only if that fallback becomes useful enough to justify it. Deduplicating backups and source/app relocation remain separate, parked maintenance work.
 
 ## Cross-platform library: version 3.0.0
 
