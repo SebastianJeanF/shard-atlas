@@ -32,7 +32,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 SCHEMA_VERSION = 1
 DATABASE_VERSION = 5
-BACKEND_VERSION = "3.2.0"  # Keep the additive API compatible with already-running contribution clients.
+BACKEND_VERSION = "3.3.0"  # Keep the additive API compatible with already-running contribution clients.
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DB = Path.home() / "Library/Application Support/Shard Atlas/shards.sqlite3"
 KINDS = {"concept", "fact", "example", "mistake", "event", "idea"}

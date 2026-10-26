@@ -42,9 +42,9 @@ test('discovery and the tool list need no library protocol header or storage bin
   const discovery = await invoke(rpc('server/discover'));
   assert.deepEqual(discovery.data, {jsonrpc: '2.0', id: 1, result: {supportedVersions: ['2026-07-28'], capabilities: {tools: {}}, ttlMs: 0, cacheScope: 'private', resultType: 'complete'}});
   const listing = await invoke(rpc('tools/list'), {headers: {'oai-authenticated-user-email': OWNER.toUpperCase(), Origin: 'https://chatgpt.com'}});
-  assert.equal(listing.data.result.tools.length, 5);
-  assert.deepEqual(listing.data.result.tools.map(tool => tool.name), ['shard_atlas_connection_test', 'shard_atlas_search', 'shard_atlas_read', 'shard_atlas_get_instructions', 'shard_atlas_add_knowledge']);
-  for (const listed of listing.data.result.tools) assert.deepEqual(listed.annotations, {readOnlyHint: listed.name !== 'shard_atlas_add_knowledge', destructiveHint: false, idempotentHint: true, openWorldHint: false});
+  assert.equal(listing.data.result.tools.length, 6);
+  assert.deepEqual(listing.data.result.tools.map(tool => tool.name), ['shard_atlas_connection_test', 'shard_atlas_search', 'shard_atlas_read', 'shard_atlas_get_instructions', 'shard_atlas_add_knowledge', 'shard_atlas_edit_knowledge']);
+  for (const listed of listing.data.result.tools) assert.deepEqual(listed.annotations, {readOnlyHint: !['shard_atlas_add_knowledge', 'shard_atlas_edit_knowledge'].includes(listed.name), destructiveHint: listed.name === 'shard_atlas_edit_knowledge', idempotentHint: true, openWorldHint: false});
   assert.equal(listing.data.result.ttlMs, 0); assert.equal(listing.data.result.cacheScope, 'private');
   const tool = listing.data.result.tools[0];
   assert.equal(tool.name, 'shard_atlas_connection_test');
@@ -56,7 +56,7 @@ test('MCP validates every supplied origin while supporting Sites and ChatGPT tra
   for (const origin of ['https://atlas.example.test', 'https://chatgpt.com', 'https://chat.openai.com']) {
     const result = await invoke(rpc('tools/list'), {headers: {Origin: origin}});
     assert.equal(result.response.status, 200);
-    assert.equal(result.data.result.tools.length, 5);
+    assert.equal(result.data.result.tools.length, 6);
   }
   for (const origin of ['null', 'not an origin', 'https://other.example.test', 'https://chatgpt.com.evil.example', 'https://chatgpt.com/', 'https://chatgpt.com https://other.example.test', 'https://user:password@chatgpt.com']) {
     assert.equal((await invoke(rpc('tools/list'), {headers: {Origin: origin}})).response.status, 403);
@@ -76,7 +76,7 @@ test('connection calls return fixed success without personal data, library reads
 });
 
 test('tool errors reject unknown tools and all nonempty or nonobject arguments', async () => {
-  const unknown = await invoke(rpc('tools/call', {name: 'shard_atlas_edit_knowledge', arguments: {query: 'private'}}));
+  const unknown = await invoke(rpc('tools/call', {name: 'shard_atlas_delete_knowledge', arguments: {query: 'private'}}));
   assert.equal(unknown.data.error.code, -32602);
   assert.equal(unknown.data.result, undefined);
   for (const args of [{query: 'private'}, {readNotes: true}, [], 'text', 1, false, null]) {
@@ -91,7 +91,9 @@ test('initialization, ping, and notifications support stateless clients', async 
   const initialized = await invoke(rpc('initialize', {protocolVersion: '2026-07-28', capabilities: {}, clientInfo: {name: 'test-client', version: '1'}}));
   assert.equal(initialized.data.result.protocolVersion, '2026-07-28');
   assert.deepEqual(initialized.data.result.capabilities, {tools: {}});
-  assert.match(initialized.data.result.instructions, /cannot edit or delete existing records/);
+  assert.equal(initialized.data.result.serverInfo.version, '1.3.0');
+  assert.match(initialized.data.result.instructions, /a request to add knowledge does not authorize editing/);
+  assert.match(initialized.data.result.instructions, /No deletion or image upload/);
   assert.match(initialized.data.result.instructions, /Unsynced device changes are excluded/);
   assert.deepEqual((await invoke(rpc('ping'))).data.result, {resultType: 'complete'});
   assert.deepEqual((await invoke(rpc('ping', {}, null))).data, {jsonrpc: '2.0', id: null, result: {resultType: 'complete'}});
@@ -338,4 +340,101 @@ test('duplicate JSON keys, unauthorized writes, notifications, and unknown error
   assert.equal(failed.data.result.structuredContent.error.code, 'save_outcome_unknown');
   assert.match(failed.data.result.content[0].text, /Retry the identical batch and requestId/);
   assert.doesNotMatch(JSON.stringify(failed.data), /SQL|serviceToken|secret-value|Nothing was saved/);
+});
+
+async function editArguments(configuration = contributionEnv()) {
+  const args = await guideArguments(configuration);
+  args.batch = {requestId: 'cloud-edit-1', shards: [{id: 'saved-note', changes: {title: 'A revised title'}}], links: []};
+  return args;
+}
+
+test('edit tool publishes a typed sparse schema with explicit array and approach semantics', async () => {
+  const listed = await invoke(rpc('tools/list'));
+  const tool = listed.data.result.tools.find(item => item.name === 'shard_atlas_edit_knowledge');
+  assert.ok(tool); assert.equal(tool.annotations.destructiveHint, true); assert.equal(tool.annotations.readOnlyHint, false);
+  const schema = tool.inputSchema, batchSchema = schema.properties.batch;
+  assert.deepEqual(schema.required, ['batch', 'expectedRevision', 'instructionsVersion', 'instructionsReceipt']);
+  assert.equal(batchSchema.additionalProperties, false);
+  assert.deepEqual(batchSchema.required, ['requestId', 'shards', 'links']);
+  const shard = batchSchema.properties.shards.items, link = batchSchema.properties.links.items;
+  assert.deepEqual(shard.required, ['id', 'changes']); assert.deepEqual(link.required, ['id', 'changes']);
+  for (const changes of [shard.properties.changes, link.properties.changes]) {
+    assert.equal(changes.additionalProperties, false); assert.equal(changes.minProperties, 1); assert.equal(changes.required, undefined);
+    for (const immutable of ['id', 'createdAt', 'updatedAt', 'reviewCount', 'lastReviewedAt', 'nextReviewAt', 'assets', 'delete']) assert.equal(changes.properties[immutable], undefined);
+  }
+  const code = shard.properties.changes.properties.codeSolution;
+  assert.deepEqual(shard.properties.changes.properties.prompt.type, 'string');
+  assert.equal(shard.properties.changes.properties.prompt.maxLength, 10_000);
+  assert.equal(JSON.stringify(batchSchema).includes('"type":"null"'), false);
+  assert.equal(code.required, undefined); assert.equal(code.minProperties, 1);
+  assert.match(shard.properties.changes.properties.tags.description, /replaces the entire saved field/);
+  assert.match(code.properties.approaches.description, /Keyed upserts/);
+  assert.deepEqual(code.properties.approaches.items.required, ['id']);
+  assert.match(tool.description, /Omitted fields remain unchanged/);
+  assert.match(tool.description, /No shard\/connection deletion or creation/);
+});
+
+test('current guide authorizes sparse existing-record edits without replacing omitted fields in transit', async () => {
+  const configuration = contributionEnv(), args = await editArguments(configuration);
+  const exactCode = '\nint identity(int x) {\r\n\treturn x;\r\n}\r\n';
+  args.batch.shards[0].changes = {content: 'An explicitly revised explanation.', codeSolution: {approaches: [{id: 'existing-approach', code: exactCode}]}};
+  args.batch.links = [{id: 'saved-link', changes: {note: 'An improved explanation of this saved relationship.'}}];
+  const original = JSON.stringify(args.batch); let edits = 0;
+  const receipt = {requestId: args.batch.requestId, operation: 'edit', verified: true, replayed: false,
+    currentContentMatches: true, acceptedRevision: 'accepted-edit', currentRevision: 'accepted-edit', edited: {shards: 1, links: 1}, unchanged: {shards: 0, links: 0}};
+  const edited = await invoke(rpc('tools/call', {name: 'shard_atlas_edit_knowledge', arguments: args}), {}, configuration, {
+    guideText, editKnowledge: async (actualEnv, input) => {
+      edits++; assert.equal(actualEnv, configuration); assert.deepEqual(input, {batch: args.batch, expectedRevision: args.expectedRevision});
+      assert.equal(input.batch.shards[0].changes.codeSolution.approaches[0].code, exactCode);
+      assert.equal(Object.hasOwn(input.batch.shards[0].changes, 'title'), false); return receipt;
+    },
+  });
+  assert.equal(edits, 1); assert.equal(edited.data.result.isError, false);
+  assert.equal(edited.data.result.structuredContent.operation, 'edit');
+  assert.equal(edited.data.result.structuredContent.verified, true);
+  assert.equal(edited.data.result.structuredContent.acceptedRevision, 'accepted-edit');
+  assert.equal(JSON.stringify(args.batch), original);
+});
+
+test('edit authorization, guide proofs, malformed patches and notifications fail before editing storage', async () => {
+  const configuration = contributionEnv(), original = await editArguments(configuration); let edits = 0;
+  const dependencies = {guideText, editKnowledge: async () => {edits++; throw new Error('Storage must not be called.');}};
+  for (const options of [{authenticated: false}, {headers: {'oai-authenticated-user-email': 'other@example.test'}}, {headers: {Origin: 'https://evil.example.test'}}]) {
+    assert.ok([401, 403].includes((await invoke(rpc('tools/call', {name: 'shard_atlas_edit_knowledge', arguments: original}), options, configuration, dependencies)).response.status));
+  }
+  for (const missing of ['batch', 'expectedRevision', 'instructionsVersion', 'instructionsReceipt']) {
+    const args = {...original}; delete args[missing];
+    assert.equal((await invoke(rpc('tools/call', {name: 'shard_atlas_edit_knowledge', arguments: args}), {}, configuration, dependencies)).data.error.code, -32602);
+  }
+  for (const changes of [{instructionsReceipt: 'v1.invalid.invalid'}, {instructionsVersion: 'b'.repeat(64)}]) {
+    assert.equal((await invoke(rpc('tools/call', {name: 'shard_atlas_edit_knowledge', arguments: {...original, ...changes}}), {}, configuration, dependencies)).data.result.isError, true);
+  }
+  for (const patch of [{}, {id: 'replace-id'}, {createdAt: '2026-01-01T00:00:00Z'}, {reviewCount: 1}, {assets: []}, {delete: true},
+    JSON.parse('{"__proto__":{"polluted":true}}'), {codeSolution: {constructor: {polluted: true}}},
+    {codeSolution: {}}, {codeSolution: {approaches: [{title: 'Missing stable ID'}]}}]) {
+    const args = {...original, batch: {...original.batch, shards: [{id: 'saved-note', changes: patch}]}};
+    assert.equal((await invoke(rpc('tools/call', {name: 'shard_atlas_edit_knowledge', arguments: args}), {}, configuration, dependencies)).data.result.isError, true);
+  }
+  const duplicate = JSON.stringify(rpc('tools/call', {name: 'shard_atlas_edit_knowledge', arguments: original})).replace('"requestId":"cloud-edit-1"', '"requestId":"other","requestId":"cloud-edit-1"');
+  assert.equal((await invoke(duplicate, {}, configuration, dependencies)).response.status, 400);
+  assert.equal((await invoke({jsonrpc: '2.0', method: 'tools/call', params: {name: 'shard_atlas_edit_knowledge', arguments: original}}, {}, configuration, dependencies)).response.status, 202);
+  assert.equal(edits, 0);
+});
+
+test('edit bodies receive the bounded write allowance and unknown outcomes never claim no edit occurred', async () => {
+  const configuration = contributionEnv(), args = await editArguments(configuration); let edits = 0;
+  args.batch.shards[0].changes = {content: 'x'.repeat(20_000)};
+  const dependencies = {guideText, editKnowledge: async () => {edits++; return {operation: 'edit', verified: true};}};
+  const accepted = await invoke(rpc('tools/call', {name: 'shard_atlas_edit_knowledge', arguments: args}), {}, configuration, dependencies);
+  assert.equal(accepted.data.result.isError, false); assert.equal(edits, 1);
+  args.batch.shards = Array.from({length: 3}, (_, index) => ({id: 'large-' + index, changes: {content: 'x'.repeat(88_000)}}));
+  assert.equal((await invoke(rpc('tools/call', {name: 'shard_atlas_edit_knowledge', arguments: args}), {}, configuration, dependencies)).data.result.isError, true);
+  assert.equal(edits, 1);
+  args.batch.shards = [{id: 'saved-note', changes: {content: 'A reviewed update.'}}];
+  const unknown = await invoke(rpc('tools/call', {name: 'shard_atlas_edit_knowledge', arguments: args}), {}, configuration, {
+    guideText, editKnowledge: async () => {throw new Error('SELECT private_token SECRET_PAYLOAD');},
+  });
+  assert.equal(unknown.data.result.structuredContent.error.code, 'save_outcome_unknown');
+  assert.match(unknown.data.result.content[0].text, /Retry the identical batch and requestId/);
+  assert.doesNotMatch(JSON.stringify(unknown.data), /private_token|SECRET_PAYLOAD|No new save was attempted|Nothing was saved/);
 });

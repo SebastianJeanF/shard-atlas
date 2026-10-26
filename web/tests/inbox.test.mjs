@@ -6,6 +6,7 @@ import {emptyDatabase, handleCore} from '../../web-dist/model.mjs';
 import {fingerprint, handleArchives} from '../../web-dist/archives.mjs';
 import {handleInbox, importInbox, parseInboxJSON, validateInboxEnvelope} from '../../web-dist/inbox.mjs';
 import {BrowserStore} from '../../web-dist/persistence.mjs';
+import {libraryCapsule} from '../../web-dist/library-sync.mjs';
 import {DriveInboxClient, DRIVE_SCOPE, readBoundedText} from '../../web-dist/drive-client.mjs';
 import {resolveDriveSettings} from '../../web-dist/drive-ui.mjs';
 
@@ -267,4 +268,26 @@ test('settings reject credential fields and local status exposes receipts withou
   const status = handleInbox(db, '/api/drive/status', 'GET');
   assert.deepEqual(status.settings, settings); assert.equal(status.receipts.length, 1); assert.equal(Object.hasOwn(status.receipts[0], 'fingerprint'), false);
   assert.equal(validateInboxEnvelope(batch()).requestId, 'capture-1');
+});
+
+test('portable edit receipts remain synchronized but do not displace addition import history', () => {
+  const db = emptyDatabase();
+  importInbox(db, batch('legacy-import'));
+  importInbox(db, batch('cloud-addition', [{id: 'cloud-note', title: 'Cloud addition', content: 'Another note', tags: []}]));
+  db.inboxReceipts[1].operation = 'add';
+  // These are portable receipts received with the shared library. Exercise both
+  // operation markers, including the compatibility form stored by older hosts.
+  const edits = Array.from({length: 35}, (_, index) => ({
+    requestId: 'portable-edit-' + index, fingerprint: 'a'.repeat(64),
+    ...(index % 2 ? {operation: 'edit'} : {}),
+    receipt: {requestId: 'portable-edit-' + index, ...(index % 2 ? {} : {operation: 'edit'}),
+      shards: [], links: [], edited: {shards: 1, links: 0}},
+  }));
+  db.inboxReceipts.push(...edits);
+  const before = JSON.stringify(db.inboxReceipts);
+  const status = handleInbox(db, '/api/drive/status', 'GET');
+  assert.deepEqual(status.receipts.map(receipt => receipt.requestId), ['cloud-addition', 'legacy-import']);
+  assert.equal(status.receipts[0].added.shards, 1);
+  assert.equal(JSON.stringify(db.inboxReceipts), before);
+  assert.deepEqual(libraryCapsule(db).contributionReceipts.slice(-edits.length), edits);
 });

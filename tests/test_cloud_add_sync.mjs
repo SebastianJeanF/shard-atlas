@@ -42,7 +42,7 @@ async function cloud(t) {
     async put(key, value) {objects.set(key, new Uint8Array(value));}, async get(key) {const bytes = objects.get(key); return bytes ? {size: bytes.byteLength, body: new Response(bytes).body} : null;}};
   const env = {DB, BUCKET, SHARD_ATLAS_OWNER_PRIVATE: 'true', SHARD_ATLAS_OWNER_EMAIL: OWNER,
     SHARD_ATLAS_GUIDE_RECEIPT_SECRET: 'a'.repeat(64)};
-  const controls = {loseAddResponse: false, nativeOffline: false};
+  const controls = {loseAddResponse: false, loseEditResponse: false, nativeOffline: false};
   const cleanups = [];
   const server = http.createServer(async (req, res) => {
     try {
@@ -63,6 +63,9 @@ async function cloud(t) {
       const bytes = Buffer.from(await response.arrayBuffer());
       if (controls.loseAddResponse && url.pathname === '/mcp' && JSON.parse(body).params?.name === 'shard_atlas_add_knowledge') {
         controls.loseAddResponse = false; req.socket.destroy(); return;
+      }
+      if (controls.loseEditResponse && url.pathname === '/mcp' && JSON.parse(body).params?.name === 'shard_atlas_edit_knowledge') {
+        controls.loseEditResponse = false; req.socket.destroy(); return;
       }
       res.writeHead(response.status, Object.fromEntries(response.headers)); res.end(bytes);
     } catch {res.writeHead(500); res.end('Isolated fixture request failed.');}
@@ -233,4 +236,202 @@ test('direct cloud additions preserve unknown portable extensions through browse
   const receiving = await browserPeer(t, service); receiving.sync.start();
   await until(async () => (await receiving.read()).archive.shards.some(item => item.id === 'm3-extension-added'), 'browser receives exact preserved extensions');
   assert.deepEqual((await receiving.read()).archive.shards[0].futureExtension, {keep: 'exact synthetic extension'});
+});
+
+const EDIT_CODE = '\n#include <vector>\r\nint fixture_identity(int x) {\r\n\treturn x + 1; // β [[id:literal]]\r\n}\r\n';
+const APPENDED_CODE = '\nint fixture_alternative(int x) {\r\n\treturn x; // synthetic and untested\r\n}\r\n';
+const shardWithId = (archive, id) => archive.shards.find(item => item.id === id);
+const linkWithId = (archive, id) => archive.links.find(item => item.id === id);
+const editBatch = (requestId, shardId, changes, links = []) => ({requestId, shards: [{id: shardId, changes}], links});
+
+async function editPeers(t) {
+  const service = await cloud(t), native = await nativePeer(t, service);
+  await until(async () => (await native.request('/api/library-sync/status')).status === 'synced', 'empty edit fixture pairing');
+  const asset = await native.request('/api/assets', 'POST', {name: 'Preserved edit fixture pixel', mimeType: 'image/png', data: PNG});
+  const first = await native.request('/api/shards', 'POST', {title: 'M4 isolated edit target', content: `Synthetic original with image ![fixture](/assets/${asset.id})`, tags: ['QA fixture', 'Original topic'],
+    codeSolution: {role: 'problem', purpose: 'Preserve omitted solution details.', approaches: [
+      {id: 'm4-primary', title: 'Original primary', summary: 'Original primary summary.', code: CODE},
+      {id: 'm4-secondary', title: 'Original secondary', summary: 'Original secondary summary.', code: APPENDED_CODE}]}});
+  const target = first.shards.find(item => item.title === 'M4 isolated edit target');
+  const second = await native.request('/api/shards', 'POST', {title: 'M4 isolated related helper', content: 'An unrelated note must remain unchanged.', tags: ['QA fixture'],
+    codeSolution: {role: 'snippet', approaches: [{id: 'm4-helper', title: 'Helper', code: CODE}]}});
+  const helper = second.shards.find(item => item.title === 'M4 isolated related helper');
+  const linked = await native.request('/api/links', 'POST', {fromId: target.id, toId: helper.id, type: 'uses', fromApproachId: 'm4-primary', toApproachId: 'm4-helper',
+    note: 'Original typed approach relationship.', scope: 'Synthetic fixture only', evidence: 'Original relationship evidence.'});
+  const link = linked.links.find(item => item.fromId === target.id && item.toId === helper.id);
+  await native.request('/api/reviews', 'POST', {shardId: target.id, grade: 'good'});
+  await native.request('/api/boards', 'POST', {title: 'M4 retained board', items: [{shardId: target.id, x: 3, y: 4}]});
+  const deleted = await native.request('/api/shards', 'POST', {title: 'M4 retained Trash fixture', content: 'Keep this recovery record.', tags: []});
+  await native.request('/api/shards/' + deleted.shards.find(item => item.title === 'M4 retained Trash fixture').id, 'DELETE', {});
+  const baseline = await native.request('/api/export');
+  await until(async () => {const value = await service.current(); return value.capsule && isDeepStrictEqual(recordMap(value.capsule.archive), recordMap(baseline));}, 'rich edit fixture automatic publication');
+  let canApply = true;
+  const browser = await browserPeer(t, service, {canApplyRemote: () => canApply}); browser.sync.start();
+  await until(async () => shardWithId((await browser.read()).archive, target.id), 'edit fixture browser initial automatic pull');
+  return {service, native, browser, target: shardWithId(baseline, target.id), helper: shardWithId(baseline, helper.id),
+    link: linkWithId(baseline, link.id), baseline, setCanApply(value) {canApply = value;}};
+}
+
+test('direct MCP shard and typed-link edits preserve history and automatically arrive with exact code and safe lost-response replay', {timeout: 120_000}, async t => {
+  const {service, native, browser, target, link, baseline} = await editPeers(t);
+  const authorization = await guide(service), first = await service.current();
+  const batch = editBatch('m4-first-edit', target.id, {
+    content: 'A corrected synthetic explanation. Example code remains explicitly untested.', tags: ['QA fixture', 'Edited topic'],
+    codeSolution: {approaches: [{id: 'm4-secondary', summary: 'A partial update keeps the original code and title.'},
+      {id: 'm4-primary', code: EDIT_CODE}, {id: 'm4-appended', title: 'Appended alternative', code: APPENDED_CODE}]},
+  }, [{id: link.id, changes: {note: 'Corrected typed relationship.', evidence: 'Updated synthetic evidence.'}}]);
+  const args = {...authorization, expectedRevision: first.head.revision, batch};
+  service.controls.loseEditResponse = true;
+  await assert.rejects(() => service.call('shard_atlas_edit_knowledge', args));
+  const accepted = await service.current();
+  assert.notEqual(accepted.head.revision, first.head.revision);
+  const commits = service.sqlite.prepare('SELECT count(*) AS count FROM library_commits').get().count;
+  const replay = await service.call('shard_atlas_edit_knowledge', args);
+  assert.equal(replay.isError, false); assert.equal(replay.structuredContent.operation, 'edit');
+  assert.equal(replay.structuredContent.replayed, true); assert.equal(replay.structuredContent.verified, true);
+  assert.equal(replay.structuredContent.currentContentMatches, true);
+  assert.deepEqual(replay.structuredContent.edited, {shards: 1, links: 1});
+  assert.equal(service.sqlite.prepare('SELECT count(*) AS count FROM library_commits').get().count, commits);
+  assert.deepEqual((await service.current()).capsule.archive.revisions, accepted.capsule.archive.revisions);
+
+  const saved = shardWithId(accepted.capsule.archive, target.id), savedLink = linkWithId(accepted.capsule.archive, link.id);
+  assert.equal(saved.title, target.title); assert.equal(saved.createdAt, target.createdAt);
+  assert.deepEqual(saved.tags, ['QA fixture', 'Edited topic']);
+  assert.equal(saved.codeSolution.purpose, target.codeSolution.purpose);
+  assert.deepEqual(saved.codeSolution.approaches.map(item => item.id), ['m4-primary', 'm4-secondary', 'm4-appended']);
+  assert.equal(saved.codeSolution.approaches[0].code, EDIT_CODE);
+  assert.equal(saved.codeSolution.approaches[0].title, 'Original primary');
+  assert.equal(saved.codeSolution.approaches[1].code, APPENDED_CODE);
+  assert.equal(saved.codeSolution.approaches[1].title, 'Original secondary');
+  assert.equal(saved.codeSolution.approaches[2].code, APPENDED_CODE);
+  assert.equal(savedLink.fromApproachId, 'm4-primary'); assert.equal(savedLink.toApproachId, 'm4-helper');
+  assert.equal(savedLink.fromId, target.id); assert.equal(savedLink.toId, link.toId); assert.equal(savedLink.type, 'uses');
+  const newHistory = accepted.capsule.archive.revisions.filter(item => !baseline.revisions.some(old => old.id === item.id));
+  assert.equal(newHistory.length, 2);
+  assert.ok(newHistory.some(item => isDeepStrictEqual(item.snapshot, target)), 'The exact pre-edit shard must be recoverable.');
+  assert.ok(newHistory.some(item => isDeepStrictEqual(item.snapshot, saved)), 'The exact accepted edit must be in shard history.');
+  const portableReceipt = accepted.capsule.contributionReceipts.find(item => item.requestId === batch.requestId);
+  assert.equal(portableReceipt.operation, 'edit');
+  assert.ok(portableReceipt.beforeRecords.every(item => item.kind === 'links'));
+  assert.ok(portableReceipt.beforeRecords.some(item => item.kind === 'links' && item.id === link.id && isDeepStrictEqual(item.record, link)));
+  const revisionPointers = replay.structuredContent.shardRevisions.find(item => item.id === target.id);
+  assert.deepEqual(portableReceipt.receipt.shardRevisions, replay.structuredContent.shardRevisions);
+  assert.deepEqual(accepted.capsule.archive.revisions.find(item => item.id === revisionPointers.beforeRevisionId)?.snapshot, target);
+  assert.deepEqual(accepted.capsule.archive.revisions.find(item => item.id === revisionPointers.afterRevisionId)?.snapshot, saved);
+  const oldCommit = await service.client.download(await service.client.commit(first.head.revision));
+  assert.deepEqual(linkWithId(oldCommit.archive, link.id), link);
+  for (const [kind, records] of Object.entries(recordMap(baseline))) {
+    const next = recordMap(accepted.capsule.archive)[kind];
+    for (const [id, record] of Object.entries(records)) if (!(kind === 'shards' && id === target.id || kind === 'links' && id === link.id)) assert.deepEqual(next[id], record, 'An unrelated portable record changed during an edit.');
+  }
+  await until(async () => shardWithId(await native.request('/api/export'), target.id)?.content === saved.content
+    && shardWithId((await browser.read()).archive, target.id)?.content === saved.content, 'MCP edits automatic native/browser arrival');
+  assert.deepEqual(recordMap(await native.request('/api/export')), recordMap(accepted.capsule.archive));
+  assert.deepEqual(recordMap((await browser.read()).archive), recordMap(accepted.capsule.archive));
+
+  browser.sync.stop();
+  const later = await service.call('shard_atlas_edit_knowledge', {...authorization, expectedRevision: accepted.head.revision,
+    batch: editBatch('m4-later-edit', target.id, {content: 'A later accepted edit must never be undone by retrying an earlier request.'})});
+  assert.equal(later.isError, false);
+  const current = await service.current();
+  assert.equal(shardWithId((await browser.read()).archive, target.id).content, saved.content);
+  browser.sync.start();
+  await until(async () => shardWithId((await browser.read()).archive, target.id)?.content === shardWithId(current.capsule.archive, target.id).content, 'reopened browser automatically catches up');
+  const oldReplay = await service.call('shard_atlas_edit_knowledge', args);
+  assert.equal(oldReplay.isError, false); assert.equal(oldReplay.structuredContent.replayed, true);
+  assert.equal(oldReplay.structuredContent.currentContentMatches, false);
+  assert.ok(oldReplay.structuredContent.changedShardIds.includes(target.id));
+  assert.equal((await service.current()).head.revision, current.head.revision);
+  assert.equal(shardWithId((await service.current()).capsule.archive, target.id).content, shardWithId(current.capsule.archive, target.id).content);
+  const reused = await service.call('shard_atlas_edit_knowledge', {...args, batch: {...batch, shards: [{id: target.id, changes: {title: 'Changed request payload'}}]}});
+  assert.equal(reused.isError, true); assert.equal(reused.structuredContent.error.code, 'request_id_reused');
+  const stale = await service.call('shard_atlas_edit_knowledge', {...authorization, expectedRevision: first.head.revision,
+    batch: editBatch('m4-stale-edit', target.id, {content: 'Must not replace a newer cloud edit.'})});
+  assert.equal(stale.isError, true); assert.equal(stale.structuredContent.error.code, 'cloud_library_changed');
+  assert.equal((await service.current()).head.revision, current.head.revision);
+  const parallelContent = ['Concurrent correction A.', 'Concurrent correction B.'];
+  const parallel = await Promise.all(parallelContent.map((content, index) => service.call('shard_atlas_edit_knowledge', {
+    ...authorization, expectedRevision: current.head.revision, batch: editBatch('m4-concurrent-edit-' + index, target.id, {content}),
+  })));
+  const winner = parallel.findIndex(result => result.isError === false);
+  assert.notEqual(winner, -1); assert.equal(parallel.filter(result => result.isError === false).length, 1);
+  assert.ok(['cloud_library_changed', 'request_conflicted'].includes(parallel[1 - winner].structuredContent.error.code));
+  assert.equal(shardWithId((await service.current()).capsule.archive, target.id).content, parallelContent[winner]);
+});
+
+test('direct edits wait behind native/browser drafts and retain overlapping offline native edits for conflict review', {timeout: 120_000}, async t => {
+  const {service, native, browser, target, link, setCanApply} = await editPeers(t);
+  const authorization = await guide(service), initial = await service.current();
+  const draft = {values: {title: 'M4 unfinished draft', content: 'Preserve this local editor text.'}, updatedAt: '2026-10-25T00:00:00Z'};
+  const connectionDraft = {values: {fromId: target.id, toId: link.toId, note: 'Preserve this unfinished relationship.'}, updatedAt: '2026-10-25T00:00:00Z'};
+  await native.request('/api/drafts/editor', 'PUT', {draft}); await browser.store.request('/api/drafts/editor', 'PUT', {draft});
+  await native.request('/api/drafts/connection', 'PUT', {draft: connectionDraft}); await browser.store.request('/api/drafts/connection', 'PUT', {draft: connectionDraft});
+  setCanApply(false); await browser.sync.markEditing(true);
+  await native.request('/api/library-sync/editing', 'POST', {editing: true, clientId: 'isolated-edit-editor'});
+  const guarded = await service.call('shard_atlas_edit_knowledge', {...authorization, expectedRevision: initial.head.revision,
+    batch: editBatch('m4-guarded-edit', target.id, {content: 'Cloud edit waiting behind a local draft.'}, [{id: link.id, changes: {note: 'Guarded cloud link correction.'}}])});
+  assert.equal(guarded.isError, false); browser.sync.schedule();
+  await until(async () => (await native.request('/api/library-sync/status')).incomingAvailable === true
+    && (await browser.sync.status()).incomingAvailable === true, 'edited cloud data observed behind both draft guards', 20_000);
+  assert.equal(shardWithId(await native.request('/api/export'), target.id).content, target.content);
+  assert.equal(shardWithId((await browser.read()).archive, target.id).content, target.content);
+  assert.deepEqual((await native.request('/api/drafts')).drafts.editor, draft); assert.deepEqual((await browser.read()).drafts.editor, draft);
+  assert.deepEqual((await native.request('/api/drafts')).drafts.connection, connectionDraft); assert.deepEqual((await browser.read()).drafts.connection, connectionDraft);
+  await native.request('/api/library-sync/editing', 'POST', {editing: false, clientId: 'isolated-edit-editor'});
+  setCanApply(true); await browser.sync.markEditing(false); browser.sync.schedule();
+  const guardedCloud = await service.current();
+  await until(async () => shardWithId(await native.request('/api/export'), target.id).content === 'Cloud edit waiting behind a local draft.'
+    && shardWithId((await browser.read()).archive, target.id).content === 'Cloud edit waiting behind a local draft.', 'guarded edits automatically arrive after editor finishes');
+  assert.deepEqual(recordMap(await native.request('/api/export')), recordMap(guardedCloud.capsule.archive));
+  assert.deepEqual(recordMap((await browser.read()).archive), recordMap(guardedCloud.capsule.archive));
+  assert.deepEqual((await native.request('/api/drafts')).drafts.editor, draft); assert.deepEqual((await browser.read()).drafts.editor, draft);
+  assert.deepEqual((await native.request('/api/drafts')).drafts.connection, connectionDraft); assert.deepEqual((await browser.read()).drafts.connection, connectionDraft);
+
+  service.controls.nativeOffline = true;
+  await native.request('/api/shards/' + target.id, 'PUT', {content: 'An overlapping offline native edit must stay recoverable.'});
+  await until(async () => {const status = await native.request('/api/library-sync/status'); return status.pending && status.status === 'offline';}, 'durable overlapping native outbox', 20_000);
+  const beforeRemote = await service.current();
+  const remote = await service.call('shard_atlas_edit_knowledge', {...authorization, expectedRevision: beforeRemote.head.revision,
+    batch: editBatch('m4-overlapping-cloud-edit', target.id, {content: 'The accepted overlapping cloud edit must remain current.'})});
+  assert.equal(remote.isError, false); service.controls.nativeOffline = false;
+  await until(async () => (await native.request('/api/library-sync/status')).status === 'conflict', 'overlapping local edit retained for conflict review', 20_000);
+  assert.equal(shardWithId(await native.request('/api/export'), target.id).content, 'An overlapping offline native edit must stay recoverable.');
+  const final = await service.current();
+  assert.equal(shardWithId(final.capsule.archive, target.id).content, 'The accepted overlapping cloud edit must remain current.');
+  const conflicts = await service.client.conflicts(); assert.ok(conflicts.items.length >= 1);
+  const savedConflict = await service.client.download(await service.client.commit(conflicts.items[0].id));
+  assert.equal(shardWithId(savedConflict.archive, target.id).content, 'An overlapping offline native edit must stay recoverable.');
+  assert.equal(shardWithId(savedConflict.archive, target.id).codeSolution.approaches[0].code, CODE);
+  assert.ok(final.capsule.archive.revisions.some(item => item.snapshot?.content === 'Cloud edit waiting behind a local draft.'));
+  assert.deepEqual((await browser.read()).drafts.editor, draft);
+  assert.deepEqual((await browser.read()).drafts.connection, connectionDraft);
+});
+
+test('direct edits retain unknown cloud/browser extensions and empty approach patches leave saved approaches intact', {timeout: 30_000}, async t => {
+  const service = await cloud(t), peer = await browserPeer(t, service);
+  await peer.store.request('/api/shards', 'POST', {title: 'M4 extension fixture', content: 'Original synthetic note.', tags: ['Keep until explicitly replaced'],
+    codeSolution: {role: 'problem', approaches: [{id: 'm4-extension-approach', title: 'Retained approach', code: CODE}]}});
+  const original = await peer.read(), target = original.archive.shards[0];
+  shardWithId(original.archive, target.id).futureExtension = {keep: ['exact', 'synthetic', 'values']};
+  original.archive.futureArchiveExtension = {keep: true};
+  await service.client.publish(await preparePendingSnapshot({format: 'shard-atlas-library', version: 1, archive: original.archive,
+    contributionReceipts: [], futureCapsuleExtension: {keep: 'exact'}}, '', 'm4-extension-seed'));
+  const authorization = await guide(service), head = await service.client.head();
+  const result = await service.call('shard_atlas_edit_knowledge', {...authorization, expectedRevision: head.revision,
+    batch: editBatch('m4-extension-edit', target.id, {content: 'A sparse correction preserves unrelated future data.', tags: [], codeSolution: {approaches: []}})});
+  assert.equal(result.isError, false);
+  const current = await service.current(), saved = shardWithId(current.capsule.archive, target.id);
+  assert.deepEqual(saved.tags, []); assert.deepEqual(saved.codeSolution.approaches, target.codeSolution.approaches);
+  assert.deepEqual(saved.futureExtension, {keep: ['exact', 'synthetic', 'values']});
+  assert.deepEqual(current.capsule.archive.futureArchiveExtension, {keep: true}); assert.deepEqual(current.capsule.futureCapsuleExtension, {keep: 'exact'});
+  const receiving = await browserPeer(t, service); receiving.sync.start();
+  await until(async () => shardWithId((await receiving.read()).archive, target.id)?.content === saved.content, 'browser receives sparse edit and preserved extensions');
+  assert.deepEqual((await receiving.read()).archive, current.capsule.archive);
+  const historyLength = current.capsule.archive.revisions.length;
+  const noChange = await service.call('shard_atlas_edit_knowledge', {...authorization, expectedRevision: current.head.revision,
+    batch: editBatch('m4-approaches-noop', target.id, {codeSolution: {approaches: []}})});
+  assert.equal(noChange.isError, false); assert.deepEqual(noChange.structuredContent.unchanged, {shards: 1, links: 0});
+  const after = await service.current();
+  assert.deepEqual(shardWithId(after.capsule.archive, target.id), saved);
+  assert.equal(after.capsule.archive.revisions.length, historyLength);
 });

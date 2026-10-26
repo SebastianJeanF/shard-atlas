@@ -261,7 +261,7 @@ function planAddition(capsule, batch, {stamp, acceptedRevision}) {
 
 function matchingEntry(capsule, batch) {
   const entry = (capsule.contributionReceipts ?? []).find(item => item.requestId === batch.requestId);
-  if (entry && entry.fingerprint !== fingerprint(batch)) fail('request_id_reused', 409);
+  if (entry && (entry.operation === 'edit' || entry.fingerprint !== fingerprint(batch))) fail('request_id_reused', 409);
   if (entry) validateReceipt(entry, batch);
   return entry;
 }
@@ -385,6 +385,7 @@ async function finishAccepted(storage, row, batch, replayed) {
 
 async function prepareCloudSnapshot(capsule, baseRevision, mutationId) {
   validateCapsule(capsule);
+  if (Object.values(capsule.archive).some(value => Array.isArray(value) && value.length > 100_000)) fail('cloud_snapshot_too_large', 413);
   // A hosted request needs no durable device outbox. Serialize once and retain
   // subarray views into one bounded buffer instead of duplicating every chunk.
   const bytes = encoder.encode(JSON.stringify(capsule));
@@ -431,6 +432,14 @@ async function serialized(storage, operation) {
   try {return await result;} finally {state.count--;}
 }
 
+// Hosted additions and edits share these bounded transport checks and the same
+// queue. Keeping one queue prevents overlapping full-capsule decodes per binding.
+export const cloudMutationTransport = Object.freeze({currentRevision, capsuleForCommit, loadCurrent, prepareCloudSnapshot});
+export async function withCloudMutationStorage(env, operation) {
+  const storage = storageFor(env);
+  return serialized(storage, () => operation(storage));
+}
+
 async function contribute(storage, {batch, expectedRevision}) {
   let publicationAttempted = false;
   try {
@@ -440,6 +449,7 @@ async function contribute(storage, {batch, expectedRevision}) {
       publicationAttempted = previous.status === 'accepted';
       return await finishAccepted(storage, previous, batch, true);
     }
+    if (await storage.receipt('mcp-edit-' + await sha256(encoder.encode(batch.requestId)))) fail('request_id_reused', 409);
     let current = await loadCurrent(storage);
     const existing = matchingEntry(current.capsule, batch);
     if (existing) return currentReceipt(existing, batch, current);

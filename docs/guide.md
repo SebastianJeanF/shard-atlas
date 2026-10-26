@@ -150,7 +150,11 @@ Selected releases include expandable C++ examples about spell effects, capabilit
 
 ## Capture from another chat
 
-**Use the private Shard Atlas connection in regular browser ChatGPT to save directly.** The chat reads the current contribution guide, searches existing notes, checks useful connections, and saves an additions-only batch to the shared cloud library. It reports a verified result with actual saved or reused IDs. The website need not be open. Connected apps receive saved changes automatically while running and online, or catch up when reopened. Existing edit and conflict protections remain in place. Direct edits through this cloud tool are a later milestone.
+**Use the private Shard Atlas connection in regular browser ChatGPT to save or edit directly.** The chat reads the current contribution guide, searches existing notes, checks useful connections, and saves new knowledge to the shared cloud library. When you explicitly ask it to revise a saved shard or connection, it reads the current record and applies only the requested changes through a separate edit tool. It reports a verified result with actual saved, edited, reused, or unchanged IDs. Saying “Add this to Shard Atlas” authorizes additions, so a duplicate match does not itself authorize rewriting the saved note.
+
+Direct edits preserve omitted fields, exact untouched code, and other solution approaches. Shard changes retain before and after snapshots in **Saved versions**. Previous connection records remain in the portable edit receipt and earlier cloud snapshot for recovery. These tools do not delete saved shards or connections or upload new images. A stale cloud revision stops an edit for review. Retrying the same request after a lost response verifies the original result without repeating it or undoing later changes.
+
+The website need not be open for a cloud save. Connected apps receive saved additions and edits automatically while running and online, or catch up when reopened. Existing editor and conflict protections remain in place. A verified cloud save and delivery to another device are separate checks.
 
 Open **Use with AI** to copy the guide or import a prepared file. An AI client with the optional local integration can also search, read, and save directly on the Mac. Saying “Add this to Shard Atlas” requires the relevant connection to be available in that chat. See [integration setup](development.md#optional-ai-integration).
 

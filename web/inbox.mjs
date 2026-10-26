@@ -229,7 +229,9 @@ export function validateDriveSettings(settings) {
 }
 
 export function handleInbox(db, path, method, body = {}) {
-  if (method === 'GET' && path === '/api/drive/status') return {settings: copy(db.driveInbox?.settings || {}), lastRun: copy(db.driveInbox?.lastRun || null), receipts: (db.inboxReceipts || []).slice(-30).reverse().map(item => replayReceipt(db, item))};
+  if (method === 'GET' && path === '/api/drive/status') return {settings: copy(db.driveInbox?.settings || {}), lastRun: copy(db.driveInbox?.lastRun || null), receipts: (db.inboxReceipts || [])
+    .filter(item => item.operation !== 'edit' && item.receipt?.operation !== 'edit')
+    .slice(-30).reverse().map(item => replayReceipt(db, item))};
   if (method === 'PUT' && path === '/api/drive/settings') {
     db.driveInbox = {...(db.driveInbox || {}), settings: validateDriveSettings(body)};
     return copy(db.driveInbox.settings);
