@@ -23,7 +23,7 @@ The Shard Atlas website need not be open for an accepted cloud save. Verificatio
 
 **Automatic library synchronization already exists.** A connected Mac service receives cloud changes automatically while running and online. A closed app normally catches up when reopened. Unfinished edits defer incoming changes, and conflicts require review. Routine capture must not depend on pressing **Sync now** or importing a Drive batch.
 
-The previously proposed milestone 5, automatic Drive Inbox detection/importing, is removed from the core plan. Keep the existing manual Drive/file import route available for emergencies. Reconsider automation only if that fallback becomes useful enough to justify it. Deduplicating backups and source/app relocation remain separate, parked maintenance work.
+The previously proposed milestone 5, automatic Drive Inbox detection/importing, is removed from the core plan. Keep the existing manual Drive/file import route available for emergencies. Reconsider automation only if that fallback becomes useful enough to justify it. Source/app relocation and cold-file consolidation were completed as separate maintenance on October 25–26, 2026. The recurring deduplicating backup system remains planned. See the [maintenance record](handoff.md#drive-file-count-reduction-october-2526-2026).
 
 ## Cross-platform library: version 3.0.0
 

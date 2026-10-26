@@ -32,13 +32,16 @@ The included collection has **12 C++ notes and 18 connections**. It is a startin
 The desktop app requires **macOS 12 or later**, **Python 3.10 or later**, and **Xcode Command Line Tools** to build. The app uses Python already installed on your machine. It does not bundle a Python interpreter. There are no pip or npm packages to install for the application.
 
 ```sh
-git clone https://github.com/SebastianJeanF/shard-atlas.git
-cd shard-atlas
-python3 desktop/build.py
-open "Shard Atlas.app"
+mkdir -p "$HOME/Developer" "$HOME/Applications"
+git clone https://github.com/SebastianJeanF/shard-atlas.git "$HOME/Developer/shard-atlas"
+cd "$HOME/Developer/shard-atlas"
+python3 desktop/build.py --output "$HOME/Applications/Shard Atlas.app"
+open "$HOME/Applications/Shard Atlas.app"
 ```
 
 If needed, install Xcode Command Line Tools with `xcode-select --install` and install a compatible Python interpreter before building. See [setup and troubleshooting](docs/development.md#build-the-desktop-app) for interpreter selection and isolated development.
+
+Keep the checkout, dependencies, builds, and maintenance evidence outside folders synchronized by Drive or another file service. The source is backed by Git. The personal library and its recovery copies are separate.
 
 This is currently a **source build**, signed locally during compilation. There is no notarized, self-contained download. The native window uses AppKit and WKWebView around a bundled local Python service.
 

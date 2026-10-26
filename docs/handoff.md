@@ -2,13 +2,33 @@
 
 **Goal:** maintain one source workflow and one private technical library across the Mac app, Windows browsers, and phones.
 
+## Drive file-count reduction, October 25–26, 2026
+
+**The maintained Mac checkout is now `~/Developer/shard-atlas`, and the installed app is `~/Applications/Shard Atlas.app`.** Both locations, Application Support, and the maintenance directory were checked against all five configured Drive backup roots and are outside them. Documents is a configured backup root. Keep future builds, dependency trees, Sites mirrors, browser test profiles, and QA evidence outside it.
+
+The audited payload began with **57,694 checkout files, 5,676 dated QA files, and 2 emergency capture files**. The retained payload is approximately **24 files**: eight compatibility files at the former Drive checkout, eight small QA location notices, the two untouched capture files, and six recovery files. The recovery files are four compressed archives, a manifest, and instructions. This comparison covers the audited software, work, and capture folders, not all Drive files or its recoverable Trash. Locator and recovery-file delivery by the desktop Drive client may still need to settle.
+
+All 57,696 files present at the moment of relocation retained their inodes, sizes, and exact bytes. The difference from the initial checkout count is two generated or newly added test files. All 5,676 relocated QA files also matched their archive hashes. Historical `backups/`, `work/`, and `output/` remain preserved outside Drive in the relocated checkout. Dated QA folders are under `~/Library/Application Support/Shard Atlas Maintenance/overnight-2026-10-25/development-evidence/`, with the original date/name suffixes.
+
+Private recovery archives are in `ChatGPT/Shard Atlas/Recovery`. They preserve 3,846 historical work/backup files, all dated QA evidence, 55 local database snapshots plus a fresh current snapshot, and 37 earlier cloud versions that differed from the Mac copies. Every archived entry was checked against its source hash. The historical, QA, and earlier-cloud-version archives also passed fresh cloud-download SHA-256 comparisons. The 484 MB local-snapshot archive completed its cloud upload at the expected size and passed a complete local extraction and restore check. A full cloud download of that archive was not verified. Ordinary local snapshots remain intact.
+
+Before retiring expanded cloud folders, 270 mutable cloud databases and knowledge JSON files, totaling 851,414,458 bytes, matched their archived bytes exactly. The separate 37-version archive preserves all cloud-only and size-different files found by a complete 897-folder metadata scan. Timestamped database snapshots were matched by path and size and are immutable under the backup writer's contract. Their remote bytes were not individually downloaded. Expanded development folders and the six grounded legacy data/QA roots were moved to recoverable Drive Trash after these gates. Trash was not emptied and no automatic retention or pruning was enabled.
+
+The contribution helper and browser launcher now explicitly put working-library snapshots in Application Support. The launcher falls back to the installed app in `~/Applications`. MCP configuration, the installed capture-skill symlink, and the Desktop shortcut point to the new locations. The Dock bookmark resolves the moved app. Eight small regular files at the old source path support already-running helpers and delayed configurations without a directory symlink. Their guide matches the current canonical guide. Refresh it after guide changes until the compatibility bridge can be retired.
+
+Implementation commit is `9a28234`. Verification passed **276 Python tests**, **31 independent relocated-runtime/MCP checks**, strict app signature validation, exact portable data and decoded-image comparisons, and backup restore integrity checks. Two existing tests assumed insertion order when millisecond timestamps tied. They now select persisted records by stable identity, with no runtime ordering change. The source and installed bundle retain release identity `258e8984c9e7fa059da350ee411a0e39ded0e5e283aae2a20ae1ab97c13c0a18` and application source `7a7a96741d2a55f31488a2562f97852ac4a4da7a`. No bundled runtime or website component changed, so no rebuild or publication was needed. Existing matching interface verification remains applicable.
+
+The working library stayed at its original Application Support path with **253 shards, 280 links, 43 assets, 873 revisions, 149 Trash records, 2 legacy boards, and 0 reviews**. No personal contribution, edit, or Drive Inbox import was performed. The Mac was locked, so a fresh native-window opening was unavailable. The actual relocated bundled backend was verified against an isolated full copy, and both old and new MCP paths read the exact guide without starting the working service. Evidence and manifests are under `~/Library/Application Support/Shard Atlas Maintenance/overnight-2026-10-25/`.
+
+The separate encrypted, recurring, deduplicating backup system remains planned. Restic, rclone, backup scheduling, and automatic pruning were not installed by this cleanup.
+
 ## Current browser ChatGPT priorities, October 25, 2026
 
 **Milestones 3 and 4, direct additions and edits, are implemented and published. Mac 3.3.0 is installed and verified. Actual ChatGPT browser write checks remain pending.** Milestones 1 (private connection) and 2 (search/read) are complete. Use the [current milestone plan](roadmap.md#browser-chatgpt-integration) for requirements and device verification.
 
 Direct browser ChatGPT saves should publish accepted cloud revisions and use the existing automatic library synchronization. The website need not be open for the save, and the Mac should receive it automatically while its connected service is running and online. Closed apps normally catch up when reopened. Unsaved edits and conflicts retain their existing protections.
 
-**Google Drive is an emergency manual fallback.** The previously proposed milestone 5 for automatic Inbox detection/importing is removed from the core plan. No new Inbox automation is planned unless requested later. Deduplicating backups and source/app relocation remain separate, parked work.
+**Google Drive is an emergency manual fallback.** The previously proposed milestone 5 for automatic Inbox detection/importing is removed from the core plan. No new Inbox automation is planned unless requested later. Source/app relocation and cold-file consolidation were completed as separate maintenance above. The recurring deduplicating backup system remains planned.
 
 ## Browser ChatGPT integration milestone 4, October 25, 2026
 

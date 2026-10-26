@@ -15,7 +15,7 @@
 | `hosting/` | Sites Worker runtime, generated D1 migrations, and hosting build dependencies |
 | `tools/build_web.py`, `tools/build_host.py` | Deterministic browser composition and hosted artifact generation |
 
-Edit shared interface files once. `web-dist/`, `hosting/public/`, `dist/`, and app bundles are generated output. Never maintain a second edited copy of `app.js`. Each computer should have its own Git checkout. Use commits and branches to transfer source rather than concurrently editing a Drive-synchronized checkout.
+Edit shared interface files once. `web-dist/`, `hosting/public/`, `dist/`, and app bundles are generated output. Never maintain a second edited copy of `app.js`. Each computer should have its own Git checkout outside synchronized folders. Use commits and branches to transfer source. On this Mac, use `~/Developer/shard-atlas` for the checkout and `~/Library/Application Support/Shard Atlas Maintenance` for QA evidence and Sites source mirrors. Documents is also configured for Drive backup, so it is not a suitable scratch location.
 
 ## Set up on Windows or Mac
 
@@ -51,8 +51,8 @@ Preserve the deployment's existing private `drive-config.json` when publishing. 
 Fetch and safely fast-forward the latest main containing the released application revision, preserve local changes, and run the relevant checks. Make a consistent private database backup before updating the working app. Quit the previous app normally so its unsaved-change protection can run, then build and reopen:
 
 ```sh
-python3 desktop/build.py
-open "Shard Atlas.app"
+python3 desktop/build.py --output "$HOME/Applications/Shard Atlas.app"
+open "$HOME/Applications/Shard Atlas.app"
 ```
 
 Preserve unsaved-edit prompts. The Mac app loads its bundled interface and local Python service, so publishing the website alone does not update the installed app. Verify `Contents/Resources/runtime/static/build-info.json`, the running service's `/build-info.json`, backend version, and bundled backend source bytes after rebuilding. Record the actual bundled revision separately from later documentation commits.

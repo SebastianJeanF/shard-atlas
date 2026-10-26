@@ -10,11 +10,12 @@ Requirements are **macOS 12 or later**, **Python 3.10 or later with SQLite**, an
 
 Check that `python3 --version` reports a compatible interpreter and that `xcode-select -p` locates the developer tools. If the tools are missing, run `xcode-select --install` and complete the installation.
 
-From the repository root:
+From the repository root, build the installed app outside the checkout:
 
 ```sh
-python3 desktop/build.py
-open "Shard Atlas.app"
+mkdir -p "$HOME/Applications"
+python3 desktop/build.py --output "$HOME/Applications/Shard Atlas.app"
+open "$HOME/Applications/Shard Atlas.app"
 ```
 
 To use a specific interpreter or output path:
