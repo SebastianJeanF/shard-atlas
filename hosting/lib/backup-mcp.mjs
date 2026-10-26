@@ -46,13 +46,42 @@ const handlers = {status: cloudBackupStatus, list: listCloudBackups, restores: l
   acknowledge: acknowledgeCloudBackup, fail: failCloudBackup, archive: archiveCloudBackup, prepare_restore: prepareCloudRestore,
   request: requestCloudRestore, confirm: commitCloudRestore};
 
+function backupDestination(env) {
+  const destination = {account: env.SHARD_ATLAS_OWNER_EMAIL, folderId: env.SHARD_ATLAS_BACKUP_DRIVE_FOLDER_ID || null, archiveFolderId: env.SHARD_ATLAS_BACKUP_ARCHIVE_FOLDER_ID || null};
+  const names = ['SHARD_ATLAS_BACKUP_VAULT_FOLDER_ID', 'SHARD_ATLAS_BACKUP_VAULT_OWNER_EMAIL', 'SHARD_ATLAS_BACKUP_PRIMARY_ROOT_ID'];
+  // A partial vault setting must not quietly turn a cloud-only backup into a
+  // mirrored ordinary-folder upload.
+  if (!names.some(name => env[name] !== undefined && env[name] !== null && env[name] !== '')) return destination;
+  if (!names.every(name => typeof env[name] === 'string' && env[name].trim()) || !destination.account || !destination.folderId || !destination.archiveFolderId) {
+    throw new CloudBackupError('Shared backup vault configuration is incomplete. Stop backup and archive writes; do not fall back to another folder.', 'backup_destination_incomplete', 503);
+  }
+  const vaultFolderId = env.SHARD_ATLAS_BACKUP_VAULT_FOLDER_ID.trim();
+  const vaultOwnerEmail = env.SHARD_ATLAS_BACKUP_VAULT_OWNER_EMAIL.trim().toLowerCase();
+  const primaryRootId = env.SHARD_ATLAS_BACKUP_PRIMARY_ROOT_ID.trim();
+  if (![vaultFolderId, primaryRootId, destination.folderId, destination.archiveFolderId].every(value => typeof value === 'string' && /^[A-Za-z0-9_-]{10,256}$/.test(value))
+      || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(vaultOwnerEmail) || vaultOwnerEmail.length > 254
+      || vaultOwnerEmail === String(destination.account).trim().toLowerCase() || vaultFolderId === primaryRootId
+      || destination.folderId === primaryRootId || destination.archiveFolderId === primaryRootId || destination.folderId === destination.archiveFolderId) {
+    throw new CloudBackupError('Shared backup vault configuration is invalid. Stop backup and archive writes; do not fall back to another folder.', 'backup_destination_invalid', 503);
+  }
+  return {...destination, mode: 'shared-vault', vaultFolderId, vaultOwnerEmail, primaryRootId};
+}
+
 async function instructions(env, options) {
+  const destination = backupDestination(env);
+  const vaultChecks = destination.mode === 'shared-vault' ? [
+    'Shared-vault preflight is mandatory before every upload, uncertain-upload reuse, or archive move. Resolve the primary account root with native Drive get_file_metadata(fileId="root") and require its returned ID to equal destination.primaryRootId. With native Drive metadata reads, verify both configured destination folder IDs and every parent in their ancestry: each must be an untrashed folder, never a shortcut. Follow the sole parent until the exact destination.vaultFolderId is reached; reject a cycle, a missing or unreadable parent, multiple parents, or destination.primaryRootId anywhere in either chain. Metadata wrappers may expose title, mime_type, parent_ids and permissions instead of the provider field names; use their returned values, not invented missing fields.',
+    'When native metadata omits trashed, prove each non-root folder is untrashed using native Drive search with item_type="folder" and special_filter_query_str combining its exact escaped name, its known sole parent ID, and trashed=false. Escape backslashes and apostrophes for the Drive query. Paginate using the returned page token until the matching known folder ID is found or results are exhausted; a same-name folder with another ID is not proof. The only parent-search exception is an exact root ID independently resolved with get_file_metadata(fileId="root") for that account. Stop if untrashed ancestry cannot be verified. To establish that the primary account can add children, use an explicitly returned true capabilities.canAddChildren; when that field is omitted, require affirmative effective owner or writer permission for the primary account on the destination, including permission inherited through a verified ancestor. Do not treat omitted capabilities as false or assume permission from mere visibility.',
+    'Read the exact vault metadata and require its sole owner email to equal destination.vaultOwnerEmail; ownership may be returned in owners or as the owner role in permissions. Use that expected vault owner connected Drive account to resolve its root with native Drive get_file_metadata(fileId="root") and follow the vault parent ancestry to that exact root ID; verify each untrashed folder by the supported metadata or exact search procedure above and reject destination.primaryRootId anywhere. Stop on cycles, missing or unreadable parents, multiple parents or unavailable authorization; a missing parent alone is not proof of reaching a root. Do not add any My Drive shortcut, transfer ownership, create a replacement destination, or fall back to root or another folder.',
+    'Upload only using destination.account. Verify native Drive metadata for every new or reused archive and manifest: its sole owner must equal destination.account and its sole parent must be the configured upload folder. Before an archive move, require the same primary ownership and an existing parent equal to the configured upload or archive folder; after moving, read back the exact archive folder parent and unchanged owner. A permission, ancestry, ownership, or destination check failure must stop writes and be reported; never acknowledge or archive an unverified file.',
+  ] : [];
   return {
     version: 1, coverage: 'Complete accepted cloud capsules, plus separately staged complete device safety checkpoints.',
-    destination: {account: env.SHARD_ATLAS_OWNER_EMAIL, folderId: env.SHARD_ATLAS_BACKUP_DRIVE_FOLDER_ID || null, archiveFolderId: env.SHARD_ATLAS_BACKUP_ARCHIVE_FOLDER_ID || null},
+    destination,
     runner: {path: '/cloud-backup-runner.py', sha256: options.runnerSource ? await sha256(new TextEncoder().encode(options.runnerSource)) : null},
     procedure: [
       'Run in a cloud executor, never on the Mac. Use this owner-connected Site and the specified Google Drive account and folder.',
+      ...vaultChecks,
       'Read status and list all pages. Prepare the current library once with a stable requestId. Also prepare every staged or failed device checkpoint by checkpointId. Skip an already verified checkpoint.',
       'Get fresh supported Site access with native Sites get_site. Keep its bearer and scoped transfer ticket in memory and pass them to the runner through stdin. Never print or save credentials.',
       'Download the checked runner over authenticated HTTPS and verify its SHA-256 against runner.sha256. Use its download command to stream all immutable chunks, hash them, and gzip the full capsule in temporary cloud storage.',

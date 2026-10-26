@@ -445,11 +445,91 @@ test('backup procedure exposes only scoped operational metadata and never runtim
   }), {backupRunnerSource: 'checked runner source'});
   const data = response.data.result.structuredContent;
   assert.equal(response.data.result.isError, false);
-  assert.equal(data.destination.folderId, 'backup-folder');
+  assert.deepEqual(data.destination, {account: OWNER, folderId: 'backup-folder', archiveFolderId: null});
   assert.equal(data.runner.sha256, 'ad0b0bc92c7446b17e32b8b6024eb051ca44f5f485c3d470f9562acc6f836a7c');
   assert.equal(data.noMacStaging, true);
   assert.equal(data.permanentDeletion, false);
   assert.doesNotMatch(JSON.stringify(data), /private-test-secret-must-not-leak/);
+});
+
+const vaultEnv = (values = {}) => env({
+  SHARD_ATLAS_BACKUP_DRIVE_FOLDER_ID: 'automatic-test-folder',
+  SHARD_ATLAS_BACKUP_ARCHIVE_FOLDER_ID: 'older-test-folder',
+  SHARD_ATLAS_BACKUP_VAULT_FOLDER_ID: 'secondary-test-vault',
+  SHARD_ATLAS_BACKUP_VAULT_OWNER_EMAIL: 'vault-owner@example.test',
+  SHARD_ATLAS_BACKUP_PRIMARY_ROOT_ID: 'primary-test-root',
+  ...values,
+});
+
+test('shared backup vault instructions bind destination ancestry and uploader ownership without exposing secrets', async () => {
+  const response = await invoke(rpc('tools/call', {name: 'shard_atlas_backup_status', arguments: {operation: 'instructions'}}), {}, vaultEnv({
+    SHARD_ATLAS_BACKUP_SIGNING_SECRET: 'private-vault-signing-secret', GOOGLE_BACKUP_CLIENT_SECRET: 'private-google-secret',
+  }));
+  const data = response.data.result.structuredContent;
+  assert.equal(response.data.result.isError, false);
+  assert.deepEqual(data.destination, {
+    account: OWNER, folderId: 'automatic-test-folder', archiveFolderId: 'older-test-folder', mode: 'shared-vault',
+    vaultFolderId: 'secondary-test-vault', vaultOwnerEmail: 'vault-owner@example.test', primaryRootId: 'primary-test-root',
+  });
+  const procedure = data.procedure.join('\n');
+  assert.match(procedure, /preflight is mandatory before every upload, uncertain-upload reuse, or archive move/);
+  assert.match(procedure, /get_file_metadata\(fileId="root"\).*destination\.primaryRootId/);
+  assert.match(procedure, /exact destination\.vaultFolderId/);
+  assert.match(procedure, /metadata omits trashed.*item_type="folder".*special_filter_query_str.*exact escaped name.*known sole parent ID.*trashed=false/);
+  assert.match(procedure, /Paginate using the returned page token.*matching known folder ID/);
+  assert.match(procedure, /only parent-search exception is an exact root ID independently resolved/);
+  assert.match(procedure, /field is omitted.*affirmative effective owner or writer permission/);
+  assert.match(procedure, /Do not treat omitted capabilities as false or assume permission from mere visibility/);
+  assert.match(procedure, /sole owner email to equal destination\.vaultOwnerEmail/);
+  assert.match(procedure, /follow the vault parent ancestry to that exact root ID/);
+  assert.match(procedure, /missing parent alone is not proof of reaching a root/);
+  assert.match(procedure, /sole owner must equal destination\.account/);
+  assert.match(procedure, /after moving, read back the exact archive folder parent and unchanged owner/);
+  assert.match(procedure, /fall back to root or another folder/);
+  assert.doesNotMatch(JSON.stringify(data), /private-vault-signing-secret|private-google-secret/);
+});
+
+test('partial or invalid shared vault configuration fails closed instead of selecting an ordinary destination', async () => {
+  for (const values of [
+    {SHARD_ATLAS_BACKUP_VAULT_FOLDER_ID: undefined},
+    {SHARD_ATLAS_BACKUP_VAULT_OWNER_EMAIL: ''},
+    {SHARD_ATLAS_BACKUP_PRIMARY_ROOT_ID: ' '},
+    {SHARD_ATLAS_BACKUP_DRIVE_FOLDER_ID: undefined},
+    {SHARD_ATLAS_BACKUP_ARCHIVE_FOLDER_ID: undefined},
+  ]) {
+    const response = await invoke(rpc('tools/call', {name: 'shard_atlas_backup_status', arguments: {operation: 'instructions'}}), {}, vaultEnv(values));
+    assert.equal(response.data.result.isError, true);
+    assert.equal(response.data.result.structuredContent.error.code, 'backup_destination_incomplete');
+    assert.match(response.data.result.structuredContent.message, /do not fall back/);
+    assert.equal(response.data.result.structuredContent.destination, undefined);
+  }
+  for (const values of [
+    {SHARD_ATLAS_BACKUP_VAULT_FOLDER_ID: 'primary-test-root'},
+    {SHARD_ATLAS_BACKUP_DRIVE_FOLDER_ID: 'primary-test-root'},
+    {SHARD_ATLAS_BACKUP_ARCHIVE_FOLDER_ID: 'automatic-test-folder'},
+    {SHARD_ATLAS_BACKUP_VAULT_OWNER_EMAIL: OWNER.toUpperCase()},
+    {SHARD_ATLAS_BACKUP_VAULT_OWNER_EMAIL: 'invalid-email'},
+    {SHARD_ATLAS_BACKUP_VAULT_FOLDER_ID: 'https://example.test/private'},
+  ]) {
+    const response = await invoke(rpc('tools/call', {name: 'shard_atlas_backup_status', arguments: {operation: 'instructions'}}), {}, vaultEnv(values));
+    assert.equal(response.data.result.isError, true);
+    assert.equal(response.data.result.structuredContent.error.code, 'backup_destination_invalid');
+    assert.doesNotMatch(JSON.stringify(response.data), /secondary-test-vault|primary-test-root|vault-owner@example/);
+  }
+});
+
+test('private shared vault metadata remains behind the existing owner-only MCP gate', async () => {
+  const configuration = vaultEnv();
+  for (const options of [
+    {authenticated: false},
+    {headers: {'oai-authenticated-user-email': 'other@example.test'}},
+  ]) {
+    const response = await invoke(rpc('tools/call', {name: 'shard_atlas_backup_status', arguments: {operation: 'instructions'}}), options, configuration);
+    assert.ok([401, 403].includes(response.response.status));
+    assert.doesNotMatch(JSON.stringify(response.data), /secondary-test-vault|primary-test-root|vault-owner@example|automatic-test-folder|older-test-folder/);
+  }
+  const discovery = await invoke(rpc('tools/list'), {}, configuration);
+  assert.doesNotMatch(JSON.stringify(discovery.data), /secondary-test-vault|primary-test-root|vault-owner@example|automatic-test-folder|older-test-folder/);
 });
 
 test('backup actions preserve owner-only MCP authorization and do not cross tool scopes', async () => {
