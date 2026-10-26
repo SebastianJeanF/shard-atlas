@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import json
 import os
 from pathlib import Path
 import sqlite3
@@ -105,6 +106,19 @@ class CloudBackups:
                                     maximum=MAX_RESPONSE_BYTES, success_statuses=(200, 201, 202))
         except (SyncError, OSError):
             raise CloudBackupError("Cloud recovery could not be verified. Your existing data and pending safety copy are retained.") from None
+        if binary and method == "PUT" and isinstance(result, (bytes, bytearray)):
+            # LibraryClient's binary flag covers its request and response. Blob
+            # uploads send bytes but this endpoint acknowledges them with JSON.
+            # Decode only that bounded acknowledgement; blob downloads must keep
+            # their existing raw-byte semantics in the shared library client.
+            try:
+                if len(result) > MAX_RESPONSE_BYTES:
+                    raise ValueError("Oversized acknowledgement")
+                def invalid_constant(_):
+                    raise ValueError("Non-finite acknowledgement")
+                result = json.loads(bytes(result).decode("utf-8"), parse_constant=invalid_constant)
+            except (UnicodeError, ValueError, RecursionError):
+                raise CloudBackupError("The cloud backup upload acknowledgement is invalid. The temporary safety copy is retained.", "invalid_receipt") from None
         if not isinstance(result, dict):
             raise CloudBackupError("The cloud backup service returned an invalid result.", "invalid_receipt")
         return result
@@ -263,7 +277,10 @@ class CloudBackups:
                 block = stream.read(chunk["bytes"])
                 if hashlib.sha256(block).hexdigest() != chunk["sha256"]:
                     raise CloudBackupError("The temporary recovery copy changed during upload.", "invalid_staging")
-                self._request(client, "/device-snapshots/blobs/" + chunk["sha256"], method="PUT", data=block, binary=True)
+                acknowledged = self._request(client, "/device-snapshots/blobs/" + chunk["sha256"], method="PUT", data=block, binary=True)
+                if ("sha256" in acknowledged and acknowledged["sha256"] != chunk["sha256"]
+                        or "bytes" in acknowledged and (type(acknowledged["bytes"]) is not int or acknowledged["bytes"] != chunk["bytes"])):
+                    raise CloudBackupError("The cloud backup chunk acknowledgement does not match the uploaded bytes. The temporary safety copy is retained.", "invalid_receipt")
         receipt = self._request(client, "/device-snapshots/request", method="POST", data=request)
         identity = receipt.get("id")
         if (not isinstance(identity, str) or not ID.fullmatch(identity) or receipt.get("filename") != "cloud:" + identity

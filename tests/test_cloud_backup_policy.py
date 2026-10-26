@@ -1,9 +1,11 @@
 """Native recovery policy checks using isolated stores and an in-memory cloud."""
 
 import copy
+import contextlib
 import gzip
 import hashlib
 import http.client
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import sqlite3
@@ -15,7 +17,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from cloud_backups import CloudBackups, MAX_COMPRESSED_BYTES, MAX_ORIGINAL_BYTES
-from library_sync import SITE_URL, SyncError, atomic_write, canonical
+from library_sync import LibraryClient, SITE_URL, SyncError, atomic_write, canonical
 from server import AppError, LocalServer, Store
 
 
@@ -112,12 +114,113 @@ class CloudBackupPolicyTests(unittest.TestCase):
         source = next(item for item in self.cloud.receipts.values() if item["id"] == receipt["id"])
         return gzip.decompress(b"".join(self.cloud.blobs[item["sha256"]] for item in source["manifest"]["chunks"]))
 
+    @contextlib.contextmanager
+    def real_http_client(self, transform=None):
+        cloud, observed = self.cloud, []
+        class CloudHandler(BaseHTTPRequestHandler):
+            def log_message(self, *_):
+                pass
+
+            def dispatch(self):
+                authorized = (self.headers.get("X-Shard-Atlas-Sync") == "1"
+                    and self.headers.get("OAI-Sites-Authorization") == "Bearer temporary-service-token"
+                    and self.headers.get("X-Shard-Atlas-Service") == "temporary-service-secret-for-tests")
+                observed.append({"method": self.command, "path": self.path, "authorized": authorized,
+                                 "contentType": self.headers.get("Content-Type")})
+                if not authorized:
+                    body, code = canonical({"error": "Private service access required"}), 403
+                else:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    raw = self.rfile.read(length)
+                    binary = self.command == "PUT"
+                    data = raw if binary else json.loads(raw) if raw else None
+                    result = cloud.request(self.path, method=self.command, data=data, binary=binary)
+                    reply = transform(self.path, result) if transform else result
+                    body, code = reply if isinstance(reply, bytes) else canonical(reply), 200
+                self.send_response(code)
+                self.send_header("X-Shard-Atlas-Sync", "1")
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            do_GET = dispatch
+            do_POST = dispatch
+            do_PUT = dispatch
+        server = ThreadingHTTPServer(("127.0.0.1", 0), CloudHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        client = LibraryClient({"siteUrl": f"http://127.0.0.1:{server.server_address[1]}",
+            "serviceToken": "temporary-service-token", "serviceSecret": "temporary-service-secret-for-tests"})
+        try:
+            yield client, observed
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(2)
+
     def test_unconnected_local_mode_keeps_existing_backup_contract(self):
         self.add()
         result = self.store.backup()
         self.assertTrue((self.store.backup_dir / result["filename"]).is_file())
         self.assertEqual(self.store.health()["backupMode"], "local")
         self.assertFalse(self.cloud.calls)
+
+    def test_actual_library_client_binary_put_json_acknowledgement_completes_sqlite_recovery(self):
+        self.add()
+        self.store.save_draft("editor", {"draft": {"content": "device-only draft over real HTTP"}})
+        before, drafts = self.store.export_data(), self.store.drafts()
+        self.activate()
+        with self.real_http_client() as (client, requests):
+            self.store.cloud_backups.client_factory = lambda _: client
+            # Establish the actual client behavior that the previous dictionary
+            # fake hid: a binary PUT returns the JSON response as raw bytes.
+            probe = b"isolated-transport-probe"
+            probe_hash = hashlib.sha256(probe).hexdigest()
+            reply = client.request("/api/cloud-backups/device-snapshots/blobs/" + probe_hash,
+                method="PUT", data=probe, binary=True)
+            self.assertIsInstance(reply, bytes)
+            self.assertEqual(json.loads(reply)["sha256"], probe_hash)
+            receipt = self.store.backup()
+            self.assertTrue(receipt["durable"])
+            self.assertTrue(receipt["verified"])
+            self.assertTrue(all(item["authorized"] for item in requests))
+            self.assertTrue(any(item["method"] == "PUT" and item["contentType"] == "application/octet-stream" for item in requests))
+        recovered = self.root / "real-http-recovered.sqlite3"
+        recovered.write_bytes(self.raw_receipt(receipt))
+        restored = Store(recovered, root=self.root / "http-restored", seed=False, backup_on_start=False,
+                         automatic_backups=False, cloud_backup_config=self.root / "absent-http-policy")
+        self.assertEqual(restored.export_data(), before)
+        self.assertEqual(restored.drafts(), drafts)
+        self.assertFalse(self.store.cloud_backups.has_pending)
+        self.assertFalse(self.store.backup_dir.exists())
+
+    def test_real_http_mismatched_chunk_acknowledgement_keeps_prestate_and_blocks_delete(self):
+        shard = self.add()
+        self.activate()
+        def mismatch(path, result):
+            return {**result, "sha256": "0" * 64} if "/device-snapshots/blobs/" in path else result
+        with self.real_http_client(mismatch) as (client, _):
+            self.store.cloud_backups.client_factory = lambda _: client
+            with self.assertRaises(AppError):
+                self.store.delete_shard(shard["id"])
+        self.assertEqual(self.store.state()["shards"][0]["id"], shard["id"])
+        self.assertTrue(self.store.cloud_backups.has_pending)
+        self.assertFalse(self.cloud.receipts)
+
+    def test_real_http_invalid_utf8_or_nonfinite_upload_acknowledgements_are_rejected(self):
+        self.add()
+        self.activate()
+        for invalid in (b"\xff", b'{"bytes":NaN}'):
+            with self.subTest(reply=invalid):
+                def bad_json(path, result):
+                    return invalid if "/device-snapshots/blobs/" in path else result
+                with self.real_http_client(bad_json) as (client, _):
+                    self.store.cloud_backups.client_factory = lambda _: client
+                    with self.assertRaises(AppError):
+                        self.store.backup()
+                self.assertTrue(self.store.cloud_backups.has_pending)
+                self.assertFalse(self.cloud.receipts)
 
     def test_verified_device_checkpoint_includes_drafts_and_import_undo_state(self):
         self.add()
