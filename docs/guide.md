@@ -172,7 +172,7 @@ If two devices changed the library independently, both copies are retained. Revi
 
 ## Import a collection or diagram
 
-**Backup & export → Choose JSON** previews additions, duplicates, conflicts, and missing assets before importing an archive. Imports add missing stable IDs and preserve existing note text. To transfer a complete portable collection, import into an empty collection. To replace an existing collection exactly, restore a database snapshot instead.
+**Backup & export → Choose JSON** previews additions, duplicates, conflicts, and missing assets before importing an archive. Imports add missing stable IDs and preserve existing note text. To transfer a complete portable collection, import into an empty collection. To recover an earlier shared collection, use a verified library backup and explicitly confirm its restore review. A complete device database snapshot provides separate recovery of device-only state.
 
 Select the cards you want to import. Choose **Edit incoming card** to revise proposed details, then **Apply to review**. Selection and card changes automatically refresh validation for the revised cards, connections, and assets. Check that source references and notation match the selected material. Choose **Save selected to atlas** for a selection or **Save to atlas** for the full archive. Preview edits change the proposed import, not an existing note in your collection.
 
@@ -202,21 +202,31 @@ Imported notes receive stable document and shape identities. Reimporting preserv
 ~/Library/Application Support/Shard Atlas/shards.sqlite3
 ```
 
-It contains notes, connections, images, canvases, revisions, Trash, and other recovery metadata. Building or replacing the app bundle does not replace this database. The default backup folder is:
+It contains notes, connections, images, canvases, revisions, Trash, drafts, and other recovery metadata. Building or replacing the app bundle does not replace this database. **Library sync shares saved knowledge. Recovery backups preserve earlier states. Source Git stores the application code.** Cloning the source does not recover a personal collection.
+
+### Cloud-managed recovery
+
+Cloud-managed backups are enabled for this Mac and the shared library. An hourly cloud task copies changed saved-library checkpoints and queued device checkpoints into Google Drive, verifies the complete uploaded bytes, and records the result. It can run while your Mac is off. The recovery folder lives in a private shared vault outside this Mac's mirrored My Drive, so automatic backups do not return as local mirrored files. Ordinary My Drive files remain mirrored. Google Drive's emergency Inbox is separate from this recovery destination.
+
+The app keeps its working data locally for offline use. Before protected operations, a full device checkpoint also preserves drafts and import recovery. Temporary checkpoint payloads are bounded and cleared after a durable checksum-matched cloud receipt. A receipt can precede the later verified Drive copy, so **pending upload** and **Drive backup verified** are different results. Normal cloud-managed use does not accumulate dated backup history on the Mac.
+
+Open **Backup & export → Google Drive backups → View backups** to see the latest verified timestamp, pending work, errors, and available library recovery points. **Back up saved library** requests a cloud checkpoint. The background task still needs to finish its Drive copy and verification. The retention policy selects 24 hourly, 30 daily, and 12 monthly recovery points and archives older points. It does not automatically delete backups permanently. Compression reduces transfer size and temporary storage even when Drive capacity is plentiful.
+
+Older or unconfigured installations keep their existing local protection until cloud backups have been verified and activated for that device. See the [cloud backup playbook](cloud-backup-playbook.md) for setup, verification, recovery, and the file-placement rules used here.
+
+### Local protection on unconfigured installations
+
+The default local backup folder is:
 
 ```text
 ~/Library/Application Support/Shard Atlas/backups
 ```
 
-A configured backup destination can differ. **Backup & export** displays the active folder. A custom database normally keeps snapshots in an adjacent folder named `<database-stem>-backups`.
+A configured local destination can differ. A custom database normally keeps snapshots in an adjacent folder named `<database-stem>-backups`. In this local mode, the app creates consistent SQLite snapshots at startup when that day's snapshot is absent, and before operations such as imports and restores. During use, changed data is backed up roughly every 60–90 seconds. An idle collection does not create repeated periodic snapshots. **Back up now** creates an immediate snapshot.
 
-### Automatic and manual copies
+Local snapshots are complete database copies. Automatic cleanup of that legacy local history is not implemented, so sustained editing can accumulate files. Retain this protection until verified cloud activation and preserve existing history before removing it.
 
-The app creates consistent SQLite snapshots at startup when that day's snapshot is absent, and before operations such as imports and restores. During use, changed data is backed up roughly every 60–90 seconds. An idle collection does not create repeated periodic snapshots. **Back up now** creates an immediate snapshot.
-
-Snapshots are complete database copies. **Automatic retention cleanup is not implemented**, so sustained editing can accumulate files. Review the folder periodically and retain recovery points appropriate to your needs.
-
-Backups are local files. To keep a cloud copy, choose a folder uploaded by your own sync service. A successful local snapshot does not confirm that a cloud upload has completed. Git excludes databases, backups, exports, and private working material. Publishing or cloning the application source does not transfer a personal collection.
+A successful local snapshot does not confirm a cloud upload. Putting these files in a mirrored sync folder can consume space and sync work on every connected computer. The configured cloud-managed route avoids that pattern. Git excludes databases, backups, exports, and private working material.
 
 ### Choose a recovery format
 
@@ -224,13 +234,16 @@ Backups are local files. To keep a cloud copy, choose a folder uploaded by your 
 | --- | --- | --- |
 | JSON archive | Notes, connections, canvases, images, revisions, deleted notes, and portable metadata | Transfer or additive import |
 | Markdown ZIP | Readable notes and a complete JSON archive | Read without the app and retain an import copy |
-| Database snapshot | The complete SQLite collection, including recovery receipts and drafts | Restore an exact recovery point |
+| Verified cloud library backup | Saved portable library and immutable contribution receipts | Restore a reviewed shared collection |
+| Full device checkpoint or database snapshot | Device collection, including recovery receipts and drafts | Recover device-only state |
 
 Portable JSON archives support up to 256 MB, including images and saved versions. Changes that would exceed the portable capacity are rejected before altering saved data. Snapshots provide complete SQLite recovery copies.
 
 Use **revision history** to inspect or restore an earlier version of one note. Use **Trash** to restore a deleted note with its available connections. These options avoid replacing unrelated work.
 
-For complete recovery, open the backup list in **Backup & export** and choose a snapshot. The app validates it and makes a recovery copy of the current collection before replacing it. **Restoring a snapshot replaces the whole collection** with that saved state.
+For a shared-library restore, choose **View backups → Review restore** on a verified library backup. The background task downloads and verifies the archive before preparing the review. Confirm **Restore this library** only after reviewing it. The current cloud collection is preserved first, and newer immutable contribution receipts are retained so old requests cannot replay. **Confirmation replaces the shared saved collection**, then connected devices receive it through Library sync. Unfinished or independently saved device work still requires review. A changed cloud head invalidates a stale restore review.
+
+Full device checkpoints protect drafts and local import recovery that are absent from the shared portable library. Full device recovery is a separate maintenance operation that must verify the archive and preserve the current device first. The cloud library restore list is not a device-database restore interface. On installations using local snapshots, the existing snapshot restore validates the file and preserves the current device collection before replacement.
 
 ## Native controls and troubleshooting
 

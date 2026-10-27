@@ -79,7 +79,11 @@ Device service access supports `SHARD_ATLAS_SERVICE_SECRET_SHA256_ALLOWLIST`, a 
 
 Cloud capsules preserve the full portable archive, including current shards, typed relationships, approach identities, exact C++ text, images, revisions, Trash, and legacy recovery records. Contribution receipts travel with the library to prevent old inbox batches from recreating deleted notes.
 
-Drafts, local database backups, import undo receipts, private connection settings, and sync outboxes remain device-local. A remote replacement creates a safety snapshot and preserves these local records. Closed apps catch up when reopened. Offline changes remain pending across restarts.
+Drafts and import undo receipts belong to device state rather than the portable shared library. Full device checkpoints protect that state separately. Private connection settings and sync outboxes remain device-local. A remote replacement preserves the existing draft and receipt guards. Closed apps catch up when reopened. Offline changes remain pending across restarts.
+
+In verified cloud mode, a device uploads a consistent safety checkpoint before a protected replacement, then clears bounded temporary payloads only after a durable checksum-matched hosted receipt. The cloud task later copies the checkpoint into Drive and records independent complete readback verification. The working collection remains local for offline use, without accumulating local backup history. A hosted receipt and a verified Drive backup are separate states. Older or unconfigured clients keep their existing local backups until their own cloud policy is verified and activated.
+
+The current Mac uses this cloud policy. Its recovery destination is a private shared Drive vault outside its mirrored My Drive, while the emergency Inbox stays in the original location. Library synchronization does not depend on Drive for desktop. Keep source checkouts, dependencies, builds, and QA artifacts outside synced folders. Read the [cloud backup playbook](cloud-backup-playbook.md) before changing scheduling, destination, retention, or cleanup. The 24-hourly, 30-daily, and 12-monthly policy archives older points without automatic permanent deletion.
 
 The first connection to an existing different collection requires explicit review. An empty browser can download the cloud library. Concurrent edits use conditional revision publication. Both snapshots survive a conflict, and the interface requires a choice rather than silently selecting a winner. A new edit after the preview invalidates that preview.
 
