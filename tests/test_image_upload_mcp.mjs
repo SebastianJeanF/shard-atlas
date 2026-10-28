@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {handleSiteMcpRequest} from '../hosting/lib/site-mcp.mjs';
-import {ingestRemoteImage} from '../hosting/lib/image-uploads.mjs';
+import {ingestRemoteImage, ImageUploadError} from '../hosting/lib/image-uploads.mjs';
 
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jR7sAAAAASUVORK5CYII=', 'base64');
 function fixture(t) {
@@ -40,7 +40,7 @@ test('authenticated MCP file handoff stages exact bytes without changing library
   const f = fixture(t), args = {requestId: 'native-file-handoff', file: {file_id: 'file-synthetic-fixture', download_url: 'https://files.oaiusercontent.com/synthetic.png?private-token=never-return', mime_type: 'image/png', file_name: 'diagram.png'}};
   const dependencies = {uploadImage: (env, values, options) => ingestRemoteImage(env, values, {...options, fetch: async (url, init) => {
     assert.equal(url.toString(), args.file.download_url);
-    assert.equal(init.redirect, 'error');
+    assert.equal(init.redirect, 'manual');
     assert.ok(!new Headers(init.headers).has('authorization'));
     return new Response(png, {headers: {'content-type': 'image/png', 'content-length': String(png.length)}});
   }})};
@@ -64,8 +64,19 @@ test('authenticated MCP file handoff stages exact bytes without changing library
 test('unauthenticated image tools never reach staging or reveal upload status', async t => {
   const f = fixture(t); let calls = 0;
   const dependencies = {uploadImage() {calls++;}, imageUploadStatus() {calls++;}};
-  for (const name of ['shard_atlas_upload_image', 'shard_atlas_image_upload_status']) {
+  for (const name of ['shard_atlas_upload_image', 'shard_atlas_image_upload_status', 'shard_atlas_verify_image_workflow']) {
     assert.equal((await call(f, name, {}, {authenticated: false, dependencies})).status, 401);
   }
   assert.equal(calls, 0);
+});
+
+test('upload failures expose bounded phases and status without private provider details', async t => {
+  const f = fixture(t), failure = new ImageUploadError('image_download_failed');
+  failure.details = {phase: 'response', downloadStatus: 403, causeName: 'PRIVATE_PROVIDER_MESSAGE', download_url: 'PRIVATE_SIGNED_URL', headers: {secret: 'PRIVATE_HEADER'}};
+  const result = await call(f, 'shard_atlas_upload_image', {}, {dependencies: {uploadImage: () => {throw failure;}}});
+  assert.deepEqual(result.body.result.structuredContent.diagnostics, {phase: 'response', downloadStatus: 403});
+  assert.doesNotMatch(JSON.stringify(result.body), /PRIVATE_|download_url|headers/);
+  failure.details = {phase: 'PRIVATE_PROVIDER_MESSAGE', downloadStatus: 1000};
+  const invalid = await call(f, 'shard_atlas_upload_image', {}, {dependencies: {uploadImage: () => {throw failure;}}});
+  assert.equal(invalid.body.result.structuredContent.diagnostics, undefined);
 });

@@ -281,8 +281,14 @@ export async function handleSiteMcpRequest(request, env, {loadLibrary = readClou
           return result(id, {content: [{type: 'text', text: JSON.stringify(receipt)}], structuredContent: receipt, isError: false});
         } catch (error) {
           const known = error instanceof ImageUploadError;
+          const details = error?.details;
+          const diagnostics = known && object(details) && ['fetch', 'redirect', 'response', 'read'].includes(details.phase)
+            ? {phase: details.phase,
+              ...(Number.isInteger(details.downloadStatus) && details.downloadStatus >= 100 && details.downloadStatus <= 599 ? {downloadStatus: details.downloadStatus} : {}),
+              ...(['AbortError', 'TimeoutError', 'TypeError', 'NetworkError', 'Error'].includes(details.causeName) ? {causeName: details.causeName} : {})}
+            : null;
           return result(id, {content: [{type: 'text', text: known ? error.message : 'The image upload could not be verified. Check its status or retry the same upload request. No shard was changed.'}],
-            structuredContent: {error: {code: known ? error.code : 'image_upload_unavailable'}, readOnly: !uploading}, isError: true});
+            structuredContent: {error: {code: known ? error.code : 'image_upload_unavailable'}, ...(diagnostics ? {diagnostics} : {}), readOnly: !uploading}, isError: true});
         }
       }
       if (isBackupTool(params.name)) return result(id, await callBackupTool(params.name, params.arguments ?? {}, env, {identity, now, runnerSource: backupRunnerSource}));

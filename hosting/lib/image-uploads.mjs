@@ -4,13 +4,22 @@ import {sha256} from '../../sync/protocol.mjs';
 
 export const IMAGE_UPLOAD_LIMITS = Object.freeze({fileBytes: 8 * 1024 * 1024, activeUploads: 64, concurrentIngests: 2,
   retainedBytes: 96 * 1024 * 1024, retainedRequests: 4096, ttlMs: 24 * 60 * 60 * 1000,
-  leaseMs: 60 * 1000, descriptors: 40});
+  leaseMs: 60 * 1000, descriptors: 40, redirects: 3, downloadMs: 30_000});
 const ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/;
 const HASH = /^[a-f0-9]{64}$/;
 const UPLOAD_ID = /^image-upload-[a-f0-9]{64}$/;
 const TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 const encoder = new TextEncoder();
 const ingestSlots = new WeakMap();
+const causes = new Set(['AbortError', 'TimeoutError', 'TypeError', 'NetworkError', 'Error']);
+const phases = new Set(['fetch', 'redirect', 'response', 'read']);
+function downloadDetails(details) {
+  if (!details || !phases.has(details.phase)) return;
+  return Object.freeze({phase: details.phase,
+    ...(Number.isInteger(details.downloadStatus) && details.downloadStatus >= 100 && details.downloadStatus <= 599 ? {downloadStatus: details.downloadStatus} : {}),
+    ...(causes.has(details.causeName) ? {causeName: details.causeName} : {})});
+}
+const causeName = error => causes.has(error?.name) ? error.name : 'Error';
 const messages = Object.freeze({
   invalid_image_upload: 'Supply one supported image file and a stable request ID. Reuse the same request for retries.',
   image_source_not_allowed: 'Use a file attached to the chat or returned by an image tool. This upload accepts only authorized OpenAI file download links.',
@@ -28,12 +37,13 @@ const messages = Object.freeze({
 });
 
 export class ImageUploadError extends Error {
-  constructor(code, status = 503) {
+  constructor(code, status = 503, details) {
     super(messages[code] || messages.image_upload_unavailable);
     this.name = 'ImageUploadError'; this.code = Object.hasOwn(messages, code) ? code : 'image_upload_unavailable'; this.status = status;
+    const safe = downloadDetails(details); if (safe) this.details = safe;
   }
 }
-const fail = (code, status) => {throw new ImageUploadError(code, status);};
+const fail = (code, status, details) => {throw new ImageUploadError(code, status, details);};
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const bytesHash = value => sha256(value instanceof Uint8Array ? value : encoder.encode(value));
 
@@ -92,29 +102,79 @@ export function validateImageUploadArguments(args) {
     mime_type: declaredType(file.mime_type), file_name: declaredName(file.file_name)}};
 }
 
-async function readBytes(response, code = 'image_download_failed') {
+function beforeDeadline(promise, signal) {
+  if (!signal) return promise;
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    if (signal.aborted) {abort(); return;}
+    signal.addEventListener('abort', abort, {once: true});
+    Promise.resolve(promise).then(value => {signal.removeEventListener('abort', abort); resolve(value);},
+      error => {signal.removeEventListener('abort', abort); reject(error);});
+  });
+}
+function discardBody(response) {
+  try {Promise.resolve(response?.body?.cancel()).catch(() => {});} catch {}
+}
+async function readBytes(response, code = 'image_download_failed', signal) {
+  signal?.throwIfAborted();
   const declared = response.headers?.get('content-length');
   if (declared !== null && declared !== undefined && (!/^\d+$/.test(declared) || Number(declared) > IMAGE_UPLOAD_LIMITS.fileBytes)) {
-    await response.body?.cancel().catch(() => {}); fail('image_too_large', 413);
+    discardBody(response); fail('image_too_large', 413);
   }
   if (!response.body || typeof response.body.getReader !== 'function') fail(code);
   const reader = response.body.getReader(), parts = [];
+  const abort = () => {reader.cancel().catch(() => {});};
+  signal?.addEventListener('abort', abort, {once: true});
   let length = 0;
   try {
     while (true) {
-      const part = await reader.read();
+      const part = await beforeDeadline(reader.read(), signal);
       if (part.done) break;
       if (!(part.value instanceof Uint8Array)) fail(code);
       length += part.value.byteLength;
       if (length > IMAGE_UPLOAD_LIMITS.fileBytes) fail('image_too_large', 413);
       parts.push(part.value);
     }
-  } finally {await reader.cancel().catch(() => {}); reader.releaseLock();}
+  } finally {signal?.removeEventListener('abort', abort); reader.cancel().catch(() => {}); reader.releaseLock();}
   if (!length) fail('invalid_image', 400);
   const bytes = new Uint8Array(length);
   let offset = 0;
   for (const part of parts) {bytes.set(part, offset); offset += part.byteLength;}
   return bytes;
+}
+
+async function downloadImage(file, fetchFile) {
+  const signal = AbortSignal.timeout(IMAGE_UPLOAD_LIMITS.downloadMs);
+  let url = file.download_url;
+  for (let hop = 0; hop <= IMAGE_UPLOAD_LIMITS.redirects; hop++) {
+    let response;
+    try {
+      // Workers has no browser cookie jar. A new request with no copied headers
+      // cannot forward the caller's credentials, cookies, or referrer.
+      response = await beforeDeadline(fetchFile(url, {method: 'GET', redirect: 'manual', signal}), signal);
+    } catch (error) {fail('image_download_failed', 503, {phase: 'fetch', causeName: causeName(error)});}
+    const downloadStatus = response?.status;
+    if (!response || response.redirected) {discardBody(response); fail('image_download_failed', 503, {phase: 'response', downloadStatus});}
+    if ([301, 302, 303, 307, 308].includes(downloadStatus)) {
+      const location = response.headers?.get('location');
+      discardBody(response);
+      if (!location || hop === IMAGE_UPLOAD_LIMITS.redirects) fail('image_download_failed', 503, {phase: 'redirect', downloadStatus});
+      try {url = downloadUrl(new URL(location, url).href);}
+      catch {fail('image_source_not_allowed', 400, {phase: 'redirect', downloadStatus});}
+      continue;
+    }
+    if (!response.ok) {discardBody(response); fail('image_download_failed', 503, {phase: 'response', downloadStatus});}
+    let bytes;
+    try {bytes = await readBytes(response, 'image_download_failed', signal);}
+    catch (error) {
+      if (error instanceof ImageUploadError && error.code !== 'image_download_failed') throw error;
+      fail('image_download_failed', 503, {phase: 'read', downloadStatus, ...(error instanceof ImageUploadError ? {} : {causeName: causeName(error)})});
+    }
+    const type = rasterType(bytes);
+    if (TYPES.has(file.mime_type) && file.mime_type !== type) fail('invalid_image', 400);
+    return {bytes, type};
+  }
+  fail('image_download_failed', 503, {phase: 'redirect'});
 }
 
 function rasterType(bytes) {
@@ -283,11 +343,28 @@ export async function ingestRemoteImage(env, args, {ownerId, fetch: fetchFile = 
     releaseSlot = reserveIngestSlot(env);
     const expiry = new Date(instant + IMAGE_UPLOAD_LIMITS.ttlMs).toISOString();
     uploadId = 'image-upload-' + await bytesHash(ownerId + '\n' + input.requestId);
-    const fileHash = await bytesHash(JSON.stringify([input.file.file_id, input.file.file_name, input.file.mime_type]));
+    const descriptionHash = await bytesHash(JSON.stringify([input.file.file_name, input.file.mime_type]));
+    const fileHash = 'v2:' + await bytesHash(input.file.file_id) + ':' + descriptionHash;
     let row = await rowFor(env, uploadId, ownerId);
-    if (row && row.file_id_hash !== fileHash) fail('image_request_reused', 409);
+    let sameFile = !row || row.file_id_hash === fileHash;
+    if (row && !sameFile) {
+      const binding = row.file_id_hash.match(/^v2:([a-f0-9]{64}):([a-f0-9]{64})$/);
+      const legacySame = !binding && row.file_id_hash === await bytesHash(JSON.stringify([input.file.file_id, input.file.file_name, input.file.mime_type]));
+      sameFile = legacySame;
+      const sameDescription = binding ? binding[2] === descriptionHash
+        : !row.sha256 && row.name === input.file.file_name && row.mime_type === input.file.mime_type;
+      if (!sameFile && !sameDescription) fail('image_request_reused', 409);
+    }
     if (row?.status === 'verified') {
       await verifiedBytes(env, row, ownerId);
+      if (!sameFile) {
+        // Native file handoffs may mint a new file_id for the same path on each
+        // invocation. A fresh reference must prove identical bytes before replay.
+        const {bytes, type} = await downloadImage(input.file, fetchFile);
+        if (await bytesHash(bytes) !== row.sha256 || type !== row.mime_type) fail('image_request_reused', 409);
+        await env.DB.prepare("UPDATE image_uploads SET file_id_hash = ? WHERE id = ? AND owner_id = ? AND status = 'verified' AND sha256 = ? AND file_id_hash = ?")
+          .bind(fileHash, uploadId, ownerId, row.sha256, row.file_id_hash).run();
+      }
       if (Date.parse(row.expires_at) <= instant) {
         await env.DB.prepare(`UPDATE image_uploads SET expires_at = ? WHERE id = ? AND owner_id = ? AND status = 'verified' AND sha256 = ? AND ${quotaSql}`)
           .bind(expiry, uploadId, ownerId, row.sha256,
@@ -310,21 +387,19 @@ export async function ingestRemoteImage(env, args, {ownerId, fetch: fetchFile = 
         SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE ${quotaSql}`)
         .bind(uploadId, ownerId, input.requestId, fileHash, '', input.file.file_name, input.file.mime_type, IMAGE_UPLOAD_LIMITS.fileBytes, statusToken, stamp, expiry, ...quotaValues).run();
     } else {
-      await env.DB.prepare(`UPDATE image_uploads SET status = ?, bytes = ?, expires_at = ? WHERE id = ? AND owner_id = ? AND file_id_hash = ?
+      await env.DB.prepare(`UPDATE image_uploads SET status = ?, bytes = ?, expires_at = ?, file_id_hash = ? WHERE id = ? AND owner_id = ? AND file_id_hash = ?
         AND status = ? AND (status = 'failed' OR expires_at <= ? OR ? = 1) AND ${quotaSql}`)
-        .bind(statusToken, reserve, expiry, uploadId, ownerId, fileHash, row.status, stamp, Number(abandoned), ...quotaValues).run();
+        .bind(statusToken, reserve, expiry, fileHash, uploadId, ownerId, row.file_id_hash, row.status, stamp, Number(abandoned), ...quotaValues).run();
     }
     row = await rowFor(env, uploadId, ownerId);
     if (!row) fail('image_upload_quota', 429);
-    if (row.file_id_hash !== fileHash) fail('image_request_reused', 409);
+    if (row.file_id_hash !== fileHash) {
+      if (row.status.startsWith('uploading:') && row.file_id_hash.endsWith(':' + descriptionHash)) fail('image_upload_busy', 409);
+      fail('image_request_reused', 409);
+    }
     if (row.status !== statusToken) fail(row.status.startsWith('uploading:') ? 'image_upload_busy' : 'image_upload_quota', row.status.startsWith('uploading:') ? 409 : 429);
     reserved = true;
-    let response;
-    try {response = await fetchFile(input.file.download_url, {method: 'GET', redirect: 'error', credentials: 'omit', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(30_000)});}
-    catch {fail('image_download_failed');}
-    if (!response?.ok || response.redirected) {await response?.body?.cancel().catch(() => {}); fail('image_download_failed');}
-    const bytes = await readBytes(response), type = rasterType(bytes);
-    if (TYPES.has(input.file.mime_type) && input.file.mime_type !== type) fail('invalid_image', 400);
+    const {bytes, type} = await downloadImage(input.file, fetchFile);
     const hash = await bytesHash(bytes), key = await blobKey(ownerId, hash);
     if (row.sha256 && row.sha256 !== hash) fail('image_request_reused', 409);
     const name = input.file.file_name || 'Uploaded image.' + ({'image/png':'png','image/jpeg':'jpg','image/gif':'gif','image/webp':'webp'})[type];

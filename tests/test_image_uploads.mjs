@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {ingestRemoteImage, getImageUploadStatus, resolveStagedImages, validateImageUploadArguments, IMAGE_UPLOAD_LIMITS, ImageUploadError} from '../hosting/lib/image-uploads.mjs';
+import {sha256} from '../sync/protocol.mjs';
 
 const OWNER = 'synthetic-owner', STAMP = Date.parse('2026-10-28T12:00:00.000Z');
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jR7sAAAAASUVORK5CYII=';
@@ -28,7 +29,7 @@ function fixture(t) {
     async get(key) {const value=objects.get(key);return value ? {size:value.length,body:new Response(value).body} : null;},
     async put(key,value) {calls.puts++;if(controls.putFailure)throw new Error('PRIVATE_OBJECT_PROVIDER_ERROR');const data=new Uint8Array(value);if(controls.corruptWrite)data[data.length-1]^=1;objects.set(key,data);}};
   const env = {DB,BUCKET}, fetch = async (url, options) => {
-    calls.fetch++; assert.equal(options.redirect,'error'); assert.equal(options.credentials,'omit'); assert.equal(options.referrerPolicy,'no-referrer');
+    calls.fetch++; assert.equal(options.redirect,'manual'); assert.equal(options.credentials,undefined); assert.equal(options.referrerPolicy,undefined);
     assert.equal(options.headers,undefined,'never forward authentication to a file URL');
     if(controls.fetchHook)return controls.fetchHook(url,options);
     return controls.response || new Response(controls.body,{headers:{'content-type':'application/octet-stream'}});
@@ -90,7 +91,6 @@ test('verified retries survive expired download URLs, renewed staging retains id
   f.controls.fetchHook=()=>{throw new Error('Must not refetch a verified immutable file');};
   const replay=await ingestRemoteImage(f.env,input('upload-one',{download_url:'https://files.oaiusercontent.com/private/image?signature=renewed'}),f.options());
   assert.equal(replay.replayed,true);assert.equal(replay.uploadId,first.uploadId);assert.equal(f.calls.fetch,1);assert.equal(f.calls.puts,1);
-  await assert.rejects(ingestRemoteImage(f.env,input('upload-one',{file_id:'file_changed'}),f.options()),fails('image_request_reused'));
   await assert.rejects(ingestRemoteImage(f.env,input('upload-one',{file_name:'Different.png'}),f.options()),fails('image_request_reused'));
   const late=f.options({now:STAMP+IMAGE_UPLOAD_LIMITS.ttlMs+1});
   assert.equal((await getImageUploadStatus(f.env,{uploadId:first.uploadId},late)).status,'expired');
@@ -106,14 +106,94 @@ test('owner isolation and strict schemas reject cross-account or malformed uploa
   await assert.rejects(resolveStagedImages(f.env,[{uploadId:'missing'}],f.options()),fails('invalid_image_upload'));
 });
 
-test('file handoff cannot fetch arbitrary origins, credentials, alternate ports, redirects or private addresses',async t=>{
+test('file handoff cannot fetch arbitrary origins, credentials, alternate ports or private redirect destinations',async t=>{
   const f=fixture(t);
   const urls=['http://files.oaiusercontent.com/a','https://files.oaiusercontent.com:444/a','https://user:secret@files.oaiusercontent.com/a','https://files.oaiusercontent.com.evil.example/a','https://127.0.0.1/a','https://169.254.169.254/latest','https://[::1]/a','https://example.test/a','https://files.oaiusercontent.com/a#fragment','file:///private/a.png','https://files.oaiusercontent.com./a'];
   for(const download_url of urls)await assert.rejects(ingestRemoteImage(f.env,input('source-'+urls.indexOf(download_url),{download_url}),f.options()),fails('image_source_not_allowed'));
   assert.equal(f.calls.fetch,0);assert.equal(f.db.prepare('SELECT count(*) AS n FROM image_uploads').get().n,0);
   f.controls.response=new Response('',{status:302,headers:{location:'http://127.0.0.1/private'}});
-  await assert.rejects(ingestRemoteImage(f.env,input(),f.options()),fails('image_download_failed'));assert.equal(f.objects.size,0);
+  await assert.rejects(ingestRemoteImage(f.env,input(),f.options()),error=>fails('image_source_not_allowed')(error)&&error.details.phase==='redirect'&&error.details.downloadStatus===302);assert.equal(f.objects.size,0);
   f.controls.response=null;const retried=await ingestRemoteImage(f.env,input(),f.options());assert.equal(retried.verified,true);
+});
+
+test('official redirects are followed manually up to three hops with one deadline and no forwarded credentials',async t=>{
+  const f=fixture(t), seen=[], signals=[];
+  f.controls.fetchHook=(url,options)=>{
+    seen.push(url);signals.push(options.signal);
+    if(seen.length===1)return new Response('',{status:301,headers:{location:'/step?token=PRIVATE_SIGNED_TOKEN'}});
+    if(seen.length===2)return new Response('',{status:307,headers:{location:'https://region.oaiusercontent.com/file?token=PRIVATE_REGIONAL_TOKEN'}});
+    if(seen.length===3)return new Response('',{status:308,headers:{location:'/final.png'}});
+    return new Response(bytes(PNG));
+  };
+  const result=await ingestRemoteImage(f.env,input(),f.options());assert.equal(result.verified,true);assert.equal(seen.length,4);
+  assert.ok(signals.every(signal=>signal===signals[0]));assert.match(seen[1],/^https:\/\/files\.oaiusercontent\.com\/step\?/);assert.equal(seen[3],'https://region.oaiusercontent.com/final.png');
+  assert.doesNotMatch(JSON.stringify(result),/PRIVATE_|SIGNED|REGIONAL/);
+});
+
+test('redirect targets are checked at every hop and loops or missing locations stop with safe diagnostics',async t=>{
+  const f=fixture(t);
+  const targets=['https://example.test/private?token=PRIVATE_TOKEN','http://files.oaiusercontent.com/a','https://127.0.0.1/a','https://user:PRIVATE_SECRET@files.oaiusercontent.com/a','https://files.oaiusercontent.com:444/a','https://files.oaiusercontent.com.evil.test/a'];
+  for(const [index,target]of targets.entries()){
+    const before=f.calls.fetch;f.controls.fetchHook=()=>new Response('',{status:302,headers:{location:target}});
+    await assert.rejects(ingestRemoteImage(f.env,input('redirect-bad-'+index),f.options()),error=>{
+      assert.equal(error.code,'image_source_not_allowed');assert.deepEqual(error.details,{phase:'redirect',downloadStatus:302});assert.doesNotMatch(JSON.stringify(error),/PRIVATE_|https|127\.0\.0\.1/);return true;
+    });assert.equal(f.calls.fetch,before+1);
+  }
+  f.controls.fetchHook=()=>new Response('',{status:303,headers:{location:'/loop?token=PRIVATE_LOOP'}});
+  const before=f.calls.fetch;
+  await assert.rejects(ingestRemoteImage(f.env,input('redirect-loop'),f.options()),error=>fails('image_download_failed')(error)&&error.details.phase==='redirect'&&error.details.downloadStatus===303);
+  assert.equal(f.calls.fetch,before+4);assert.equal(f.objects.size,0);
+  f.controls.fetchHook=()=>new Response('',{status:302});
+  await assert.rejects(ingestRemoteImage(f.env,input('redirect-missing'),f.options()),error=>fails('image_download_failed')(error)&&error.details.phase==='redirect');
+});
+
+test('HTTP errors and fetch or body failures expose only fixed phases, status and allowlisted exception names',async t=>{
+  const f=fixture(t);
+  f.controls.fetchHook=()=>new Response('PRIVATE_PROVIDER_BODY',{status:403,headers:{'x-private-token':'PRIVATE_HEADER'}});
+  await assert.rejects(ingestRemoteImage(f.env,input('http-error'),f.options()),error=>{assert.deepEqual(error.details,{phase:'response',downloadStatus:403});return fails('image_download_failed')(error);});
+  for(const [index,name]of ['TypeError','PRIVATE_TOKEN_IN_NAME'].entries()) {
+    f.controls.fetchHook=()=>{throw Object.assign(new Error('PRIVATE_EXCEPTION_MESSAGE'),{name});};
+    await assert.rejects(ingestRemoteImage(f.env,input('fetch-error-'+index),f.options()),error=>{assert.deepEqual(error.details,{phase:'fetch',causeName:index===0?'TypeError':'Error'});assert.doesNotMatch(JSON.stringify(error),/PRIVATE_/);return fails('image_download_failed')(error);});
+  }
+  f.controls.fetchHook=()=>new Response(new ReadableStream({start(controller){controller.error(new Error('PRIVATE_STREAM_ERROR'));}}));
+  await assert.rejects(ingestRemoteImage(f.env,input('read-error'),f.options()),error=>{assert.deepEqual(error.details,{phase:'read',downloadStatus:200,causeName:'Error'});return fails('image_download_failed')(error);});
+});
+
+test('the shared deadline bounds a pending redirect fetch and a stalled body read, and cancels body consumption',async t=>{
+  const f=fixture(t);let timers=0;
+  t.mock.method(AbortSignal,'timeout',milliseconds=>{assert.equal(milliseconds,30_000);timers++;const controller=new AbortController();setTimeout(()=>controller.abort(new DOMException('PRIVATE_TIMEOUT_MESSAGE','TimeoutError')),5);return controller.signal;});
+  let hops=0;
+  f.controls.fetchHook=()=>++hops===1?new Response('',{status:302,headers:{location:'/wait'}}):new Promise(()=>{});
+  await assert.rejects(ingestRemoteImage(f.env,input('fetch-timeout'),f.options()),error=>{assert.deepEqual(error.details,{phase:'fetch',causeName:'TimeoutError'});return fails('image_download_failed')(error);});
+  assert.equal(timers,1);assert.equal(hops,2);
+  let cancelled=false;f.controls.fetchHook=()=>new Response(new ReadableStream({cancel(){cancelled=true;}}));
+  await assert.rejects(ingestRemoteImage(f.env,input('read-timeout'),f.options()),error=>{assert.deepEqual(error.details,{phase:'read',downloadStatus:200,causeName:'TimeoutError'});return fails('image_download_failed')(error);});
+  assert.equal(cancelled,true);assert.equal(f.objects.size,0);
+});
+
+test('fresh native file IDs replay only after original description and exact verified bytes agree',async t=>{
+  const f=fixture(t), descriptor={file_name:'diagram.png',mime_type:'image/png'};
+  const first=await ingestRemoteImage(f.env,input('fresh-native',descriptor),f.options());
+  const replay=await ingestRemoteImage(f.env,input('fresh-native',{...descriptor,file_id:'file_new_handoff'}),f.options());
+  assert.equal(replay.replayed,true);assert.equal(replay.uploadId,first.uploadId);assert.equal(replay.sha256,first.sha256);assert.equal(f.calls.fetch,2);assert.equal(f.calls.puts,1);
+  for(const changed of [{file_name:'changed.png'},{mime_type:'application/octet-stream'}])await assert.rejects(ingestRemoteImage(f.env,input('fresh-native',{...descriptor,...changed,file_id:'file_changed_description'}),f.options()),fails('image_request_reused'));
+  assert.equal(f.calls.fetch,2);
+  const changed=bytes(PNG);changed[changed.length-15]^=1;f.controls.body=changed;
+  await assert.rejects(ingestRemoteImage(f.env,input('fresh-native',{...descriptor,file_id:'file_changed_bytes'}),f.options()),fails('image_request_reused'));
+  assert.equal((await getImageUploadStatus(f.env,{uploadId:first.uploadId},f.options())).verified,true);assert.equal(f.calls.puts,1);
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM image_uploads').get().n,1);
+});
+
+test('failed handoffs accept fresh IDs with the same description, including legacy rows without accepted bytes',async t=>{
+  const f=fixture(t), descriptor={file_name:'native.png',mime_type:'image/png'};
+  f.controls.fetchHook=()=>{throw new TypeError('PRIVATE_FETCH_FAILURE');};
+  await assert.rejects(ingestRemoteImage(f.env,input('fresh-after-failure',descriptor),f.options()),fails('image_download_failed'));
+  const legacyHash=await sha256(new TextEncoder().encode(JSON.stringify(['file_fixture',descriptor.file_name,descriptor.mime_type])));
+  f.db.prepare('UPDATE image_uploads SET file_id_hash = ?').run(legacyHash);
+  f.controls.fetchHook=null;
+  const result=await ingestRemoteImage(f.env,input('fresh-after-failure',{...descriptor,file_id:'file_retry_fresh'}),f.options());assert.equal(result.verified,true);
+  assert.match(f.db.prepare('SELECT file_id_hash FROM image_uploads').get().file_id_hash,/^v2:[a-f0-9]{64}:[a-f0-9]{64}$/);
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM image_uploads').get().n,1);assert.equal(f.calls.puts,1);
 });
 
 test('stream limits cancel oversize transfers before persistence and reject unsafe dimensions',async t=>{
