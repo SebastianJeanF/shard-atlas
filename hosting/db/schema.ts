@@ -63,3 +63,20 @@ export const backupRestores = sqliteTable('backup_restores', {
   acceptedRevision: text('accepted_revision').notNull().default(''),
   preRestoreCheckpointId: text('pre_restore_checkpoint_id').notNull().default(''),
 }, table => [index('backup_restores_history').on(table.libraryId, table.createdAt, table.id)]);
+
+export const imageUploads = sqliteTable('image_uploads', {
+  id: text('id').primaryKey().notNull(),
+  ownerId: text('owner_id').notNull(),
+  requestId: text('request_id').notNull(),
+  fileIdHash: text('file_id_hash').notNull(),
+  sha256: text('sha256').notNull(),
+  name: text('name').notNull(),
+  mimeType: text('mime_type').notNull(),
+  bytes: integer('bytes').notNull(),
+  status: text('status').notNull(),
+  createdAt: text('created_at').notNull(),
+  expiresAt: text('expires_at').notNull(),
+}, table => [
+  uniqueIndex('image_uploads_request').on(table.ownerId, table.requestId),
+  index('image_uploads_expiry').on(table.ownerId, table.expiresAt),
+]);

@@ -1,17 +1,20 @@
 import {LibraryStorage} from '../../sync/storage.mjs';
 import {validateCapsule} from '../../sync/client.mjs';
-import {ARCHIVE_VERSION, CHUNK_BYTES, HASH_PATTERN, ID_PATTERN, MAX_MANIFEST_BYTES, PROTOCOL_VERSION, sha256, validateManifest} from '../../sync/protocol.mjs';
+import {CHUNK_BYTES, HASH_PATTERN, ID_PATTERN, MAX_MANIFEST_BYTES, sha256, validateManifest} from '../../sync/protocol.mjs';
 import {canonicalLink, copy, linkKey, recordId, validateCodeSolution, validateLink, validateLinkEndpoints, validateShard} from '../../web/model.mjs';
 import {fingerprint} from '../../web/archives.mjs';
 import {INBOX_LIMITS, validateInboxEnvelope} from '../../web/inbox.mjs';
 import {validateRichKnowledge} from '../../web/knowledge-validation.mjs';
+import {readCloudCapsule, prepareCloudSnapshot as streamCloudSnapshot} from './cloud-capsule.mjs';
+import {libraryNamespace} from './cloud-library-context.mjs';
+import {validateImageAttachments, attachImagesToContent, prepareImageAttachments, validateImageReceipt, compareImageReceiptAssets} from './cloud-image-attachments.mjs';
 
 export const CLOUD_CONTRIBUTION_LIMITS = Object.freeze({batchBytes: 256 * 1024, shards: 20, links: 100, snapshotBytes: 16 * 1024 * 1024});
 const queues = new WeakMap();
 const messages = Object.freeze({
   invalid_contribution: 'Use one additions-only batch with valid stable IDs, at most 20 notes and 100 relationships, and the expected cloud revision.',
   contribution_too_large: 'This addition exceeds the 256 KiB batch limit. Split genuinely separate additions into reviewed requests.',
-  cloud_snapshot_too_large: 'This library exceeds the 16 MiB cloud addition limit. Use the local Shard Atlas tools; library synchronization is unaffected.',
+  cloud_snapshot_too_large: 'This save exceeds the hosted metadata, image, or receipt capacity. Use the Shard Atlas app to review the library; existing knowledge was preserved.',
   cloud_library_invalid: 'The complete cloud library could not be verified. Existing knowledge was preserved.',
   cloud_library_unavailable: 'The cloud addition could not finish. Retry the exact same request ID and batch when the connection is available.',
   cloud_library_changed: 'The shared library changed. Search and read the current library, then retry the unchanged batch and request ID with its reviewed revision.',
@@ -20,6 +23,8 @@ const messages = Object.freeze({
   request_conflicted: 'This request was not accepted because another cloud change won. Refresh and review the library before preparing a new request; never retry with invented IDs automatically.',
   save_outcome_unknown: 'The request may have been saved, but its current result could not be verified. Retry the exact same request ID and batch; do not create a new request.',
   cloud_busy: 'Another cloud addition is being checked. Retry the exact same request ID and batch shortly; do not create a new request.',
+  image_attachment_invalid: 'An image attachment is invalid or targets an existing duplicate. Check its shard target, verified upload ID, caption, and placement. Existing knowledge was preserved.',
+  image_upload_unavailable: 'An image upload is unavailable, expired, or belongs to a different owner. Re-upload the same original image and review this save. Existing knowledge was preserved.',
 });
 
 export class AtlasContributionError extends Error {
@@ -44,7 +49,11 @@ export function validateCloudContributionArguments(args) {
     if (!object(args) || Object.keys(args).some(key => !['batch', 'expectedRevision'].includes(key))
         || !own(args, 'batch') || !own(args, 'expectedRevision') || !validRevision(args.expectedRevision)
         || !object(args.batch) || !Array.isArray(args.batch.shards) || !Array.isArray(args.batch.links)) fail('invalid_contribution', 400);
-    const batch = validateInboxEnvelope({format: 'shard-atlas-inbox', version: 1, batch: args.batch});
+    if (Object.keys(args.batch).some(key => !['requestId', 'shards', 'links', 'images'].includes(key))) fail('invalid_contribution', 400);
+    const {images, ...textBatch} = args.batch;
+    validateInboxEnvelope({format: 'shard-atlas-inbox', version: 1, batch: textBatch});
+    const batch = args.batch;
+    if (own(batch, 'images')) validateImageAttachments(images, batch.shards.map(shard => shard.id));
     if (batch.shards.length > CLOUD_CONTRIBUTION_LIMITS.shards || batch.links.length > CLOUD_CONTRIBUTION_LIMITS.links) fail('invalid_contribution', 400);
     if (encoder.encode(JSON.stringify(batch)).byteLength > CLOUD_CONTRIBUTION_LIMITS.batchBytes) fail('contribution_too_large', 413);
     for (const shard of batch.shards) {
@@ -65,7 +74,7 @@ export function validateCloudContributionArguments(args) {
 function storageFor(env) {
   if (!env || !env.DB || !env.BUCKET || typeof env.DB.prepare !== 'function' || typeof env.DB.batch !== 'function'
       || typeof env.BUCKET.get !== 'function' || typeof env.BUCKET.head !== 'function' || typeof env.BUCKET.put !== 'function') fail('cloud_library_unavailable');
-  return new LibraryStorage(env.DB, env.BUCKET, 'owner');
+  return new LibraryStorage(env.DB, env.BUCKET, libraryNamespace(env));
 }
 
 async function currentRevision(storage) {
@@ -75,42 +84,24 @@ async function currentRevision(storage) {
 }
 
 async function capsuleForCommit(storage, commit, {allowConflict = false} = {}) {
-  if (!object(commit) || !validRevision(commit.id) || !commit.id || commit.library_id !== 'owner'
+  if (!object(commit) || !validRevision(commit.id) || !commit.id || commit.library_id !== storage.libraryId
       || !['accepted', ...(allowConflict ? ['conflict'] : [])].includes(commit.status) || !validTimestamp(commit.created_at)
       || typeof commit.manifest !== 'string' || commit.manifest.length > MAX_MANIFEST_BYTES
       || encoder.encode(commit.manifest).byteLength > MAX_MANIFEST_BYTES) fail('cloud_library_invalid');
   let manifest;
   try {manifest = validateManifest(JSON.parse(commit.manifest));} catch {fail('cloud_library_invalid');}
-  if (manifest.bytes > CLOUD_CONTRIBUTION_LIMITS.snapshotBytes) fail('cloud_snapshot_too_large', 413);
   return decodeCapsule(storage, manifest);
 }
 
 async function decodeCapsule(storage, manifest) {
-  const bytes = new Uint8Array(manifest.bytes);
-  let offset = 0;
-  for (const chunk of manifest.chunks) {
-    const blob = await storage.blob(chunk.sha256);
-    if (!blob || blob.size !== chunk.bytes || !blob.body || typeof blob.body.getReader !== 'function') fail('cloud_library_invalid');
-    const reader = blob.body.getReader(), part = new Uint8Array(chunk.bytes);
-    let length = 0;
-    try {
-      while (true) {
-        const next = await reader.read();
-        if (next.done) break;
-        if (!(next.value instanceof Uint8Array) || length + next.value.byteLength > part.byteLength) fail('cloud_library_invalid');
-        part.set(next.value, length); length += next.value.byteLength;
-      }
-    } finally {await reader.cancel().catch(() => {}); reader.releaseLock();}
-    if (length !== chunk.bytes || await sha256(part) !== chunk.sha256) fail('cloud_library_invalid');
-    bytes.set(part, offset); offset += part.byteLength;
-  }
-  if (offset !== manifest.bytes || await sha256(bytes) !== manifest.sha256) fail('cloud_library_invalid');
   try {
-    const capsule = validateCapsule(JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes)));
+    const capsule = validateCapsule(await readCloudCapsule(storage, manifest, {metadataBytes: CLOUD_CONTRIBUTION_LIMITS.snapshotBytes}));
     validateCurrent(capsule);
     return capsule;
   } catch (error) {
     if (error instanceof AtlasContributionError) throw error;
+    if (error?.code === 'cloud_snapshot_too_large') fail('cloud_snapshot_too_large', 413);
+    if (error?.code === 'cloud_library_unavailable') fail('cloud_library_unavailable');
     fail('cloud_library_invalid');
   }
 }
@@ -194,10 +185,11 @@ function remapShard(shard, aliases) {
   return result;
 }
 
-function planAddition(capsule, batch, {stamp, acceptedRevision}) {
+function planAddition(capsule, batch, {stamp, acceptedRevision, images = [], savedAssets = []}) {
   const shards = new Map(capsule.archive.shards.map(record => [record.id, record]));
   const links = new Map(capsule.archive.links.map(record => [record.id, record]));
   const duplicates = new Map(capsule.archive.shards.map(record => [contentKey(record), record]));
+  const originalDuplicates = new Set(duplicates.keys());
   const tags = new Map(capsule.archive.shards.flatMap(record => record.tags ?? []).map(tag => [lower(tag), tag]));
   const deleted = new Set();
   for (const item of capsule.archive.trash) {
@@ -208,18 +200,22 @@ function planAddition(capsule, batch, {stamp, acceptedRevision}) {
   const addedLinks = [], shardReceipts = [], linkReceipts = [], idMap = new Map();
   try {
     for (const data of batch.shards) {
+      const attachments = images.filter(image => image.shardId === data.id);
+      if (attachments.length && (shards.has(data.id) || originalDuplicates.has(contentKey(data)))) fail('image_attachment_invalid', 409);
       const values = {...copy(data), tags: [...new Set(data.tags.map(tag => {
         const value = tag.trim(), key = lower(value);
         if (!tags.has(key)) tags.set(key, value);
         return tags.get(key);
-      }))], createdAt: stamp, updatedAt: stamp};
+      }))], content: attachImagesToContent(data.content, attachments), createdAt: stamp, updatedAt: stamp};
       const shard = validateShard(values, {imported: true});
+      originalDuplicates.add(contentKey(data));
       let current = shards.get(shard.id), reason;
       if (current) {
         if (current.title !== shard.title || current.content !== shard.content || fingerprint(validateCodeSolution(current.codeSolution ?? {})) !== fingerprint(shard.codeSolution)) fail('contribution_conflict', 409);
         reason = 'id_exists';
       } else if (deleted.has(shard.id)) fail('contribution_conflict', 409);
       else if (duplicates.has(contentKey(shard))) {current = duplicates.get(contentKey(shard)); reason = 'content_duplicate';}
+      if (attachments.length && current) fail('image_attachment_invalid', 409);
       if (!current) {current = shard; addedShards.push(shard); shards.set(shard.id, shard); duplicates.set(contentKey(shard), shard);}
       idMap.set(shard.id, current.id);
       shardReceipts.push({inputId: shard.id, id: current.id, title: current.title, outcome: reason ? 'existing' : 'added', ...(reason ? {reason} : {})});
@@ -243,6 +239,7 @@ function planAddition(capsule, batch, {stamp, acceptedRevision}) {
     }
   } catch (error) {
     if (error instanceof AtlasContributionError) throw error;
+    if (error?.code === 'invalid_image_attachment') fail('image_attachment_invalid', error.status);
     fail('contribution_conflict', 409);
   }
   const savedRecords = [...shardReceipts.map(record => ({kind: 'shards', id: record.id, fingerprint: fingerprint(shards.get(record.id))})),
@@ -250,8 +247,8 @@ function planAddition(capsule, batch, {stamp, acceptedRevision}) {
   const receipt = {requestId: batch.requestId, createdAt: stamp, replayed: false, verified: true, currentContentMatches: true,
     added: {shards: addedShards.length, links: addedLinks.length}, skipped: {shards: batch.shards.length - addedShards.length, links: batch.links.length - addedLinks.length},
     shards: shardReceipts, links: linkReceipts, idMap: Object.fromEntries(idMap), acceptedRevision,
-    presentShardIds: shardReceipts.map(record => record.id), missingShardIds: []};
-  const entry = {requestId: batch.requestId, fingerprint: fingerprint(batch), receipt, savedRecords};
+    presentShardIds: shardReceipts.map(record => record.id), missingShardIds: [], ...(images.length ? {images} : {})};
+  const entry = {requestId: batch.requestId, fingerprint: fingerprint(batch), receipt, savedRecords, ...(images.length ? {savedAssets} : {})};
   const receipts = capsule.contributionReceipts ?? [];
   if (receipts.length >= INBOX_LIMITS.receipts || encoder.encode(JSON.stringify([...receipts, entry])).byteLength > INBOX_LIMITS.receiptBytes) fail('cloud_snapshot_too_large', 413);
   return {...capsule, archive: {...capsule.archive, shards: [...capsule.archive.shards, ...addedShards], links: [...capsule.archive.links, ...addedLinks],
@@ -274,6 +271,7 @@ function validateReceipt(entry, batch) {
 }
 
 function checkedReceipt(entry, batch) {
+  validateImageReceipt(entry, batch);
   const receipt = entry.receipt;
   if (!object(receipt) || receipt.requestId !== batch.requestId || !validTimestamp(receipt.createdAt)
       || !object(receipt.idMap) || !object(receipt.added) || !object(receipt.skipped)
@@ -329,7 +327,7 @@ function verifyLegacyReceipt(receipt, batch, shards, links, changedShardIds, cha
   } catch {fail('cloud_library_invalid');}
 }
 
-function currentReceipt(entry, batch, current, {acceptedRevision = null, replayed = true} = {}) {
+function currentReceipt(entry, batch, current, {acceptedRevision = null, replayed = true, imageCheck = {missingAssetIds: [], changedAssetIds: []}} = {}) {
   validateReceipt(entry, batch);
   const shards = new Map(current.capsule.archive.shards.map(record => [record.id, record]));
   const links = new Map(current.capsule.archive.links.map(record => [record.id, record]));
@@ -352,7 +350,7 @@ function currentReceipt(entry, batch, current, {acceptedRevision = null, replaye
     }
     if (entry.savedRecords.length !== receipt.shards.length + receipt.links.length || [...expected.values()].some(count => count !== 0)) fail('cloud_library_invalid');
   } else verifyLegacyReceipt(receipt, batch, shards, links, changedShardIds, changedLinkIds);
-  const matches = !missingShardIds.length && !missingLinkIds.length && !changedShardIds.length && !changedLinkIds.length;
+  const matches = !missingShardIds.length && !missingLinkIds.length && !changedShardIds.length && !changedLinkIds.length && !imageCheck.missingAssetIds.length && !imageCheck.changedAssetIds.length;
   return {requestId: batch.requestId, replayed, verified: matches, currentContentMatches: matches, originalSaveVerified: receipt.verified === true,
     createdAt: receipt.createdAt, acceptedRevision: acceptedRevision ?? (validRevision(receipt.acceptedRevision) ? receipt.acceptedRevision : null), currentRevision: current.revision,
     added: {shards: receipt.added.shards, links: receipt.added.links}, skipped: {shards: receipt.skipped.shards, links: receipt.skipped.links}, shards: receipt.shards.map(record => ({inputId: record.inputId, id: record.id, title: record.title, outcome: record.outcome, ...(record.reason ? {reason: record.reason} : {})})),
@@ -360,6 +358,7 @@ function currentReceipt(entry, batch, current, {acceptedRevision = null, replaye
       fromApproachId: record.fromApproachId || '', toApproachId: record.toApproachId || '', outcome: record.outcome, ...(record.reason ? {reason: record.reason} : {})})),
     idMap: Object.fromEntries(receipt.shards.map(record => [record.inputId, record.id])), presentShardIds: receipt.shards.filter(record => shards.has(record.id)).map(record => record.id),
     missingShardIds, missingLinkIds, changedShardIds, changedLinkIds,
+    ...(entry.receipt.images?.length ? {images: entry.receipt.images, ...imageCheck} : {}),
     ...(!matches ? {warnings: ['This request was saved previously. Later changes or deletions were preserved; no notes were added again.']} : {})};
 }
 
@@ -368,11 +367,12 @@ async function priorReceipt(storage, row, batch) {
   const entry = matchingEntry(capsule, batch);
   if (!entry) fail('cloud_library_invalid');
   if (row.status === 'conflict') fail('request_conflicted', 409);
+  const imageCheck = await compareImageReceiptAssets(capsule, entry);
   const observed = {revision: row.id, capsule: {archive: {shards: capsule.archive.shards, links: capsule.archive.links}}};
-  if (!currentReceipt(entry, batch, observed).currentContentMatches) fail('cloud_library_invalid');
+  if (!currentReceipt(entry, batch, observed, {imageCheck}).currentContentMatches) fail('cloud_library_invalid');
   // Only the small receipt escapes this function; historical images and recovery
   // payloads can be released before loading a newer current cloud revision.
-  return {entry, observed};
+  return {entry, observed, imageCheck};
 }
 
 async function finishAccepted(storage, row, batch, replayed) {
@@ -380,30 +380,25 @@ async function finishAccepted(storage, row, batch, replayed) {
   let current;
   if (await currentRevision(storage) === row.id && await currentRevision(storage) === row.id) current = prior.observed;
   else current = await loadCurrent(storage);
-  return currentReceipt(prior.entry, batch, current, {acceptedRevision: row.id, replayed});
+  const imageCheck = current === prior.observed ? prior.imageCheck : await compareImageReceiptAssets(current.capsule, prior.entry);
+  return currentReceipt(prior.entry, batch, current, {acceptedRevision: row.id, replayed, imageCheck});
 }
 
-async function prepareCloudSnapshot(capsule, baseRevision, mutationId) {
+async function prepareCloudSnapshot(capsule, baseRevision, mutationId, storage) {
   validateCapsule(capsule);
   if (Object.values(capsule.archive).some(value => Array.isArray(value) && value.length > 100_000)) fail('cloud_snapshot_too_large', 413);
-  // A hosted request needs no durable device outbox. Serialize once and retain
-  // subarray views into one bounded buffer instead of duplicating every chunk.
-  const bytes = encoder.encode(JSON.stringify(capsule));
-  if (bytes.byteLength > CLOUD_CONTRIBUTION_LIMITS.snapshotBytes) fail('cloud_snapshot_too_large', 413);
-  const chunks = [];
-  for (let offset = 0; offset < bytes.byteLength; offset += CHUNK_BYTES) {
-    const data = bytes.subarray(offset, Math.min(offset + CHUNK_BYTES, bytes.byteLength));
-    chunks.push({sha256: await sha256(data), bytes: data.byteLength, data});
+  try {return await streamCloudSnapshot(storage, capsule, baseRevision, mutationId, {metadataBytes: CLOUD_CONTRIBUTION_LIMITS.snapshotBytes});}
+  catch (error) {
+    if (error?.code === 'cloud_snapshot_too_large') fail('cloud_snapshot_too_large', 413);
+    if (error?.code === 'cloud_library_invalid') fail('cloud_library_invalid');
+    fail('cloud_library_unavailable');
   }
-  return {mutationId, baseRevision, chunks, manifest: {protocolVersion: PROTOCOL_VERSION, archiveVersion: ARCHIVE_VERSION,
-    format: 'shard-atlas-library-json', sha256: await sha256(bytes), bytes: bytes.byteLength,
-    chunks: chunks.map(({sha256, bytes}) => ({sha256, bytes}))}};
 }
 
-async function publishAddition(storage, current, batch, mutationId, onAttempt) {
+async function publishAddition(storage, current, batch, mutationId, onAttempt, attachmentState) {
   const id = crypto.randomUUID(), stamp = new Date().toISOString();
-  const next = planAddition(current.capsule, batch, {stamp, acceptedRevision: id});
-  const pending = await prepareCloudSnapshot(next, current.revision, mutationId);
+  const next = planAddition(attachmentState.capsule, batch, {stamp, acceptedRevision: id, ...attachmentState});
+  const pending = await prepareCloudSnapshot(next, current.revision, mutationId, storage);
   for (let index = 0; index < pending.chunks.length; index++) {
     const chunk = pending.chunks[index], expected = pending.manifest.chunks[index];
     if (chunk.data.byteLength > CHUNK_BYTES || chunk.data.byteLength !== expected.bytes || await sha256(chunk.data) !== expected.sha256) fail('cloud_library_invalid');
@@ -440,7 +435,7 @@ export async function withCloudMutationStorage(env, operation) {
   return serialized(storage, () => operation(storage));
 }
 
-async function contribute(storage, {batch, expectedRevision}) {
+async function contribute(storage, {batch, expectedRevision}, env, options) {
   let publicationAttempted = false;
   try {
     const mutationId = 'mcp-add-' + await sha256(encoder.encode(batch.requestId));
@@ -452,9 +447,12 @@ async function contribute(storage, {batch, expectedRevision}) {
     if (await storage.receipt('mcp-edit-' + await sha256(encoder.encode(batch.requestId)))) fail('request_id_reused', 409);
     let current = await loadCurrent(storage);
     const existing = matchingEntry(current.capsule, batch);
-    if (existing) return currentReceipt(existing, batch, current);
+    if (existing) return currentReceipt(existing, batch, current, {imageCheck: await compareImageReceiptAssets(current.capsule, existing)});
     if (current.revision !== expectedRevision) fail('cloud_library_changed', 409);
-    const published = await publishAddition(storage, current, batch, mutationId, () => {publicationAttempted = true;});
+    let attachmentState;
+    try {attachmentState = await prepareImageAttachments(env, current.capsule, batch.images, options.ownerId);}
+    catch (error) {fail(error?.code === 'invalid_image_attachment' ? 'image_attachment_invalid' : 'image_upload_unavailable', error?.status || 400);}
+    const published = await publishAddition(storage, current, batch, mutationId, () => {publicationAttempted = true;}, attachmentState);
     current = null;
     if (published.row.status === 'conflict') {await priorReceipt(storage, published.row, batch); fail('request_conflicted', 409);}
     return await finishAccepted(storage, published.row, batch, published.replayed);
@@ -467,12 +465,12 @@ async function contribute(storage, {batch, expectedRevision}) {
   }
 }
 
-export async function contributeCloudKnowledge(env, args) {
+export async function contributeCloudKnowledge(env, args, options = {}) {
   const validated = validateCloudContributionArguments(args);
   let storage;
   try {storage = storageFor(env);} catch (error) {
     if (error instanceof AtlasContributionError) throw error;
     fail('cloud_library_unavailable');
   }
-  return serialized(storage, () => contribute(storage, validated));
+  return serialized(storage, () => contribute(storage, validated, env, options));
 }

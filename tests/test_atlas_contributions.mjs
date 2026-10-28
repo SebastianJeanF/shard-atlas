@@ -298,13 +298,13 @@ test('ID conflicts, deleted identities and dangling approach references reject t
   });
 });
 
-test('malformed and oversized current snapshots fail without publishing and provider errors never expose private details', async t => {
+test('malformed current snapshots fail without publishing and provider errors never expose private details', async t => {
   const f = fixture(t), expectedRevision = await f.seed();
   const row = await f.storage.commit(expectedRevision), manifest = JSON.parse(row.manifest);
   const tooLarge = {...manifest, bytes: CLOUD_CONTRIBUTION_LIMITS.snapshotBytes + 1,
     chunks: Array.from({length: 5}, (_, index) => ({sha256: 'a'.repeat(64), bytes: index === 4 ? 1 : 4 * 1024 * 1024}))};
   f.sqlite.prepare('UPDATE library_commits SET manifest=? WHERE id=?').run(JSON.stringify(tooLarge), expectedRevision);
-  await rejects(() => contributeCloudKnowledge(f.env, {batch: batch(), expectedRevision}), 'cloud_snapshot_too_large');
+  await rejects(() => contributeCloudKnowledge(f.env, {batch: batch(), expectedRevision}), 'cloud_library_invalid');
   f.sqlite.prepare('UPDATE library_commits SET manifest=? WHERE id=?').run(row.manifest, expectedRevision);
   f.objects.delete('libraries/owner/blobs/' + manifest.chunks[0].sha256);
   await rejects(() => contributeCloudKnowledge(f.env, {batch: batch(), expectedRevision}), 'cloud_library_invalid');

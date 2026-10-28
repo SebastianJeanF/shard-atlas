@@ -1,6 +1,6 @@
 // Edits share the existing knowledge types, but contain sparse changes rather
 // than replacement records. The engine validates each merged saved record.
-import {CLOUD_BATCH_SCHEMA} from './contribution-schema.mjs';
+import {CLOUD_BATCH_SCHEMA, CLOUD_IMAGES_SCHEMA} from './contribution-schema.mjs';
 
 const clone = value => JSON.parse(JSON.stringify(value));
 function withoutNull(schema) {
@@ -31,6 +31,7 @@ function sparseObject(schema) {
 const shardSource = CLOUD_BATCH_SCHEMA.properties.shards.items;
 const linkSource = CLOUD_BATCH_SCHEMA.properties.links.items;
 const shardChanges = sparseObject(shardSource);
+shardChanges.minProperties = 0;
 delete shardChanges.properties.id;
 shardChanges.properties.prompt = {type: 'string', maxLength: 10_000,
   description: 'The explicitly revised problem or study prompt. Omission preserves the saved prompt.'};
@@ -52,9 +53,10 @@ const item = (changes, description) => ({type: 'object', additionalProperties: f
 
 export const CLOUD_EDIT_BATCH_SCHEMA = {
   type: 'object', additionalProperties: false, required: ['requestId', 'shards', 'links'],
-  description: 'One atomic edits-only batch. Include at least one shard or connection change. Omitted fields are preserved; ordinary arrays explicitly replace their field, except keyed codeSolution.approaches upserts. No new shards/connections, deletes, image uploads, IDs, timestamps, or review metadata.',
+  description: 'One atomic edits-only batch. Include at least one shard or connection change, or verified image attachment targeting an explicitly listed existing shard. Omitted fields are preserved. No new shards/connections, deletes, IDs, timestamps, or review metadata. Images must be uploaded separately first.',
   properties: {
     requestId: {...clone(CLOUD_BATCH_SCHEMA.properties.requestId), description: 'Unique stable identifier for this exact edit batch. Retry the identical batch and request ID after uncertain outcomes; never reuse the ID for different edits or additions.'},
+    images: {...clone(CLOUD_IMAGES_SCHEMA), description: 'Ordered image attachments to existing shard IDs explicitly included in this edit batch. An image-only target may use changes:{}. Verified upload IDs and descriptors remain unchanged on retry.'},
     shards: {type: 'array', maxItems: 20, items: item(shardChanges,
       'Sparse changes to this existing shard. Objects merge recursively. Omitted optional fields remain unchanged; explicitly supplied ordinary arrays replace the saved field. codeSolution.approaches uses keyed upserts instead.')},
     links: {type: 'array', maxItems: 100, items: item(linkChanges,

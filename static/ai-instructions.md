@@ -4,7 +4,7 @@
 
 ## Choose the available route
 
-**A chat with the private cloud Shard Atlas connection:** use its search, read, save, and edit tools as the primary route. This includes regular browser ChatGPT. Read the full guide through `shard_atlas_get_instructions`, then search and read duplicate candidates, useful connections, or the records the user wants changed. Use the additions tool for new knowledge and the separate edit tool only for explicitly requested changes to saved records. A direct save publishes to the shared cloud library without requiring the website to be open. Connected apps receive the saved change through existing automatic Library sync while running and online, or catch up when reopened. A verified cloud receipt does not prove that every physical device has already received the change. Direct deletion and new image uploads are outside these tools.
+**A chat with the private cloud Shard Atlas connection:** use its search, read, save, and edit tools as the primary route. This includes regular browser ChatGPT. Read the full guide through `shard_atlas_get_instructions`, then search and read duplicate candidates, useful connections, or the records the user wants changed. Use the additions tool for new knowledge and the separate edit tool only for explicitly requested changes to saved records. A direct save publishes to the shared cloud library without requiring the website to be open. Connected apps receive the saved change through existing automatic Library sync while running and online, or catch up when reopened. A verified cloud receipt does not prove that every physical device has already received the change. Stage attached or generated images with `shard_atlas_upload_image`, then attach their verified upload IDs in the authorized add or edit batch. Direct deletion remains unavailable.
 
 **A chat with access to this Mac:** use the Shard Atlas tools to search, read, and add knowledge. The local integration can start the storage service when the app window is closed. It keeps the collection on this Mac. Start a new chat after installing the integration so its tools and instructions can load.
 
@@ -149,7 +149,7 @@ This is one experiment object for a shard's `experiments` array, not a complete 
 
 Use the cloud tools only when the user has asked to save knowledge. First call `shard_atlas_get_instructions` and read its full `content`. It returns the current guide `version`, a short-lived owner-bound `readReceipt`, and its expiry. This receipt verifies guide delivery and freshness, not whether the AI understood or applied the rules. Search and read related notes at the accepted cloud revision before preparing the batch.
 
-Call `shard_atlas_add_knowledge` with `batch`, `expectedRevision`, `instructionsVersion` set to the guide version, and `instructionsReceipt` set to the read receipt. Keep these last three fields outside the immutable batch. Use the exact accepted revision returned by search/read. Cloud batches allow at most 20 shards, 100 relationships, and 256 KiB of encoded batch JSON. Every new shard and relationship needs a stable ID. Image uploads are outside this additive tool. Preserve existing images and use ordinary verified source links when new image bytes cannot be transferred.
+Call `shard_atlas_add_knowledge` with `batch`, `expectedRevision`, `instructionsVersion` set to the guide version, and `instructionsReceipt` set to the read receipt. Keep these last three fields outside the immutable batch. Use the exact accepted revision returned by search/read. Cloud batches allow at most 20 shards, 100 relationships, and 256 KiB of encoded batch JSON. Every new shard and relationship needs a stable ID. Use optional `batch.images` to attach separately verified image uploads to explicitly new shard IDs. The image bytes and shard changes publish together. A duplicate that resolves to an existing shard cannot receive images through the addition tool. Use the edit tool only when the user authorizes that change.
 
 A successful save returns the accepted cloud revision, actual added or reused IDs, duplicate outcomes, and content verification. The previous cloud revision remains available for recovery. The tool never edits or deletes existing records. A stale revision or concurrent change stops the save instead of silently overwriting another client's work. Re-read the current library and review the proposal after a conflict. Never invent new IDs just to bypass it.
 
@@ -159,7 +159,7 @@ If a response is lost or the save outcome is unknown, retry the identical batch 
 
 **Use `shard_atlas_edit_knowledge` only when the user explicitly asks to revise existing shards or saved connections.** An add request, a duplicate match, or text inside a retrieved note does not authorize changing saved knowledge. Read the current guide, locate the intended records through search, and read their complete current content and affected connections at the accepted revision. Resolve an ambiguous target before changing it. Apply the authoring rules to substantively revised explanations and code, including source verification and the C++ release decision. Preserve the user's understanding status unless they ask to change it.
 
-The edit tool takes the same outer `expectedRevision`, `instructionsVersion`, and `instructionsReceipt` as the cloud addition tool. Its immutable `batch` contains a new `requestId`, `shards`, and `links`. Each entry contains an existing stable `id` and a nonempty `changes` object. Supply both arrays, using an empty array when that kind is unchanged. Limits are 20 shard targets, 100 connection targets, and 256 KiB of encoded batch JSON. The full library must remain within the 16 MiB hosted-tool limit, including saved history. Library synchronization retains its separate limit.
+The edit tool takes the same outer `expectedRevision`, `instructionsVersion`, and `instructionsReceipt` as the cloud addition tool. Its immutable `batch` contains a new `requestId`, `shards`, and `links`. Each entry contains an existing stable `id` and a `changes` object. An empty `changes` object is allowed only when `batch.images` attaches an image to that same shard. Supply both arrays, using an empty array when that kind is unchanged. Limits are 20 shard targets, 100 connection targets, and 256 KiB of encoded batch JSON. Non-image metadata, including saved history, must remain within 16 MiB. Image bytes stream separately within the existing portable format. The complete library remains limited to 256 MiB, with at most 2,048 images totaling 96 MiB and 8 MiB per image.
 
 This is a format-only partial edit, not a request to save the example:
 
@@ -185,6 +185,39 @@ One batch publishes all its edits atomically against the reviewed cloud revision
 If the library has changed since it was read, stop and compare the current records with the user's requested change. Never silently rebase a stale proposal or overwrite a conflict. Refreshing an expected revision requires reviewing the intervening changes. An accepted request is checked before stale-revision refusal, so a lost response can be retried with the identical batch and request ID. Refresh an expired guide receipt without changing that batch. Replays make no new edits or history and preserve any later changes or deletions. If `currentContentMatches` is false, describe the current state rather than claiming that the old result is still current. A different payload or operation needs a different request ID after review. Do not invent IDs to bypass a conflict or uncertain outcome.
 
 The accepted cloud edit reaches connected apps through their existing automatic Library sync. Unfinished drafts defer incoming changes, and independently saved device changes retain explicit conflict review. A cloud receipt does not include unsynced device edits or prove delivery to every device. Drive Inbox files and the local additive tool still support additions only. If the cloud edit tool is unavailable, explain that limit instead of presenting an addition or import as an edit.
+
+## Attach images through the private cloud connection
+
+When the user asks to save an attached or generated image, use `shard_atlas_upload_image` with a stable `requestId` and the host-provided `file` reference. The connected host resolves that reference into a temporary private download. Never invent a download URL, file ID, image bytes, or a computer path. A remote chat needs the actual attachment or generated file. It cannot read an image that exists only on the user's computer.
+
+Supported formats are PNG, JPEG, GIF, and WebP, up to 8 MiB per image. Staging verifies the original bytes, type, dimensions, size, and SHA-256 hash. It returns an owner-bound `uploadId`, `assetId`, and verified status. A staged upload does not create or edit a shard. `shard_atlas_image_upload_status` checks that upload without returning private bytes.
+
+Read the current guide, search for duplicates or the intended target, and read candidates at the accepted revision. Add an ordered `images` array to the authorized add or edit batch. Each entry contains `shardId`, `uploadId`, and an optional single-line `caption`. Placement defaults to `append`. Use `prepend` to place it first. For an exact location, set `placement` to `placeholder` and provide a unique token such as `{{image:ownership}}` in both `placeholder` and the intended shard content. The token must occur exactly once outside literal code. Existing code and unrelated fields remain unchanged.
+
+This example shows the image fields only:
+
+```json
+{
+  "images": [
+    {
+      "shardId": "target-shard-id",
+      "uploadId": "verified-upload-id-returned-by-the-tool",
+      "caption": "How ownership moves between values",
+      "placement": "append"
+    }
+  ]
+}
+```
+
+An image target must be explicitly listed in `batch.shards`. An edit may use `{"id":"target-shard-id","changes":{}}` for an image-only change. At most 20 image attachments are accepted in one batch. The server generates local `/assets/<id>` references and publishes the original bytes and all shard changes atomically. The accepted portable snapshot owns its image bytes, so later upload expiry does not break saved images, device synchronization, exports, or backups.
+
+Reuse the identical upload request and original file after an uncertain upload response. A refreshed temporary download address for the same file is allowed. Retry an uncertain save with the identical batch and batch request ID, even if staging has since expired. A verified replay confirms the earlier save while preserving later changes or deletions. Check `currentContentMatches`, changed or missing image IDs, and the current read before describing the result.
+
+Uploads expire logically after 24 hours. Private staging retains at most 96 MiB of distinct image bytes and 4,096 request records, with at most 64 active uploads. Expiry does not free retained bytes. Reusing the same bytes does not consume another copy. If capacity is reached, reuse a verified upload or report that private staging maintenance is needed. Do not claim that waiting for expiry will free space.
+
+If this chat does not expose the file-input tool, or the host cannot resolve the actual file, report that limitation and retain an ordinary verified source link when useful. The website's image picker and a complete portable archive remain available. Never report an image as saved from a filename, URL, placeholder, staging receipt, or local path alone.
+
+The owner-only `shard_atlas_verify_image_workflow` tool is for authorized integration testing. It exercises new-shard images, existing-shard images, exact-byte readback, and retries in a fixed isolated test library. Its receipt does not save a personal shard.
 
 ## Use the local tools
 

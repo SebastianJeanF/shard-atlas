@@ -15,6 +15,13 @@
       "when": 1793039554126,
       "tag": "0001_cooing_stone_men",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793226008452,
+      "tag": "0002_huge_spot",
+      "breakpoints": true
     }
   ]
 }

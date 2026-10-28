@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {CloudLibraryReadError, MAX_READ_ONLY_SNAPSHOT_BYTES, readCloudLibrary} from '../hosting/lib/cloud-library-reader.mjs';
+import {scopeEnvironment} from '../hosting/lib/cloud-library-context.mjs';
 import {CHUNK_BYTES, sha256} from '../sync/protocol.mjs';
 import {preparePendingSnapshot} from '../sync/client.mjs';
 
@@ -96,6 +97,20 @@ test('empty cloud is explicit and is confirmed with two fresh head reads without
   assert.equal(f.calls.head, 2); assert.equal(f.calls.commit, 0); assert.equal(f.calls.blobs, 0);
 });
 
+test('internal QA namespaces verify their own commit and never reuse an owner cache', async t => {
+  const f = fixture(t), namespace = 'qa-image-' + 'a'.repeat(64), qaEnv = scopeEnvironment(f.env, namespace);
+  await f.seed(capsule('Owner concept'));
+  assert.equal((await readCloudLibrary(f.env)).archive.shards[0].title, 'Owner concept');
+  // A scoped head pointing at an owner revision cannot obtain its cached data.
+  f.sqlite.prepare('INSERT INTO library_heads(library_id,revision) VALUES (?,?)').run(namespace, 'revision-1');
+  await rejected(() => readCloudLibrary(qaEnv), 'read_only_snapshot_invalid');
+  const {manifest} = await f.seed(capsule('Isolated QA concept'), 'qa-revision', {libraryId: namespace, makeHead: false});
+  for (const chunk of manifest.chunks) f.objects.set(`libraries/${namespace}/blobs/${chunk.sha256}`, f.objects.get('libraries/owner/blobs/' + chunk.sha256));
+  f.sqlite.prepare('UPDATE library_heads SET revision = ? WHERE library_id = ?').run('qa-revision', namespace);
+  assert.equal((await readCloudLibrary(qaEnv)).archive.shards[0].title, 'Isolated QA concept');
+  assert.equal((await readCloudLibrary(f.env)).archive.shards[0].title, 'Owner concept');
+});
+
 test('single-flight and immutable cache avoid repeated snapshot decoding while every call verifies both live heads', async t => {
   const f = fixture(t); await f.seed();
   const values = await Promise.all(Array.from({length: 5}, () => readCloudLibrary(f.env)));
@@ -155,13 +170,12 @@ test('continually moving heads return an explicit retry error instead of a mixed
   await rejected(() => readCloudLibrary(f.env), 'read_only_library_changed');
 });
 
-test('16 MiB reader cap rejects before object access and does not change the synchronization protocol limit', async t => {
-  const f = fixture(t); const {manifest} = await f.seed();
-  const tooBig = {...manifest, bytes: MAX_READ_ONLY_SNAPSHOT_BYTES + 1,
-    chunks: Array.from({length: 5}, (_, index) => ({sha256: 'a'.repeat(64), bytes: index === 4 ? 1 : CHUNK_BYTES}))};
-  f.sqlite.prepare('UPDATE library_commits SET manifest=? WHERE id=?').run(JSON.stringify(tooBig), 'revision-1');
+test('16 MiB metadata cap remains bounded while image bytes have a separate streamed budget', async t => {
+  const f = fixture(t), value = capsule();
+  value.discardedPadding = 'x'.repeat(MAX_READ_ONLY_SNAPSHOT_BYTES);
+  await f.seed(value);
   await rejected(() => readCloudLibrary(f.env), 'read_only_snapshot_too_large');
-  assert.equal(f.calls.blobs, 0);
+  assert.ok(f.calls.blobs > 0, 'a manifest size alone cannot distinguish images from metadata');
 });
 
 test('multi-chunk snapshots are fully assembled, hashed and checked before returning current notes', async t => {

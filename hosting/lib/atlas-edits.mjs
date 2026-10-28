@@ -3,6 +3,7 @@ import {HASH_PATTERN, ID_PATTERN, sha256} from '../../sync/protocol.mjs';
 import {copy, linkKey, recordId, validateLink, validateLinkEndpoints, validateShard} from '../../web/model.mjs';
 import {fingerprint} from '../../web/archives.mjs';
 import {INBOX_LIMITS} from '../../web/inbox.mjs';
+import {validateImageAttachments, attachImagesToContent, prepareImageAttachments, validateImageReceipt, compareImageReceiptAssets} from './cloud-image-attachments.mjs';
 
 export const CLOUD_EDIT_LIMITS = Object.freeze({batchBytes: 256 * 1024, shards: 20, links: 100, snapshotBytes: 16 * 1024 * 1024});
 const messages = Object.freeze({
@@ -17,6 +18,8 @@ const messages = Object.freeze({
   request_conflicted: 'This edit was not accepted because another cloud change won. Refresh and review the library before preparing a new request; never invent retry IDs automatically.',
   save_outcome_unknown: 'The edit may have been saved, but its current result could not be verified. Retry the exact same request ID and batch; do not create a new request.',
   cloud_busy: 'Another cloud save is being checked. Retry the exact same request ID and batch shortly; do not create a new request.',
+  image_attachment_invalid: 'An image attachment is invalid. Check its explicit shard target, verified upload ID, caption, and placement. Existing knowledge was preserved.',
+  image_upload_unavailable: 'An image upload is unavailable, expired, or belongs to a different owner. Re-upload the same original image and review this save. Existing knowledge was preserved.',
 });
 export class AtlasEditError extends Error {
   constructor(code, status = 503) {
@@ -44,14 +47,14 @@ const linkTypes = new Set(['depends_on', 'explains', 'contrasts_with', 'example_
 function exact(value, fields) {
   if (!object(value) || Object.keys(value).some(key => !fields.has(key))) fail('invalid_edit', 400);
 }
-function finite(value, depth = 0) {
+function finite(value, depth = 0, allowedEmpty = new WeakSet()) {
   if (depth > 64 || value === null) fail('invalid_edit', 400);
   if (['string', 'boolean'].includes(typeof value) || typeof value === 'number' && Number.isFinite(value)) return;
   if (!object(value) && !Array.isArray(value)) fail('invalid_edit', 400);
-  if (object(value) && !Object.keys(value).length) fail('invalid_edit', 400);
+  if (object(value) && !Object.keys(value).length && !allowedEmpty.has(value)) fail('invalid_edit', 400);
   for (const [key, item] of Object.entries(value)) {
     if (forbidden.has(key)) fail('invalid_edit', 400);
-    finite(item, depth + 1);
+    finite(item, depth + 1, allowedEmpty);
   }
 }
 function shardPatch(changes) {
@@ -80,9 +83,13 @@ export function validateCloudEditArguments(args) {
     exact(args, new Set(['batch', 'expectedRevision']));
     if (!own(args, 'batch') || !own(args, 'expectedRevision') || !validRevision(args.expectedRevision)) fail('invalid_edit', 400);
     const batch = args.batch;
-    exact(batch, new Set(['requestId', 'shards', 'links']));
+    exact(batch, new Set(['requestId', 'shards', 'links', 'images']));
     if (!['requestId', 'shards', 'links'].every(key => own(batch, key))) fail('invalid_edit', 400);
-    finite(batch); recordId(batch.requestId, 'requestId');
+    if (!Array.isArray(batch.shards) || !Array.isArray(batch.links)) fail('invalid_edit', 400);
+    if (own(batch, 'images')) validateImageAttachments(batch.images, batch.shards.map(shard => shard?.id));
+    const imageTargets = new Set((batch.images ?? []).map(image => image.shardId)), allowedEmpty = new WeakSet();
+    for (const shard of batch.shards) if (imageTargets.has(shard?.id) && object(shard.changes)) allowedEmpty.add(shard.changes);
+    finite(batch, 0, allowedEmpty); recordId(batch.requestId, 'requestId');
     if (bytes(batch) > CLOUD_EDIT_LIMITS.batchBytes) fail('edit_too_large', 413);
     for (const [kind, fields] of [['shards', shardFields], ['links', linkFields]]) {
       if (!Array.isArray(batch[kind]) || batch[kind].length > CLOUD_EDIT_LIMITS[kind]) fail('invalid_edit', 400);
@@ -90,7 +97,7 @@ export function validateCloudEditArguments(args) {
       for (const entry of batch[kind]) {
         exact(entry, new Set(['id', 'changes'])); recordId(entry.id);
         exact(entry.changes, fields);
-        if (!Object.keys(entry.changes).length || ids.has(entry.id)) fail('invalid_edit', 400);
+        if (!Object.keys(entry.changes).length && !(kind === 'shards' && imageTargets.has(entry.id)) || ids.has(entry.id)) fail('invalid_edit', 400);
         ids.add(entry.id);
         if (kind === 'shards') {
           shardPatch(entry.changes);
@@ -189,7 +196,12 @@ function validateFinal(capsule, shards, links) {
 }
 const batchHash = batch => fingerprint({operation: 'edit', batch});
 
-function planEdit(capsule, batch, stamp, acceptedRevision) {
+function imageChanges(kind, current, changes, images) {
+  const attachments = kind === 'shards' ? images.filter(image => image.shardId === current.id) : [];
+  return attachments.length ? {...changes, content: attachImagesToContent(own(changes, 'content') ? changes.content : current.content, attachments)} : changes;
+}
+
+function planEdit(capsule, batch, stamp, acceptedRevision, {images = [], savedAssets = []} = {}) {
   const maps = {shards: new Map(capsule.archive.shards.map(record => [record.id, record])), links: new Map(capsule.archive.links.map(record => [record.id, record]))};
   const entries = {shards: [], links: []}, edited = {shards: 0, links: 0}, unchanged = {shards: 0, links: 0};
   const savedRecords = [], beforeRecords = [], revisions = [], shardRevisions = [];
@@ -197,7 +209,7 @@ function planEdit(capsule, batch, stamp, acceptedRevision) {
     for (const kind of ['shards', 'links']) for (const {id, changes} of batch[kind]) {
       const current = maps[kind].get(id);
       if (!current) fail('edit_conflict', 409);
-      const next = editedRecord(kind, current, changes, stamp), changed = next !== current;
+      const next = editedRecord(kind, current, imageChanges(kind, current, changes, images), stamp), changed = next !== current;
       maps[kind].set(id, next); (changed ? edited : unchanged)[kind]++;
       if (changed) {
         if (kind === 'shards') {
@@ -214,13 +226,16 @@ function planEdit(capsule, batch, stamp, acceptedRevision) {
     validateFinal(capsule, maps.shards, maps.links);
   } catch (error) {
     if (error instanceof AtlasEditError) throw error;
+    if (error?.code === 'invalid_image_attachment') fail('image_attachment_invalid', error.status);
     fail('edit_conflict', 409);
   }
   const receipt = {requestId: batch.requestId, operation: 'edit', createdAt: stamp, replayed: false, verified: true, currentContentMatches: true,
     // Older browser import-history renderers expect this additions count.
     // Zero is truthful: this operation edits records and never adds them.
-    added: {shards: 0, links: 0}, edited, unchanged, shards: entries.shards, links: entries.links, shardRevisions, acceptedRevision};
-  const entry = {requestId: batch.requestId, operation: 'edit', fingerprint: batchHash(batch), receipt, savedRecords, beforeRecords};
+    added: {shards: 0, links: 0}, edited, unchanged, shards: entries.shards, links: entries.links, shardRevisions, acceptedRevision,
+    ...(images.length ? {images} : {})};
+  const entry = {requestId: batch.requestId, operation: 'edit', fingerprint: batchHash(batch), receipt, savedRecords, beforeRecords,
+    ...(images.length ? {savedAssets} : {})};
   const receipts = [...(capsule.contributionReceipts ?? []), entry];
   if (receipts.length > INBOX_LIMITS.receipts || bytes(receipts) > INBOX_LIMITS.receiptBytes) fail('cloud_snapshot_too_large', 413);
   return {...capsule, archive: {...capsule.archive,
@@ -236,6 +251,7 @@ function matchingEntry(capsule, batch) {
 }
 
 function validateReceipt(entry, batch) {
+  try {validateImageReceipt(entry, batch);} catch {fail('cloud_library_invalid');}
   const receipt = entry.receipt;
   if (entry.operation !== 'edit' || receipt?.operation !== 'edit' || receipt.requestId !== batch.requestId || !validStamp(receipt.createdAt)
       || receipt.verified !== true || !object(receipt.edited) || !object(receipt.unchanged) || !validRevision(receipt.acceptedRevision) || !receipt.acceptedRevision
@@ -275,7 +291,7 @@ function validateReceipt(entry, batch) {
   }
 }
 
-function currentReceipt(entry, batch, current, {acceptedRevision, replayed = true} = {}) {
+function currentReceipt(entry, batch, current, {acceptedRevision, replayed = true, imageCheck = {missingAssetIds: [], changedAssetIds: []}} = {}) {
   validateReceipt(entry, batch);
   const maps = {shards: new Map(current.capsule.archive.shards.map(record => [record.id, record])), links: new Map(current.capsule.archive.links.map(record => [record.id, record]))};
   const missingShardIds = [], missingLinkIds = [], changedShardIds = [], changedLinkIds = [];
@@ -284,7 +300,7 @@ function currentReceipt(entry, batch, current, {acceptedRevision, replayed = tru
     if (!current) (item.kind === 'shards' ? missingShardIds : missingLinkIds).push(item.id);
     else if (fingerprint(current) !== item.fingerprint) (item.kind === 'shards' ? changedShardIds : changedLinkIds).push(item.id);
   }
-  const matches = !missingShardIds.length && !missingLinkIds.length && !changedShardIds.length && !changedLinkIds.length;
+  const matches = !missingShardIds.length && !missingLinkIds.length && !changedShardIds.length && !changedLinkIds.length && !imageCheck.missingAssetIds.length && !imageCheck.changedAssetIds.length;
   return {requestId: batch.requestId, operation: 'edit', replayed, verified: matches, originalSaveVerified: entry.receipt.verified === true,
     currentContentMatches: matches, createdAt: entry.receipt.createdAt, acceptedRevision: acceptedRevision ?? entry.receipt.acceptedRevision, currentRevision: current.revision,
     edited: {shards: entry.receipt.edited.shards, links: entry.receipt.edited.links}, unchanged: {shards: entry.receipt.unchanged.shards, links: entry.receipt.unchanged.links},
@@ -292,6 +308,7 @@ function currentReceipt(entry, batch, current, {acceptedRevision, replayed = tru
     links: entry.receipt.links.map(({inputId, id, outcome, fromId, toId, type, fromApproachId, toApproachId}) => ({inputId, id, outcome, fromId, toId, type, fromApproachId, toApproachId})),
     shardRevisions: entry.receipt.shardRevisions.map(({id, beforeRevisionId, afterRevisionId}) => ({id, beforeRevisionId, afterRevisionId})),
     presentShardIds: entry.receipt.shards.filter(item => maps.shards.has(item.id)).map(item => item.id), missingShardIds, missingLinkIds, changedShardIds, changedLinkIds,
+    ...(entry.receipt.images?.length ? {images: entry.receipt.images, ...imageCheck} : {}),
     ...(!matches ? {warnings: ['This edit was saved previously. Later changes or deletions were preserved; the edit was not applied again.']} : {})};
 }
 
@@ -300,8 +317,9 @@ async function priorReceipt(storage, row, batch) {
   const entry = matchingEntry(capsule, batch);
   if (!entry) fail('cloud_library_invalid');
   if (row.status === 'conflict') fail('request_conflicted', 409);
+  const imageCheck = await compareImageReceiptAssets(capsule, entry);
   const observed = {revision: row.id, capsule: {archive: {shards: capsule.archive.shards, links: capsule.archive.links}}};
-  if (entry.receipt.acceptedRevision !== row.id || !currentReceipt(entry, batch, observed).currentContentMatches) fail('cloud_library_invalid');
+  if (entry.receipt.acceptedRevision !== row.id || !currentReceipt(entry, batch, observed, {imageCheck}).currentContentMatches) fail('cloud_library_invalid');
   const originals = new Map(entry.beforeRecords.map(item => [item.kind + ':' + item.id, item.record]));
   const revisions = new Map(capsule.archive.revisions.filter(object).map(item => [item.id, item]));
   try {
@@ -314,22 +332,23 @@ async function priorReceipt(storage, row, batch) {
     for (const kind of ['shards', 'links']) for (const item of batch[kind]) {
       const after = observed.capsule.archive[kind].find(record => record.id === item.id);
       const before = originals.get(kind + ':' + item.id) ?? after;
-      if (fingerprint(editedRecord(kind, before, item.changes, entry.receipt.createdAt)) !== fingerprint(after)) fail('cloud_library_invalid');
+      if (fingerprint(editedRecord(kind, before, imageChanges(kind, before, item.changes, entry.receipt.images ?? []), entry.receipt.createdAt)) !== fingerprint(after)) fail('cloud_library_invalid');
     }
   } catch {fail('cloud_library_invalid');}
-  return {entry, observed};
+  return {entry, observed, imageCheck};
 }
 
 async function finishAccepted(storage, row, batch, replayed) {
   const prior = await priorReceipt(storage, row, batch);
   const current = await transport.currentRevision(storage) === row.id && await transport.currentRevision(storage) === row.id ? prior.observed : await transport.loadCurrent(storage);
-  return currentReceipt(prior.entry, batch, current, {acceptedRevision: row.id, replayed});
+  const imageCheck = current === prior.observed ? prior.imageCheck : await compareImageReceiptAssets(current.capsule, prior.entry);
+  return currentReceipt(prior.entry, batch, current, {acceptedRevision: row.id, replayed, imageCheck});
 }
 
-async function publishEdit(storage, current, batch, mutationId, onAttempt) {
+async function publishEdit(storage, current, batch, mutationId, onAttempt, attachmentState) {
   const id = crypto.randomUUID(), stamp = new Date().toISOString();
-  const next = planEdit(current.capsule, batch, stamp, id);
-  const pending = await transport.prepareCloudSnapshot(next, current.revision, mutationId);
+  const next = planEdit(attachmentState.capsule, batch, stamp, id, attachmentState);
+  const pending = await transport.prepareCloudSnapshot(next, current.revision, mutationId, storage);
   for (const chunk of pending.chunks) {
     let stored = await storage.blobInfo(chunk.sha256);
     if (!stored) {await storage.putBlob(chunk.sha256, chunk.data); stored = await storage.blobInfo(chunk.sha256);}
@@ -342,7 +361,7 @@ async function publishEdit(storage, current, batch, mutationId, onAttempt) {
   return {row, replayed: row.id !== id};
 }
 
-async function edit(storage, {batch, expectedRevision}) {
+async function edit(storage, {batch, expectedRevision}, env, options) {
   let publicationAttempted = false;
   try {
     const mutationId = 'mcp-edit-' + await sha256(encoder.encode(batch.requestId));
@@ -354,9 +373,12 @@ async function edit(storage, {batch, expectedRevision}) {
     if (await storage.receipt('mcp-add-' + await sha256(encoder.encode(batch.requestId)))) fail('request_id_reused', 409);
     let current = await transport.loadCurrent(storage);
     const existing = matchingEntry(current.capsule, batch);
-    if (existing) return currentReceipt(existing, batch, current);
+    if (existing) return currentReceipt(existing, batch, current, {imageCheck: await compareImageReceiptAssets(current.capsule, existing)});
     if (current.revision !== expectedRevision) fail('cloud_library_changed', 409);
-    const published = await publishEdit(storage, current, batch, mutationId, () => {publicationAttempted = true;});
+    let attachmentState;
+    try {attachmentState = await prepareImageAttachments(env, current.capsule, batch.images, options.ownerId);}
+    catch (error) {fail(error?.code === 'invalid_image_attachment' ? 'image_attachment_invalid' : 'image_upload_unavailable', error?.status || 400);}
+    const published = await publishEdit(storage, current, batch, mutationId, () => {publicationAttempted = true;}, attachmentState);
     current = null;
     if (published.row.status === 'conflict') {await priorReceipt(storage, published.row, batch); fail('request_conflicted', 409);}
     return await finishAccepted(storage, published.row, batch, published.replayed);
@@ -370,9 +392,9 @@ async function edit(storage, {batch, expectedRevision}) {
   }
 }
 
-export async function editCloudKnowledge(env, args) {
+export async function editCloudKnowledge(env, args, options = {}) {
   const validated = validateCloudEditArguments(args);
-  try {return await withCloudMutationStorage(env, storage => edit(storage, validated));}
+  try {return await withCloudMutationStorage(env, storage => edit(storage, validated, env, options));}
   catch (error) {
     if (error instanceof AtlasEditError) throw error;
     if (error instanceof AtlasContributionError) throw new AtlasEditError(error.code, error.status);

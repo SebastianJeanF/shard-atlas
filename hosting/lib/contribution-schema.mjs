@@ -1,5 +1,16 @@
 // Shared knowledge fields follow the local contribution schema. Cloud batches
 // have stricter request limits and require stable relationship IDs for retries.
+export const CLOUD_IMAGES_SCHEMA = {
+  type: 'array', maxItems: 20,
+  description: 'Ordered image attachments from verified private uploads. Keep the original descriptors and upload IDs unchanged on retry. Add targets must be new shards explicitly included in this batch.',
+  items: {type: 'object', additionalProperties: false, required: ['shardId', 'uploadId'], properties: {
+    shardId: {type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$', maxLength: 100},
+    uploadId: {type: 'string', pattern: '^image-upload-[a-f0-9]{64}$', maxLength: 100, description: 'Verified uploadId returned by the image upload tool.'},
+    caption: {type: 'string', maxLength: 1000, description: 'Optional one-line image caption. Omission uses the uploaded filename.'},
+    placement: {type: 'string', enum: ['append', 'prepend', 'placeholder'], description: 'Append by default. Prepend preserves the descriptor order. Placeholder replaces exactly one explicit token outside literal code.'},
+    placeholder: {type: 'string', maxLength: 110, pattern: '^\\{\\{image:[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}\\}\\}$', description: 'Required only with placeholder placement, for example {{image:diagram-1}}. Include that token once in the explanation outside code.'},
+  }},
+};
 export const CLOUD_BATCH_SCHEMA = {
   "type": "object",
   "additionalProperties": false,
@@ -9,6 +20,7 @@ export const CLOUD_BATCH_SCHEMA = {
     "links"
   ],
   "properties": {
+    "images": CLOUD_IMAGES_SCHEMA,
     "requestId": {
       "type": "string",
       "minLength": 1,

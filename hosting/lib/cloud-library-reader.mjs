@@ -1,15 +1,16 @@
 import {LibraryStorage} from '../../sync/storage.mjs';
 import {validateCapsule} from '../../sync/client.mjs';
-import {ID_PATTERN, MAX_MANIFEST_BYTES, SyncError, sha256, validateManifest} from '../../sync/protocol.mjs';
+import {ID_PATTERN, MAX_MANIFEST_BYTES, SyncError, validateManifest} from '../../sync/protocol.mjs';
 import {linkKey, validateLink, validateLinkEndpoints, validateShard} from '../../web/model.mjs';
+import {readCloudCapsule, CloudCapsuleError} from './cloud-capsule.mjs';
+import {libraryNamespace} from './cloud-library-context.mjs';
 
-// The synchronization transport accepts larger archives. This read-only Worker
-// must leave memory for UTF-8 decoding, JSON validation, and the tool response.
+// Image strings stream around this separate non-image metadata bound.
 export const MAX_READ_ONLY_SNAPSHOT_BYTES = 16 * 1024 * 1024;
 const caches = new WeakMap();
 const messages = {
   read_only_storage_unavailable: 'The private cloud library is unavailable. Retry after the connection is restored.',
-  read_only_snapshot_too_large: 'This cloud snapshot exceeds the 16 MiB read-only tool limit. Library synchronization is unaffected; use the local Shard Atlas tools for this library.',
+  read_only_snapshot_too_large: 'The non-image library metadata exceeds the 16 MiB remote tool limit. Library synchronization is unaffected; use the local Shard Atlas tools for this library.',
   read_only_snapshot_invalid: 'The current cloud snapshot could not be verified. No library content was returned.',
   read_only_library_changed: 'The shared library changed during this read. Retry to read one current revision.',
 };
@@ -27,16 +28,19 @@ const validAcceptedAt = value => typeof value === 'string' && value.length <= 64
 
 function readonlyStorage(env) {
   if (!env || !env.DB || !env.BUCKET || typeof env.DB.prepare !== 'function' || typeof env.BUCKET.get !== 'function') fail('read_only_storage_unavailable');
-  const storage = new LibraryStorage(env.DB, env.BUCKET, 'owner');
+  const storage = new LibraryStorage(env.DB, env.BUCKET, libraryNamespace(env));
   // The loader has no callable publication, blob-write, or receipt operation.
-  return {head: () => storage.head(), commit: revision => storage.commit(revision), blob: hash => storage.blob(hash)};
+  return {libraryId: storage.libraryId, head: () => storage.head(), commit: revision => storage.commit(revision), blob: hash => storage.blob(hash)};
 }
 
 function cacheFor(env) {
-  let state = caches.get(env.DB);
+  let namespaces = caches.get(env.DB);
+  if (!namespaces) {namespaces = new Map(); caches.set(env.DB, namespaces);}
+  const namespace = libraryNamespace(env);
+  let state = namespaces.get(namespace);
   if (!state || state.bucket !== env.BUCKET) {
     state = {bucket: env.BUCKET, current: null, loading: null};
-    caches.set(env.DB, state);
+    namespaces.set(namespace, state);
   }
   return state;
 }
@@ -57,39 +61,6 @@ async function head(storage) {
   const revision = await storage.head();
   if (!validRevision(revision)) fail();
   return revision;
-}
-
-async function readChunk(storage, chunk) {
-  const blob = await storage.blob(chunk.sha256);
-  if (!blob || blob.size !== chunk.bytes || !blob.body || typeof blob.body.getReader !== 'function') fail();
-  const reader = blob.body.getReader(), bytes = new Uint8Array(chunk.bytes);
-  let offset = 0;
-  try {
-    while (true) {
-      const part = await reader.read();
-      if (part.done) break;
-      if (!(part.value instanceof Uint8Array) || offset + part.value.byteLength > bytes.byteLength) fail();
-      bytes.set(part.value, offset); offset += part.value.byteLength;
-    }
-  } finally {
-    await reader.cancel().catch(() => {});
-    reader.releaseLock();
-  }
-  if (offset !== chunk.bytes || await sha256(bytes) !== chunk.sha256) fail();
-  return bytes;
-}
-
-async function decodedCapsule(storage, manifest) {
-  const bytes = new Uint8Array(manifest.bytes);
-  let offset = 0;
-  for (const chunk of manifest.chunks) {
-    const data = await readChunk(storage, chunk);
-    bytes.set(data, offset); offset += data.byteLength;
-  }
-  if (offset !== manifest.bytes || await sha256(bytes) !== manifest.sha256) fail();
-  // This function finishes before record validation. Its assembled bytes and
-  // decoded text are not retained by the sanitized revision cache.
-  return JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes));
 }
 
 function validateCurrentRecords(archive) {
@@ -118,13 +89,12 @@ function validateCurrentRecords(archive) {
 
 async function loadRevision(storage, revision) {
   const commit = await storage.commit(revision);
-  if (!object(commit) || commit.id !== revision || commit.library_id !== 'owner' || commit.status !== 'accepted'
+  if (!object(commit) || commit.id !== revision || commit.library_id !== storage.libraryId || commit.status !== 'accepted'
       || !validAcceptedAt(commit.created_at)
       || typeof commit.manifest !== 'string' || commit.manifest.length > MAX_MANIFEST_BYTES
       || new TextEncoder().encode(commit.manifest).byteLength > MAX_MANIFEST_BYTES) fail();
   const manifest = validateManifest(JSON.parse(commit.manifest));
-  if (manifest.bytes > MAX_READ_ONLY_SNAPSHOT_BYTES) fail('read_only_snapshot_too_large', 413);
-  const capsule = validateCapsule(await decodedCapsule(storage, manifest));
+  const capsule = validateCapsule(await readCloudCapsule(storage, manifest, {metadataBytes: MAX_READ_ONLY_SNAPSHOT_BYTES, validateImages: false}));
   if (!object(capsule.archive)) fail();
   validateCurrentRecords(capsule.archive);
   return freeze({revision, snapshotHash: manifest.sha256, acceptedAt: commit.created_at,
@@ -163,6 +133,7 @@ export async function readCloudLibrary(env) {
     fail('read_only_library_changed', 409);
   } catch (error) {
     if (error instanceof CloudLibraryReadError) throw error;
+    if (error instanceof CloudCapsuleError) fail(error.code === 'cloud_snapshot_too_large' ? 'read_only_snapshot_too_large' : error.code === 'cloud_library_unavailable' ? 'read_only_storage_unavailable' : 'read_only_snapshot_invalid', error.status);
     // Validation and provider exceptions can contain private JSON, SQL, or keys.
     // Only fixed, bounded messages and codes cross this module's boundary.
     if (error instanceof SyncError || error?.status === 400 || error?.status === 422 || error instanceof SyntaxError || error instanceof TypeError || error instanceof RangeError) fail();

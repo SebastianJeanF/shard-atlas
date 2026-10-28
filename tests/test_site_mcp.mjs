@@ -42,9 +42,9 @@ test('discovery and the tool list need no library protocol header or storage bin
   const discovery = await invoke(rpc('server/discover'));
   assert.deepEqual(discovery.data, {jsonrpc: '2.0', id: 1, result: {supportedVersions: ['2026-07-28'], capabilities: {tools: {}}, ttlMs: 0, cacheScope: 'private', resultType: 'complete'}});
   const listing = await invoke(rpc('tools/list'), {headers: {'oai-authenticated-user-email': OWNER.toUpperCase(), Origin: 'https://chatgpt.com'}});
-  assert.equal(listing.data.result.tools.length, 9);
-  assert.deepEqual(listing.data.result.tools.map(tool => tool.name), ['shard_atlas_connection_test', 'shard_atlas_search', 'shard_atlas_read', 'shard_atlas_get_instructions', 'shard_atlas_add_knowledge', 'shard_atlas_edit_knowledge', 'shard_atlas_backup_status', 'shard_atlas_prepare_backup', 'shard_atlas_restore_backup']);
-  for (const listed of listing.data.result.tools) assert.deepEqual(listed.annotations, {readOnlyHint: !['shard_atlas_add_knowledge', 'shard_atlas_edit_knowledge', 'shard_atlas_prepare_backup', 'shard_atlas_restore_backup'].includes(listed.name), destructiveHint: ['shard_atlas_edit_knowledge', 'shard_atlas_restore_backup'].includes(listed.name), idempotentHint: true, openWorldHint: false});
+  assert.equal(listing.data.result.tools.length, 12);
+  assert.deepEqual(listing.data.result.tools.map(tool => tool.name), ['shard_atlas_connection_test', 'shard_atlas_search', 'shard_atlas_read', 'shard_atlas_get_instructions', 'shard_atlas_add_knowledge', 'shard_atlas_edit_knowledge', 'shard_atlas_upload_image', 'shard_atlas_image_upload_status', 'shard_atlas_verify_image_workflow', 'shard_atlas_backup_status', 'shard_atlas_prepare_backup', 'shard_atlas_restore_backup']);
+  for (const listed of listing.data.result.tools) assert.deepEqual(listed.annotations, {readOnlyHint: !['shard_atlas_add_knowledge', 'shard_atlas_edit_knowledge', 'shard_atlas_upload_image', 'shard_atlas_verify_image_workflow', 'shard_atlas_prepare_backup', 'shard_atlas_restore_backup'].includes(listed.name), destructiveHint: ['shard_atlas_edit_knowledge', 'shard_atlas_restore_backup'].includes(listed.name), idempotentHint: true, openWorldHint: false});
   assert.equal(listing.data.result.ttlMs, 0); assert.equal(listing.data.result.cacheScope, 'private');
   const tool = listing.data.result.tools[0];
   assert.equal(tool.name, 'shard_atlas_connection_test');
@@ -56,7 +56,7 @@ test('MCP validates every supplied origin while supporting Sites and ChatGPT tra
   for (const origin of ['https://atlas.example.test', 'https://chatgpt.com', 'https://chat.openai.com']) {
     const result = await invoke(rpc('tools/list'), {headers: {Origin: origin}});
     assert.equal(result.response.status, 200);
-    assert.equal(result.data.result.tools.length, 9);
+    assert.equal(result.data.result.tools.length, 12);
   }
   for (const origin of ['null', 'not an origin', 'https://other.example.test', 'https://chatgpt.com.evil.example', 'https://chatgpt.com/', 'https://chatgpt.com https://other.example.test', 'https://user:password@chatgpt.com']) {
     assert.equal((await invoke(rpc('tools/list'), {headers: {Origin: origin}})).response.status, 403);
@@ -91,9 +91,9 @@ test('initialization, ping, and notifications support stateless clients', async 
   const initialized = await invoke(rpc('initialize', {protocolVersion: '2026-07-28', capabilities: {}, clientInfo: {name: 'test-client', version: '1'}}));
   assert.equal(initialized.data.result.protocolVersion, '2026-07-28');
   assert.deepEqual(initialized.data.result.capabilities, {tools: {}});
-  assert.equal(initialized.data.result.serverInfo.version, '1.4.0');
+  assert.equal(initialized.data.result.serverInfo.version, '1.5.0');
   assert.match(initialized.data.result.instructions, /a request to add knowledge does not authorize editing/);
-  assert.match(initialized.data.result.instructions, /No deletion or image upload/);
+  assert.match(initialized.data.result.instructions, /No deletion is available/);
   assert.match(initialized.data.result.instructions, /Unsynced device changes are excluded/);
   assert.deepEqual((await invoke(rpc('ping'))).data.result, {resultType: 'complete'});
   assert.deepEqual((await invoke(rpc('ping', {}, null))).data, {jsonrpc: '2.0', id: null, result: {resultType: 'complete'}});
@@ -359,7 +359,7 @@ test('edit tool publishes a typed sparse schema with explicit array and approach
   const shard = batchSchema.properties.shards.items, link = batchSchema.properties.links.items;
   assert.deepEqual(shard.required, ['id', 'changes']); assert.deepEqual(link.required, ['id', 'changes']);
   for (const changes of [shard.properties.changes, link.properties.changes]) {
-    assert.equal(changes.additionalProperties, false); assert.equal(changes.minProperties, 1); assert.equal(changes.required, undefined);
+    assert.equal(changes.additionalProperties, false); assert.equal(changes.minProperties, changes === shard.properties.changes ? 0 : 1); assert.equal(changes.required, undefined);
     for (const immutable of ['id', 'createdAt', 'updatedAt', 'reviewCount', 'lastReviewedAt', 'nextReviewAt', 'assets', 'delete']) assert.equal(changes.properties[immutable], undefined);
   }
   const code = shard.properties.changes.properties.codeSolution;

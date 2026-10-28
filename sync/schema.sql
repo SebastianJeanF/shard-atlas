@@ -61,3 +61,19 @@ CREATE TABLE backup_restores (
   pre_restore_checkpoint_id TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX backup_restores_history ON backup_restores (library_id, created_at, id);
+
+CREATE TABLE image_uploads (
+  id TEXT PRIMARY KEY NOT NULL,
+  owner_id TEXT NOT NULL,
+  request_id TEXT NOT NULL,
+  file_id_hash TEXT NOT NULL,
+  sha256 TEXT NOT NULL,
+  name TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  bytes INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX image_uploads_request ON image_uploads (owner_id, request_id);
+CREATE INDEX image_uploads_expiry ON image_uploads (owner_id, expires_at);
