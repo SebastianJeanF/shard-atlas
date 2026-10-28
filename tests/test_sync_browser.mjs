@@ -113,6 +113,46 @@ test('two independent browser stores roundtrip exact code, topics, scoped links,
   assert.ok(restored.trash.some(item => item.shard.id === old.id));
 });
 
+test('images added to an existing shard offline survive a draft and browser restart, then sync with captions and recoverable history', async t => {
+  const service = cloud(), a = device(t, service), b = device(t, service);
+  const original = await add(a.store, 'Offline image fixture');
+  await a.sync.run(); await b.sync.run();
+  service.setOnline(false);
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jR7sAAAAASUVORK5CYII=';
+  const gif = 'R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+  const first = (await b.store.request('/api/assets', 'POST', {name: 'offline diagram.png', mimeType: 'image/png', data: png})).result;
+  const second = (await b.store.request('/api/assets', 'POST', {name: 'offline result.gif', mimeType: 'image/gif', data: gif})).result;
+  const content = `Before.\n\n![Input α → β](/assets/${first.id})\n\nBetween.\n\n![Output diagram](/assets/${second.id})\n\nAfter.`;
+  await b.store.request('/api/drafts/editor', 'PUT', {draft: {editingId: original.id, title: original.title, content}});
+  await b.sync.run();
+  assert.equal((await b.sync.status()).state, 'offline');
+  b.sync.stop(); (await b.store.ready).close();
+  const restarted = device(t, service, {indexedDB: b.indexedDB});
+  const draft = (await restarted.store.request('/api/drafts')).result.drafts.editor;
+  assert.equal(draft.content, content);
+  assert.deepEqual((await read(restarted.store)).archive.assets.map(item => item.data), [png, gif]);
+  await restarted.store.request(`/api/shards/${original.id}`, 'PUT', {content: draft.content});
+  assert.equal((await restarted.store.request('/api/drafts')).result.drafts.editor, null);
+  service.setOnline(true); await restarted.sync.run(); await a.sync.run();
+  assert.equal((await restarted.sync.status()).state, 'synced');
+  assert.equal((await a.store.request(`/api/shards/${original.id}`)).result.content, content);
+  assert.deepEqual(libraryCapsule(await read(a.store)), libraryCapsule(await read(restarted.store)));
+
+  const version = (await a.store.request(`/api/shards/${original.id}/revisions`)).result.revisions.find(item => item.snapshot.content === content);
+  await a.store.request('/api/state');
+  await a.store.request(`/api/shards/${original.id}`, 'PUT', {content: 'Images removed from the current explanation.'});
+  await a.sync.run(); await restarted.sync.run();
+  const removed = await read(restarted.store);
+  assert.deepEqual(removed.archive.assets.map(item => item.data), [png, gif]);
+  assert.equal(removed.archive.revisions.find(item => item.id === version.id).snapshot.content, content);
+  await restarted.store.request('/api/state');
+  await restarted.store.request(`/api/shards/${original.id}/restore`, 'POST', {revisionId: version.id});
+  await restarted.sync.run(); await a.sync.run();
+  assert.equal((await a.store.request(`/api/shards/${original.id}`)).result.content, content);
+  assert.deepEqual((await read(a.store)).archive.assets.map(item => item.data), [png, gif]);
+  assert.deepEqual(libraryCapsule(await read(a.store)), libraryCapsule(await read(restarted.store)));
+});
+
 test('offline outbox survives browser restart and retries the original mutation', async t => {
   const service = cloud(), a = device(t, service);
   await add(a.store); service.setOnline(false);

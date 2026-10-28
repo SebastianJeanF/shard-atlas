@@ -17,7 +17,7 @@ class WebBuildTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "web-dist"
             BUILDER.build(output)
-            for filename in ("app.js", "platform.js", "styles.css", "code-solutions.js", "code-solutions.css", "ai-instructions.md"):
+            for filename in ("app.js", "platform.js", "styles.css", "image-editor.js", "code-solutions.js", "code-solutions.css", "ai-instructions.md"):
                 self.assertEqual((ROOT / "static" / filename).read_bytes(), (output / filename).read_bytes(), filename)
             html = (output / "index.html").read_text(encoding="utf-8")
             self.assertIn('src="/bootstrap.mjs"', html)
@@ -28,6 +28,9 @@ class WebBuildTests(unittest.TestCase):
             self.assertNotIn('id="drive-inbox-title"', html)
             self.assertNotIn("platform:", html)
             self.assertLess(html.index('src="/platform.js"'), html.index('src="/bootstrap.mjs"'))
+            self.assertLess(html.index('src="/image-editor.js"'), html.index('src="/bootstrap.mjs"'))
+            self.assertIn('id="image-file"', html)
+            self.assertIn('multiple', html.split('id="image-file"', 1)[1].split('>', 1)[0])
             self.assertIn('src="/drive-inbox.js"', (ROOT / "static/index.html").read_text(encoding="utf-8"))
             self.assertFalse((output / "drive-inbox.js").exists())
             self.assertFalse((output / "spiral/local-emblems").exists())

@@ -18,7 +18,11 @@ Use the atlas for programming languages, computer science, mathematics, and ML o
 
 The editor supports Markdown headings, lists, links, and fenced code blocks. Use `$...$` for inline math and `$$...$$` for displayed math. The bundled KaTeX renderer works offline.
 
-Add or paste an image while editing. PNG, JPEG, GIF, and WebP images up to 8 MB each are stored with the collection and included in exports and backups. Screenshot text recognition uses the local macOS helper in desktop builds.
+**Add images while creating or editing a shard.** In the Images section, choose **Add images** to select one or several files. You can also drop files into that section or the explanation, or paste a copied image into the explanation. New images appear at the last explanation cursor position, with thumbnails immediately visible below the text.
+
+Edit each image's caption, choose **Replace image**, or use **Remove from explanation**. Choose **Save shard** to commit the explanation and its image references. Removing or replacing a reference preserves image files needed by other shards, saved versions, or recovery. Click a thumbnail or an image in a saved shard to enlarge it, then use Fit, Actual size, or the zoom controls.
+
+PNG, JPEG, GIF, and WebP images up to 8 MB each are stored with the collection and included in exports and backups. Image drafts remain on the current device, while saved shard images travel through Library sync. **Read text from last image** uses the local macOS recognition helper in desktop builds.
 
 Type `[[` to find another shard and insert an inline link. Links use stable IDs, so renaming the target does not break them. Put literal C++ attributes in inline code so they are not mistaken for note links.
 

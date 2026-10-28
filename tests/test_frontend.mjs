@@ -25,10 +25,10 @@ class Element {
     this.id = attrs.id || ''; this.name = attrs.name || ''; this.type = attrs.type || (tag === 'button' ? 'submit' : 'text');
     this.value = attrs.value || ''; this.defaultValue = this.value; this.dataset = {};
     this.hidden = 'hidden' in attrs; this.open = false; this.disabled = false; this.inert = false;
-    this.style = {}; this.clientWidth = 900; this.clientHeight = 600; this.naturalWidth = 0; this.naturalHeight = 0; this.scrollLeft = 0; this.scrollTop = 0; this.selectionStart = 0; this.selectionEnd = 0; this.listeners = new Map(); this._html = ''; this._text = '';
+    this.style = {}; this.children = []; this.queries = new Map(); this.clientWidth = 900; this.clientHeight = 600; this.naturalWidth = 0; this.naturalHeight = 0; this.scrollLeft = 0; this.scrollTop = 0; this.selectionStart = 0; this.selectionEnd = 0; this.listeners = new Map(); this._html = ''; this._text = '';
     for (const [key, value] of Object.entries(attrs)) if (key.startsWith('data-')) this.dataset[key.slice(5).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = value;
     const classes = new Set((attrs.class || '').split(/\s+/).filter(Boolean));
-    this.classList = { contains: name => classes.has(name), toggle: (name, force) => { const add = force ?? !classes.has(name); if (add) classes.add(name); else classes.delete(name); return add; }, remove: name => classes.delete(name) };
+    this.classList = { contains: name => classes.has(name), add: name => classes.add(name), toggle: (name, force) => { const add = force ?? !classes.has(name); if (add) classes.add(name); else classes.delete(name); return add; }, remove: name => classes.delete(name) };
   }
   set innerHTML(value) {
     this._html = String(value);
@@ -38,6 +38,15 @@ class Element {
       this.value = option ? (attributes(option[1]).value ?? decode(option[2])) : '';
     }
     this.document?.registerIds(this._html);
+    if ('data-image-list' in this.attrs) {
+      this.children = [...this._html.matchAll(/data-image-index="(\d+)"/g)].map(match => {
+        const card = new Element('div', {'data-image-index': match[1]}, this.document);
+        card.queries.set('img', new Element('img', {}, this.document));
+        card.queries.set('[data-image-caption]', new Element('input', {'data-image-caption': ''}, this.document));
+        card.queries.set('[data-image-editor="view"]', new Element('button', {'data-image-editor': 'view'}, this.document));
+        return card;
+      });
+    }
   }
   get innerHTML() { return this._html; }
   set textContent(value) { this._text = String(value); }
@@ -51,11 +60,13 @@ class Element {
   click() { this.dispatchEvent(new FixtureEvent('click')); }
   closest() { return null; }
   setRangeText(text, start, end) { this.value = this.value.slice(0, start) + text + this.value.slice(end); this.selectionStart = this.selectionEnd = start + text.length; }
+  setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; }
+  getAttribute(name) { return this.attrs[name] ?? null; }
   setAttribute(name, value) { this.attrs[name] = value; }
   removeAttribute(name) { delete this.attrs[name]; if (name === 'src') this.src = ''; }
   getBoundingClientRect() { return { left: 0, top: 0, width: this.clientWidth, height: this.clientHeight }; }
   setPointerCapture() {}
-  querySelector(selector) { return this.document?.querySelector(selector, this._html) || null; }
+  querySelector(selector) { return this.queries.get(selector) || this.document?.querySelector(selector, this._html) || null; }
 }
 class Form extends Element {
   constructor(attrs, document) { super('form', attrs, document); this.elements = {}; }
@@ -82,6 +93,11 @@ class DocumentFixture {
     this.source = source; this.ids = new Map(); this.named = new Map(); this.staticElements = []; this.listeners = new Map();
     this.body = new Element('body', {}, this); this.body._html = source;
     this.registerIds(source);
+    const images = this.ids.get('image-editor');
+    if (images) {
+      for (const name of ['list', 'status', 'count']) images.queries.set('[data-image-' + name + ']', new Element('div', {['data-image-' + name]: ''}, this));
+      images.queries.set('[data-image-editor="choose"]', new Element('button', {'data-image-editor': 'choose'}, this));
+    }
     for (const match of source.matchAll(/<form([^>]*)>([\s\S]*?)<\/form>/g)) {
       const attrs = attributes(match[1]), form = new Form(attrs, this); this.ids.set(form.id, form);
       form.dialogId = [...source.slice(0, match.index).matchAll(/<dialog[^>]*id="([^"]+)"/g)].at(-1)?.[1];
@@ -178,9 +194,9 @@ try {
   const windowListeners = new Map();
   const w = { document, matchMedia: () => ({ matches: reducedMotion }), addEventListener(name, callback) { const listeners = windowListeners.get(name) || []; listeners.push(callback); windowListeners.set(name, listeners); }, katex: require(path.join(project, 'static/vendor/katex/katex.min.js')), confirm: () => true };
   context = vm.createContext({ window: w, document, fetch: browserFetch, FormData: FixtureFormData, FileReader: FixtureFileReader, navigator: { clipboard: { writeText: async text => { if (failClipboard) throw new Error('Clipboard permission denied'); clipboardWrites.push(text); } } }, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key=>storage.delete(key) }, setTimeout: trackedSetTimeout, clearTimeout: timer => { timers.delete(timer); clearTimeout(timer); }, console, Blob, URL: FixtureURL, atob: value => Buffer.from(value, 'base64').toString('binary') });
-  for (const filename of ['academic.js','learning.js','experiments.js','import-review.js']) vm.runInContext(fs.readFileSync(path.join(project,'static',filename),'utf8'),context,{filename});
+  for (const filename of ['academic.js','learning.js','experiments.js','import-review.js','image-editor.js']) vm.runInContext(fs.readFileSync(path.join(project,'static',filename),'utf8'),context,{filename});
   const code = fs.readFileSync(path.join(project, 'static/app.js'), 'utf8');
-  vm.runInContext(code + '\nwindow.testAtlas={renderExperiments,saveExperimentConfiguration,attachExperimentDraft,copyExperimentSetup,canRefreshAtlas,state,drafts,openImageViewer,imageViewerLoaded,imageViewerFailed,fitImageViewer,setImageViewerScale,zoomImageViewer,handleImageViewerKey,get imageViewer(){return imageViewer},filteredShards,subjectMemberships,renderCourses,reviewedImport,revalidateImport,get importIncluded(){return importIncluded},markdown,stabilizeWikiLinks,renderNav,renderLibrary,renderTimeline,renderBoards,atlasModel,atlasRelationshipModel,renderAtlas,renderDetail,dateLabel,previewImport,clearImportPreview,selectImportShard,get importImageUrls(){return importImageUrls},saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,renderReleaseFeature,loadReleaseCatalog,loadSpiralCatalog,setTimelineTheme,savedTimelineTheme,filteredSpiralExamples,handlePortalKey,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,uploadImage,showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
+  vm.runInContext(code + '\nwindow.testAtlas={renderExperiments,saveExperimentConfiguration,attachExperimentDraft,copyExperimentSetup,canRefreshAtlas,state,drafts,openImageViewer,imageViewerLoaded,imageViewerFailed,fitImageViewer,setImageViewerScale,zoomImageViewer,handleImageViewerKey,get imageViewer(){return imageViewer},filteredShards,subjectMemberships,renderCourses,reviewedImport,revalidateImport,get importIncluded(){return importIncluded},markdown,stabilizeWikiLinks,renderNav,renderLibrary,renderTimeline,renderBoards,atlasModel,atlasRelationshipModel,renderAtlas,renderDetail,dateLabel,previewImport,clearImportPreview,selectImportShard,get importImageUrls(){return importImageUrls},saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,renderReleaseFeature,loadReleaseCatalog,loadSpiralCatalog,setTimelineTheme,savedTimelineTheme,filteredSpiralExamples,handlePortalKey,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,get editorImages(){return editorImages},showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
   const t = w.testAtlas, $ = selector => document.querySelector(selector), results = [];
   async function until(predicate) { for (let i = 0; i < 300; i++) { if (predicate()) return; await delay(10); } throw new Error('Timed out waiting for frontend state'); }
   async function get(url) { const response = await fetch(base + url), data = await response.json(); assert.ok(response.ok, JSON.stringify(data)); return data; }
@@ -1165,6 +1181,28 @@ try {
     const largeFit = t.imageViewer.scale; assert.ok(largeFit < 0.1); t.setImageViewerScale(0.00001); assert.equal(t.imageViewer.scale, largeFit, 'Very large diagrams can still zoom out far enough to fit');
     t.closeDialog('image-viewer-dialog'); assert.equal(apiWrites, writes); assert.equal(JSON.stringify(t.state.data), before);
   });
+  await check('Browser image enlargement resolves a stable asset identity through the platform', async () => {
+    const platform = w.ShardAtlasPlatform, writes = apiWrites;
+    w.ShardAtlasPlatform = {imageSource: value => value === '/assets/browser-diagram' ? 'blob:active-browser-diagram' : value};
+    try {
+      const rendered = t.markdown('![Browser diagram](/assets/browser-diagram)');
+      assert.match(rendered, /src="blob:active-browser-diagram"/);
+      assert.match(rendered, /data-image-src="\/assets\/browser-diagram"/);
+      const caption = 'A [x] $4 price';
+      const withCaption = t.markdown(w.ShardAtlasImageEditor.imageMarkdown('/assets/browser-diagram', caption));
+      assert.ok(withCaption.includes('<figcaption>A [x] $4 price</figcaption>'));
+      assert.ok(!withCaption.includes('\u0000'), 'caption protection tokens must never reach the rendered image');
+      assert.equal(t.openImageViewer('/assets/browser-diagram', 'Browser diagram'), true);
+      assert.ok($('#image-viewer-dialog').open);
+      assert.equal($('#image-viewer-image').src, 'blob:active-browser-diagram');
+      t.closeDialog('image-viewer-dialog');
+      assert.equal(t.openImageViewer('blob:unregistered-image', 'Unknown image'), false);
+      assert.equal(apiWrites, writes);
+    } finally {
+      w.ShardAtlasPlatform = platform;
+      if ($('#image-viewer-dialog').open) t.closeDialog('image-viewer-dialog');
+    }
+  });
   await check('Image viewer refuses nonlocal paths and gives a recoverable missing-image message', async () => {
     const writes = apiWrites, image = $('#image-viewer-image');
     for (const source of ['https://example.com/image.png', '//example.com/image.png', 'data:image/png;base64,AAAA', 'javascript:alert(1)', '/assets/../secret', '/assets/image?download=1']) {
@@ -1268,7 +1306,7 @@ try {
   });
   await check('Actual PNG upload inserts a durable local image into the draft', async () => {
     t.openEditor(); const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7m8AAAAASUVORK5CYII=', 'base64');
-    await t.uploadImage(new FixtureFile([image], 'attachment-qa.png', { type: 'image/png' }));
+    await t.editorImages.addFiles([new FixtureFile([image], 'attachment-qa.png', { type: 'image/png' })]);
     assert.match($('#shard-content').value, /!\[attachment-qa.png\]\(\/assets\/[A-Za-z0-9_.:-]+\)/); await t.persistDraft('editor');
     assert.match((await get('/api/drafts')).drafts.editor.values.content, /\/assets\//); await t.deleteDraft('editor'); $('#editor-dialog').close();
   });
@@ -1512,9 +1550,9 @@ try {
     const archive = { schemaVersion: 1, shards: [{ id: 'review-photo-note', title: 'Pending photo', content: '![Diagram <caption>](/assets/review-photo-asset)', tags: [] }], assets: [{ id: 'review-photo-asset', name: 'diagram.png', mimeType: 'image/png', data: png }], links: [] };
     const original = JSON.stringify(archive); await t.previewImport(archive, 'With a photo.json');
     assert.equal($('#confirm-import').disabled, false); const url = t.importImageUrls.get('review-photo-asset'); assert.ok(url?.startsWith('blob:')); assert.ok(previewObjectUrls.has(url));
-    const output = $('#import-preview-content').innerHTML; assert.ok(output.includes('src="' + url + '"')); assert.ok(output.includes('data-image-src="' + url + '"')); assert.match(output, /Diagram &lt;caption&gt;/);
+    const output = $('#import-preview-content').innerHTML; assert.ok(output.includes('src="' + url + '"')); assert.ok(output.includes('data-image-src="/assets/review-photo-asset"')); assert.match(output, /Diagram &lt;caption&gt;/);
     const missingAsset = await fetch(base + '/assets/review-photo-asset'); assert.equal(missingAsset.status, 404); await missingAsset.arrayBuffer(); assert.equal(JSON.stringify(await get('/api/state')), before); assert.equal(JSON.stringify(archive), original);
-    t.openImageViewer(url, 'Pending diagram'); assert.ok($('#image-viewer-dialog').open); assert.equal($('#image-viewer-image').src, url);
+    t.openImageViewer('/assets/review-photo-asset', 'Pending diagram'); assert.ok($('#image-viewer-dialog').open); assert.equal($('#image-viewer-image').src, url);
     t.closeDialog('image-viewer-dialog'); t.closeDialog('import-preview-dialog');
     assert.equal(t.importImageUrls.size, 0); assert.ok(!previewObjectUrls.has(url)); assert.ok(revokedPreviewUrls.includes(url));
     t.openImageViewer(url, 'Expired preview'); assert.ok(!$('#image-viewer-dialog').open); assert.equal(JSON.stringify(await get('/api/state')), before);

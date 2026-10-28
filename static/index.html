@@ -63,7 +63,15 @@
       <input type="hidden" name="codeSolution" value="{}"><div id="code-solution-editor"></div>
       <div class="field-row"><label class="field">Kind<select name="kind"><option value="concept">Concept</option><option value="fact">Fact</option><option value="example">Example</option><option value="mistake">Learning moment</option><option value="idea">Idea</option></select></label><label class="field">Understanding<select name="status"><option value="learning">Learning</option><option value="solid">Confident</option><option value="verify">Needs clarification</option></select></label></div>
       <label class="field explanation-field">Your explanation <span class="field-hint">Markdown, C++ code, $inline math$, $$display math$$, and [[shard links]]</span><textarea name="content" id="shard-content" rows="9" placeholder="Explain it in your own words. Add an example, a caveat, or what changed your mind."></textarea></label>
-      <div class="editor-tools"><button type="button" class="text-button" data-action="upload-image">＋ Add image</button><button type="button" class="text-button" data-action="recognize-image" id="recognize-image" hidden>Read text from last image</button><button type="button" class="text-button" data-action="toggle-preview" id="preview-toggle">Show preview</button><span class="muted">You can also paste an image.</span><input type="file" id="image-file" accept="image/png,image/jpeg,image/gif,image/webp" hidden></div>
+      <div class="editor-tools"><button type="button" class="text-button" data-action="toggle-preview" id="preview-toggle">Show preview</button><button type="button" class="text-button" data-action="recognize-image" id="recognize-image" hidden>Read text from last image</button></div>
+      <section class="image-editor" id="image-editor" aria-labelledby="image-editor-heading">
+        <div class="image-editor-heading"><div><h3 id="image-editor-heading">Images</h3><p data-image-count>Screenshots, diagrams, and photos</p></div><button type="button" class="secondary" data-image-editor="choose">＋ Add images</button></div>
+        <p class="image-editor-help">Drop images here or into your explanation, or paste a copied image into the explanation. Images appear where you last placed the cursor.</p>
+        <p class="image-editor-formats">PNG, JPEG, GIF, or WebP · up to 8 MB each</p>
+        <div class="image-editor-status" data-image-status role="status" aria-live="polite" hidden></div>
+        <div class="image-editor-list" data-image-list hidden></div>
+        <input type="file" id="image-file" accept="image/png,image/jpeg,image/gif,image/webp,.png,.jpg,.jpeg,.gif,.webp" multiple hidden>
+      </section>
       <section class="image-recognition" id="image-recognition" hidden aria-label="Review text recognized from image"></section><div class="wiki-suggestions" id="wiki-suggestions" hidden></div>
       <div class="editor-preview markdown" id="editor-preview" hidden></div>
       <label class="field">Topics <span class="field-hint">Separate with commas. Choose an existing topic below or type a new one.</span><input name="tags" id="shard-tags" placeholder="Integers, Bit manipulation, C++" autocomplete="off"></label><div id="tag-suggestions" class="code-tag-suggestions" aria-label="Suggested existing topics"></div>
@@ -143,6 +151,7 @@
   <script src="/code-solutions.js"></script>
   <script src="/experiments.js"></script>
   <script src="/import-review.js"></script>
+  <script src="/image-editor.js"></script>
   <!-- platform:mac-drive-script:start -->
   <script src="/drive-inbox.js"></script>
   <!-- platform:mac-drive-script:end -->

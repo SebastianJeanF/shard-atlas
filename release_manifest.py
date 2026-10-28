@@ -17,7 +17,7 @@ SCHEMA_VERSION = 1
 DIGEST = re.compile(r"[a-f0-9]{64}\Z")
 FIELDS = ("releaseId", "frontendId", "backendId", "hostedId", "nativeId")
 FRONTEND_FILES = (
-    "static/index.html", "static/app.js", "static/platform.js", "static/styles.css",
+    "static/index.html", "static/app.js", "static/platform.js", "static/styles.css", "static/image-editor.js",
     "static/academic.js", "static/academic.css", "static/code-solutions.js", "static/code-solutions.css",
     "static/experiments.js", "static/experiments.css", "static/learning.js", "static/learning.css",
     "static/import-review.js", "static/library-sync.js", "static/library-sync.css",

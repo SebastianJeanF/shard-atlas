@@ -27,7 +27,7 @@ let toastTimer, confirmTask = null, busy = false, pendingWrites = 0;
 let writeTail = Promise.resolve(), pendingClose = null, pendingFilePickerType = 'json';
 let localDraftKey = 'shard-atlas-drafts', previewOpen = false;
 let historyShardId = null, historyRecords = [], recoveryRecords = [], recoveryMode = null;
-let editorOcr=null;
+let editorOcr=null, editorImages=null;
 let aiInstructions = '', aiInstructionsLoading = null;
 const imageViewer = {src:'',alt:'',width:0,height:0,scale:1,mode:'fit',returnFocus:null,drag:null,layout:null};
 let atlasRefreshLoading = null;
@@ -166,16 +166,16 @@ function inlineMarkdown(text,context=null) {
   const protect=html=>{protectedParts.push(html);return '\u0000'+(protectedParts.length-1)+'\u0000';};
   let output=String(text).replace(/\u0000/g,'');
   // Protect currency amounts before pairing math delimiters. Code and links stay intact.
-  output=output.split(/(`[^`]+`|\[\[[^\]\n]+\]\]|!\[[^\]\n]*\]\([^)]*\)|\[[^\]\n]+\]\(https?:\/\/[^\s)]+\))/g).map((part,index)=>index%2?part:part.replace(/(?<![\\$])\$(?!\$)([+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[KMBkmb])?)/g,(whole,amount,offset,full)=>{
+  output=output.split(/(`[^`]+`|\[\[[^\]\n]+\]\]|!\[(?:\\.|[^\]\\\n])*\]\([^)]*\)|\[[^\]\n]+\]\(https?:\/\/[^\s)]+\))/g).map((part,index)=>index%2?part:part.replace(/(?<![\\$])\$(?!\$)([+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[KMBkmb])?)/g,(whole,amount,offset,full)=>{
     if(/[A-Za-z0-9_]/.test(full[offset+whole.length]||''))return whole;
     const tail=full.slice(offset+whole.length),closing=tail.search(/(?<!\\)\$(?!\$)/),body=closing<0?'':full.slice(offset+1,offset+whole.length+closing),words=body.match(/[A-Za-z]+/g)||[];
     const math=closing>=0&&!body.includes('\n')&&(/^\s*[+-]?\d+(?:\.\d+)?\s*$/.test(body)||/\\[A-Za-z]+|[_^]/.test(body)||(/^[\d\s.,()+\-*/^=<>\[\]{}_A-Za-z]+$/.test(body)&&words.every(word=>word.length===1)&&/[\dA-Za-z)]\s*[+*/^=<>\-]\s*[\dA-Za-z(]/.test(body)));
     return math?whole:protect(esc(whole));
   })).join('');
-  output=output.replace(/`([^`]+)`|\[\[([^\]\n]+)\]\]|!\[([^\]\n]*)\]\((\/assets\/[A-Za-z0-9_.:-]+)\)|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|(?<!\\)\$(?!\$)([^$\n]+)(?<!\\)\$/g,(whole,code,wiki,alt,image,label,url,math)=>{
+  output=output.replace(/`([^`]+)`|\[\[([^\]\n]+)\]\]|!\[((?:\\.|[^\]\\\n])*)\]\((\/assets\/[A-Za-z0-9_.:-]+)\)|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|(?<!\\)\$(?!\$)([^$\n]+)(?<!\\)\$/g,(whole,code,wiki,alt,image,label,url,math)=>{
     if(code!==undefined)return protect('<code>'+esc(code)+'</code>');
     if(wiki!==undefined){const split=wiki.indexOf('|'),target=split<0?wiki:wiki.slice(0,split),alias=split<0?null:wiki.slice(split+1),s=context?.resolveWiki?context.resolveWiki(target):resolveWiki(target);return protect(s?(context?.renderWiki?context.renderWiki(s,alias||s.title):`<button type="button" class="wiki-link" data-shard-id="${esc(s.id)}">${esc(alias||s.title)}</button>`):`<span class="wiki-unresolved" title="No shard with this title yet">${esc(alias||target)}</span>`);}
-    if(image!==undefined){const src=context?.imageSource?context.imageSource(image):(window.ShardAtlasPlatform?.imageSource(image)||image);if(!src)return protect(`<figure class="note-image"><p class="import-image-missing">Image unavailable in this file${alt?': '+esc(alt):''}.</p></figure>`);return protect(`<figure class="note-image"><button type="button" class="image-preview" data-action="open-image" data-image-src="${esc(src)}" data-image-alt="${esc(alt)}" aria-label="${esc(alt?'Enlarge image: '+alt:'Enlarge image')}" aria-haspopup="dialog"><img src="${esc(src)}" alt="${esc(alt)}" loading="lazy"><span class="image-preview-hint" aria-hidden="true">Click to enlarge</span></button>${alt?`<figcaption>${esc(alt)}</figcaption>`:''}</figure>`);}
+    if(image!==undefined){alt=window.ShardAtlasImageEditor?.captionText(alt)??alt;const src=context?.imageSource?context.imageSource(image):(window.ShardAtlasPlatform?.imageSource(image)||image);if(!src)return protect(`<figure class="note-image"><p class="import-image-missing">Image unavailable in this file${alt?': '+esc(alt):''}.</p></figure>`);return protect(`<figure class="note-image"><button type="button" class="image-preview" data-action="open-image" data-image-src="${esc(image)}" data-image-alt="${esc(alt)}" aria-label="${esc(alt?'Enlarge image: '+alt:'Enlarge image')}" aria-haspopup="dialog"><img src="${esc(src)}" alt="${esc(alt)}" loading="lazy"><span class="image-preview-hint" aria-hidden="true">Click to enlarge</span></button>${alt?`<figcaption>${esc(alt)}</figcaption>`:''}</figure>`);}
     if(url!==undefined)return protect(`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(label)} ↗</a>`);
     return protect(mathMarkup(math));
   });
@@ -232,7 +232,9 @@ function imageViewerFailed(){
   $('#image-zoom-level').textContent='Unavailable';for(const id of ['image-zoom-out','image-zoom-in','image-fit','image-actual'])$('#'+id).disabled=true;
 }
 function openImageViewer(src,alt='',trigger=null){
-  if(!/^\/assets\/[A-Za-z0-9_.:-]+$/.test(String(src||''))&&!($('#import-preview-dialog').open&&[...importImageUrls.values()].includes(src))){toast('This image cannot be opened.');return false;}
+  const canonical=/^\/assets\/[A-Za-z0-9_.:-]+$/.test(String(src||''));
+  if(canonical)src=($('#import-preview-dialog').open&&importImageUrls.get(src.slice('/assets/'.length)))||(window.ShardAtlasPlatform?.imageSource(src)||src);
+  else if(!($('#import-preview-dialog').open&&[...importImageUrls.values()].includes(src))){toast('This image cannot be opened.');return false;}
   const dialog=$('#image-viewer-dialog'),image=$('#image-viewer-image'),viewport=$('#image-viewer-viewport');
   Object.assign(imageViewer,{src,alt:String(alt||''),width:0,height:0,scale:1,mode:'fit',returnFocus:trigger||document.activeElement,drag:null,layout:null});
   $('#image-viewer-title').textContent=imageViewer.alt||'Image';image.alt=imageViewer.alt;image.hidden=true;
@@ -318,7 +320,7 @@ function markdown(text,context=null) {
     }else if(/^\s*[-*]\s+/.test(line)||/^\s*\d+[.)]\s+/.test(line)){
       if(paragraph.length){html+='<p>'+inlineMarkdown(paragraph.join(' '),context)+'</p>';paragraph=[];}const type=/^\s*\d/.test(line)?'ol':'ul';if(list!==type){if(list)html+='</'+list+'>';html+='<'+type+'>';list=type;}html+='<li>'+inlineMarkdown(line.replace(/^\s*(?:[-*]|\d+[.)])\s+/,''),context)+'</li>';
     }else if(line.startsWith('> ')){flush();html+='<blockquote>'+inlineMarkdown(line.slice(2),context)+'</blockquote>';}
-    else if(/^!\[[^\]]*\]\(\/assets\/[A-Za-z0-9_.:-]+\)\s*$/.test(line)){flush();html+=inlineMarkdown(line,context);}
+    else if(/^!\[(?:\\.|[^\]\\])*\]\(\/assets\/[A-Za-z0-9_.:-]+\)\s*$/.test(line)){flush();html+=inlineMarkdown(line,context);}
     else if(!line.trim())flush();else{if(list){html+='</'+list+'>';list=null;}paragraph.push(line);}
   }
   flush();return html||'<p class="muted">This idea is waiting for your explanation.</p>';
@@ -752,7 +754,7 @@ function openEditor(id=null,recovered=null,capture=null){
   const selectedKind=recovered?.values.kind||s?.kind||'concept';form.elements.kind.innerHTML=Object.entries(kinds).filter(([key])=>key!=='event'||selectedKind==='event').map(([key,label])=>`<option value="${key}" ${key===selectedKind?'selected':''}>${label}</option>`).join('');
   for(const key of editorFields){if(recovered&&key in recovered.values)form.elements[key].value=recovered.values[key];else if(s)form.elements[key].value=['tags','entities'].includes(key)?(s[key]||[]).join(', '):['sources','facts','codeSolution',...academicFields,...learningFields,...experimentFields].includes(key)?JSON.stringify(s[key]||(['verification','codeSolution'].includes(key)?{}:[])):key==='inbox'?String(!!s.inbox):(s[key]||'');}
   if(!s&&!recovered&&Object.hasOwn(codeRoles,capture?.role)&&window.CodeSolutions?.newReference){form.elements.codeSolution.value=JSON.stringify(window.CodeSolutions.newReference(capture.role));form.elements.tags.value=state.tags.join(', ');form.elements.title.value=[...String(capture.title||'').trim()].slice(0,240).join('');$('#editor-heading').textContent={snippet:'A new snippet',algorithm:'A new algorithm',problem:'A new solved problem'}[capture.role];}
-  installAcademicEditor({...academicFormData(form),...(!s&&!recovered&&state.subject!=='Generic'?{subjects:[state.subject]}:{})});installLearningEditor(learningFormData(form));installExperimentEditor(experimentFormData(form));installCodeEditor(codeFormData(form));updateTagSuggestions(form.elements.tags.value);if(!s&&!recovered&&state.subject!=='Generic')form.elements.subjects.value=JSON.stringify([state.subject]);renderStructuredEditor('sources');renderImageRecognition();form.dataset.baseline=recovered?.baseline||formSnapshot(form);$('#editor-error').hidden=true;$('#editor-dialog').showModal();draftStatus('editor',recovered?'Recovered draft. Save when ready.':'One idea is enough. You can refine it later.');setTimeout(()=>$('#shard-title').focus(),0);
+  installAcademicEditor({...academicFormData(form),...(!s&&!recovered&&state.subject!=='Generic'?{subjects:[state.subject]}:{})});installLearningEditor(learningFormData(form));installExperimentEditor(experimentFormData(form));installCodeEditor(codeFormData(form));updateTagSuggestions(form.elements.tags.value);if(!s&&!recovered&&state.subject!=='Generic')form.elements.subjects.value=JSON.stringify([state.subject]);renderStructuredEditor('sources');renderImageRecognition();editorImages?.reset();form.dataset.baseline=recovered?.baseline||formSnapshot(form);$('#editor-error').hidden=true;$('#editor-dialog').showModal();draftStatus('editor',recovered?'Recovered draft. Save when ready.':'One idea is enough. You can refine it later.');setTimeout(()=>$('#shard-title').focus(),0);
 }
 function renderLinkApproaches(values={}){
   const form=$('#link-form');
@@ -812,7 +814,7 @@ function showWikiSuggestions(){
   const query=match[1].toLocaleLowerCase(),found=state.data.shards.filter(s=>s.id!==editingId&&s.title.toLocaleLowerCase().includes(query)).slice(0,6);box.hidden=!found.length;box.innerHTML='<span class="eyebrow">LINK TO AN EXISTING SHARD</span>'+found.map(s=>`<button type="button" class="wiki-suggestion" data-action="insert-wiki" data-id="${esc(s.id)}">${esc(s.title)}<small>${esc(s.tags.slice(0,2).join(' · '))}</small></button>`).join('');
 }
 function insertWiki(id){const s=byId(id),field=$('#shard-content');if(!s)return;const before=field.value.slice(0,field.selectionStart),match=before.match(/\[\[([^\]\n]{0,100})$/);if(!match)return;let end=field.selectionEnd;if(field.value.slice(end,end+2)===']]')end+=2;field.setRangeText(`[[id:${s.id}|${s.title.replace(/\]/g,'')}]]`,match.index,end,'end');$('#wiki-suggestions').hidden=true;field.focus();scheduleDraft('editor');refreshPreview();}
-function refreshPreview(){updateImageRecognitionButton();if(previewOpen)$('#editor-preview').innerHTML=markdown($('#shard-content').value);}
+function refreshPreview(){updateImageRecognitionButton();editorImages?.render();if(previewOpen)$('#editor-preview').innerHTML=markdown($('#shard-content').value);}
 async function loadAiInstructions(refresh=false){
   if(aiInstructionsLoading)return aiInstructionsLoading;if(aiInstructions&&!refresh)return aiInstructions;
   aiInstructions='';$('#ai-instructions-text').value='';
@@ -830,19 +832,17 @@ async function copyAiInstructions(){
   try{const text=await loadAiInstructions(true),native=window.webkit?.messageHandlers?.nativeClipboard;try{if(native)native.postMessage({text});else await navigator.clipboard.writeText(text);$('#ai-instructions-status').textContent='Instructions copied. Paste them into your other chat.';toast('AI instructions copied.');}catch{await selectAiInstructions(text);$('#ai-instructions-status').textContent='Automatic copying is unavailable. The instructions are selected below; press ⌘ C or Ctrl C to copy them.';}}
   finally{button.disabled=false;}
 }
-function imageIdsInEditor(){return [...$('#shard-content').value.matchAll(/!\[[^\]]*\]\(\/assets\/([A-Za-z0-9_.:-]+)\)/g)].map(m=>m[1]);}
+function imageIdsInEditor(){return window.ShardAtlasImageEditor?window.ShardAtlasImageEditor.references($('#shard-content').value).map(ref=>ref.source.slice('/assets/'.length)):[...$('#shard-content').value.matchAll(/!\[[^\]]*\]\(\/assets\/([A-Za-z0-9_.:-]+)\)/g)].map(m=>m[1]);}
 function updateImageRecognitionButton(){$('#recognize-image').hidden=!imageIdsInEditor().length;}
 function renderImageRecognition(){const pane=$('#image-recognition');updateImageRecognitionButton();pane.hidden=!editorOcr;if(!editorOcr)return;pane.innerHTML=editorOcr.loading?`<p class="muted">${esc(window.ShardAtlasPlatform?.message('readingImage')||'Reading text from your image on this Mac…')}</p>`:editorOcr.text?`<div class="recognition-heading"><h3>Text recognized from your image</h3><span>Review before using</span></div><p class="field-hint">Your original image and explanation are preserved. Check code, symbols, and layout before adding this text.</p><label class="field">Recognized text<textarea id="recognized-text" rows="7">${esc(editorOcr.text)}</textarea></label><div class="recognition-actions"><button type="button" class="secondary" data-action="append-recognized-text">Append edited text to note</button><button type="button" class="text-button" data-action="dismiss-recognition">Dismiss</button></div>`:`<p class="muted">${esc(editorOcr.message||'No readable text was found. The original image is retained.')}</p>`;}
 async function recognizeImage(id){editorOcr={loading:true};renderImageRecognition();try{const result=await api('/api/assets/'+encodeURIComponent(id)+'/text','POST',{});if(!result.available){editorOcr={message:'Text recognition is unavailable on this device. The original image is retained; you can add its text manually.'};}else if(!result.text?.trim()){editorOcr={message:'No readable text was found. The original image is retained.'};}else{editorOcr={text:result.text,method:result.method};}renderImageRecognition();}catch(error){editorOcr={message:'The image was saved, but text recognition could not finish: '+error.message};renderImageRecognition();}}
 function insertContent(text){const field=$('#shard-content');field.setRangeText(text,field.selectionStart,field.selectionEnd,'end');field.focus();scheduleDraft('editor');refreshPreview();}
-async function uploadImage(file){
-  if(!file)return;if(!['image/png','image/jpeg','image/gif','image/webp'].includes(file.type))throw new Error('Choose a PNG, JPEG, GIF, or WebP image.');if(file.size>8*1024*1024)throw new Error('Choose an image smaller than 8 MB.');
-  await withBusy(async()=>{
-    const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(new Error('This image could not be read.'));reader.readAsDataURL(file);});
-    const result=await writeRequest('/api/assets','POST',{name:file.name||'Pasted image',mimeType:file.type,data});if(!/^\/assets\/[A-Za-z0-9_.:-]+$/.test(result.url))throw new Error('The image address is invalid.');insertContent('\n\n!['+(file.name||'Pasted image').replace(/[\[\]\n]/g,'')+']('+result.url+')\n');await recognizeImage(result.id||result.url.split('/').at(-1));
-  });$('#shard-content').focus();toast('Image added to your explanation.');
+async function uploadImageAsset(file,mimeType){
+  const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(new Error('This image could not be read.'));reader.readAsDataURL(file);});
+  return writeRequest('/api/assets','POST',{name:file.name||'Pasted image',mimeType,data});
 }
 async function runAction(action,button){
+  if(action==='upload-image'){editorImages?.choose();return;}
   if(action.startsWith('academic-')&&academicAction(action,button))return;
   if(await importReviewAction(action,button))return;
   if(action==='preview-import-shard'){selectImportShard(button.dataset.index);return;}
@@ -871,7 +871,7 @@ async function runAction(action,button){
   else if(action==='open-topic-map'){Object.assign(state,{atlasMode:'connections',atlasSelectedId:byId(id)?.id||state.selectedId,atlasInspectId:byId(id)?.id||state.selectedId,atlasExpandedIds:[],atlasZoom:1,atlasFit:false});changeView('atlas');}
   else if(action==='backup')await withBusy(async()=>{const result=await writeRequest('/api/backup','POST',{});toast('Backup saved: '+result.filename);});
   else if(action==='paste-import')openPasteImport();
-  else if(action==='import'||action==='import-ai'){if(action==='import-ai')$('#ai-dialog').close();pendingFilePickerType='json';$('#import-file').click();}else if(action==='upload-image'){pendingFilePickerType='image';$('#image-file').click();}
+  else if(action==='import'||action==='import-ai'){if(action==='import-ai')$('#ai-dialog').close();pendingFilePickerType='json';$('#import-file').click();}
   else if(action==='toggle-preview'){previewOpen=!previewOpen;$('#editor-preview').hidden=!previewOpen;$('#preview-toggle').textContent=previewOpen?'Hide preview':'Show preview';refreshPreview();}
   else if(action==='insert-wiki')insertWiki(id);else if(action==='rename-tag')openTagRename();else if(action==='history')await showHistory(id);else if(action==='trash'||action==='backups')await showRecovery(action);
   else if(action==='restore-revision'){const revision=historyRecords.find(r=>r.id===id);if(!revision)return;confirmAction('Restore this saved version?',`Your current explanation is saved in history before restoring the version from ${dateTimeLabel(revision.createdAt)}.`,'Restore version',async()=>{await mutate('/api/shards/'+encodeURIComponent(historyShardId)+'/restore','POST',{revisionId:id});$('#history-dialog').close();toast('Saved version restored.');});}
@@ -1153,8 +1153,12 @@ document.addEventListener('change',event=>{
 for(const kind of draftKinds){const form=draftForm(kind);form.addEventListener('input',event=>{if(event.target.dataset?.structured)syncStructuredEditor(event.target.dataset.structured);scheduleDraft(kind);if(kind==='editor'){refreshPreview();showWikiSuggestions();}});form.addEventListener('change',()=>scheduleDraft(kind));$(kind==='editor'?'#editor-dialog':'#link-dialog').addEventListener('cancel',event=>{event.preventDefault();closeDialog(kind==='editor'?'editor-dialog':'link-dialog');});}
 $('#link-search').addEventListener('input',event=>{const previous=$('#link-target').value;renderLinkTargets(event.target.value);renderLinkApproaches(previous===$('#link-target').value?{}:{toApproachId:''});scheduleDraft('connection');});
 $('#shard-tags').addEventListener('input',event=>updateTagSuggestions(event.target.value));
-$('#shard-content').addEventListener('paste',async event=>{const image=[...(event.clipboardData?.items||[])].find(item=>item.kind==='file'&&item.type.startsWith('image/'));if(!image)return;event.preventDefault();if(busy)return;try{await uploadImage(image.getAsFile());}catch(error){toast(error.message);}});
-$('#image-file').addEventListener('change',async event=>{try{await uploadImage(event.target.files[0]);}catch(error){toast(error.message);}finally{event.target.value='';}});
+if(window.ShardAtlasImageEditor&&$('#image-editor'))editorImages=window.ShardAtlasImageEditor.mount({
+  section:$('#image-editor'),field:$('#shard-content'),picker:$('#image-file'),isBusy:()=>busy,
+  run:withBusy,upload:uploadImageAsset,changed:()=>{scheduleDraft('editor');refreshPreview();},
+  imageSource:path=>window.ShardAtlasPlatform?.imageSource(path)||path,openImage:openImageViewer,
+  beforePicker:()=>{pendingFilePickerType='image';},
+});
 window.addEventListener('beforeunload',event=>{if(editorDirty()||linkDirty()||extraFormDirty()||boardDirty||busy||pendingWrites){for(const kind of draftKinds)if(dirtyKind(kind)){drafts[kind]=snapshotDraft(kind);writeLocalDrafts();}event.preventDefault();event.returnValue='';}});
 window.shardAtlasDesktop={status:()=>({dirty:editorDirty()||linkDirty()||extraFormDirty()||boardDirty,saving:busy||pendingWrites>0,draftSaved:!extraFormDirty()&&!boardDirty&&draftKinds.every(kind=>!dirtyKind(kind)||persistedDrafts[kind]===formSnapshot(draftForm(kind)))}),filePickerType:()=>pendingFilePickerType,command:name=>{if(busy){toast('Saving your change…');return;}if(document.querySelector('dialog[open]')){toast('Finish or close the current dialog first.');return;}if(name==='search'){$('#search').focus();$('#search').select();}else if(name==='new')openEditor();else if(['library','graph','timeline','atlas','boards','courses','experiments'].includes(name))changeView(name);else if(name==='settings')$('#settings-dialog').showModal();}};
 async function clearSavedDraft(kind){

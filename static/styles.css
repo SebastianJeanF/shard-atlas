@@ -831,6 +831,34 @@ dialog::backdrop { background: #22382950; backdrop-filter: blur(3px); }
 .editor-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 9px; margin: -9px 0 17px; }
 .editor-tools .text-button { font-size: 11px; padding: 5px 7px; }
 .editor-tools .muted { font-size: 9px; margin-left: auto; }
+.image-editor { margin: 0 0 20px; padding: 17px; border: 1px dashed #aebb9f; border-radius: 9px; background: #f6f8f0; transition: border-color .15s, background .15s; }
+.image-editor-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.image-editor-heading h3 { margin: 0; font-size: 14px; font-weight: 650; color: var(--green-dark); }
+.image-editor-heading p { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
+.image-editor-heading > button { flex-shrink: 0; }
+.image-editor-help { margin: 12px 0 5px; font-size: 11px; line-height: 1.65; color: var(--muted); }
+.image-editor-formats { margin: 0; font-size: 10px; color: var(--muted); }
+.image-editor.image-drop-active { border-color: var(--green); border-style: solid; background: #e7efdf; box-shadow: 0 0 0 3px #5274441a; }
+.image-editor-status { margin-top: 12px; padding: 9px 11px; background: #edf3e5; border-radius: 6px; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.image-editor-status[data-error="true"] { background: #f9ebe4; color: #9d3a31; }
+.image-editor-list { display: grid; gap: 10px; margin-top: 14px; }
+.image-editor-card { display: flex; align-items: flex-start; gap: 14px; padding: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 7px; }
+.image-editor-thumbnail { position: relative; display: flex; justify-content: center; align-items: center; width: 116px; height: 88px; padding: 0; flex-shrink: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 5px; background: #edf0e8; cursor: zoom-in; }
+.image-editor-thumbnail img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
+.image-editor-thumbnail span { position: absolute; right: 3px; bottom: 3px; padding: 2px 5px; border-radius: 3px; background: #fffefae8; color: var(--green-dark); font-size: 9px; line-height: 1.5; }
+.image-editor-card-body { min-width: 0; flex: 1; }
+.image-editor-card .field { margin: 0; font-size: 11px; }
+.image-editor-card input { min-width: 0; width: 100%; margin-top: 5px; font-size: 12px; }
+.image-editor-card-actions { display: flex; flex-wrap: wrap; gap: 1px 10px; margin-top: 6px; }
+.image-editor-card-actions .text-button { padding: 4px 0; font-size: 10px; }
+.image-editor-card-actions [data-image-editor="remove"] { color: #8b4e3b; }
+@media (max-width: 600px) {
+  .image-editor { padding: 13px; }
+  .image-editor-card { flex-direction: column; gap: 10px; }
+  .image-editor-thumbnail { width: 100%; height: 140px; }
+  .image-editor-card-body { width: 100%; }
+  .image-editor-card-actions { gap: 3px 15px; }
+}
 .editor-preview { border: 1px solid #d9dfcf; border-radius: 8px; background: #f8f9f2; padding: 20px; margin: 0 0 20px; max-height: 430px; overflow-y: auto; }
 .wiki-suggestions { border: 1px solid #d3dec9; border-radius: 8px; background: #f5f8ee; padding: 12px; margin: -6px 0 17px; box-shadow: 0 3px 10px #27462805; }
 .wiki-suggestions .eyebrow { font-size: 8px; margin-bottom: 6px; }

@@ -35,7 +35,7 @@ def compiled_native_source(native_id: str) -> str:
 def desktop_configuration(python: Path | None = None, qa_db: Path | None = None,
                           backup_dir: Path | None = None) -> dict:
     """Keep portable builds independent of the machine that compiled them."""
-    config = {"backendVersion": "3.4.0"}
+    config = {"backendVersion": "3.5.0"}
     if python is not None:
         config["pythonCandidates"] = [str(python.expanduser().resolve())]
     if qa_db is not None:
@@ -79,7 +79,7 @@ def build(output: Path, python: Path | None = None, qa_db: Path | None = None,
             if asset.is_file() and not any(part.startswith('.') for part in asset.relative_to(ROOT / 'static').parts):
                 digest.update(asset.relative_to(ROOT / "static").as_posix().encode())
                 digest.update(asset.read_bytes())
-        (runtime / 'static/build-info.json').write_text(json.dumps({"version": "3.4.0", "sourceRevision": revision, "interfaceFingerprint": digest.hexdigest(), "release": release}) + '\n', encoding='utf-8')
+        (runtime / 'static/build-info.json').write_text(json.dumps({"version": "3.5.0", "sourceRevision": revision, "interfaceFingerprint": digest.hexdigest(), "release": release}) + '\n', encoding='utf-8')
         config = desktop_configuration(python, qa_db, backup_dir)
         (resources / "desktop-config.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
         info = {
@@ -88,8 +88,8 @@ def build(output: Path, python: Path | None = None, qa_db: Path | None = None,
             "CFBundleDisplayName": "Shard Atlas QA" if qa_db is not None else "Shard Atlas",
             "CFBundleExecutable": "ShardAtlas",
             "CFBundlePackageType": "APPL",
-            "CFBundleShortVersionString": "3.4.0",
-            "CFBundleVersion": "34",
+            "CFBundleShortVersionString": "3.5.0",
+            "CFBundleVersion": "35",
             "ShardAtlasNativeReleaseId": release["nativeId"],
             "LSMinimumSystemVersion": "12.0",
             "NSHighResolutionCapable": True,
