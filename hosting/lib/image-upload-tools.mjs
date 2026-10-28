@@ -33,7 +33,7 @@ export const IMAGE_UPLOAD_TOOLS = [{
 }, {
   name: IMAGE_UPLOAD_STATUS_NAME,
   title: 'Check a staged Shard Atlas image',
-  description: 'Read the owner-bound status of an image upload by its returned uploadId. A staged or verified upload does not prove that an image is attached to a saved shard. Use the add/edit save receipt and a current read to verify attachment. Does not read image bytes or modify the library.',
+  description: 'Read the owner-bound status of an image upload by its returned uploadId. A staged or verified upload does not prove that an image is attached to a saved shard. Use the add/edit save receipt and a current read to verify attachment. Verifies the staged bytes without returning them or modifying the library.',
   inputSchema: {type: 'object', additionalProperties: false, required: ['uploadId'], properties: {
     uploadId: {type: 'string', minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$'},
   }},
