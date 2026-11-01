@@ -31,6 +31,7 @@ let editorOcr=null, editorImages=null;
 let aiInstructions = '', aiInstructionsLoading = null;
 const imageViewer = {src:'',alt:'',width:0,height:0,scale:1,mode:'fit',returnFocus:null,drag:null,layout:null};
 let atlasRefreshLoading = null;
+let atlasNavigation = null, atlasNavigationReady = false;
 let editingBoardId=null, editingSectionId=null, editingBoardItemId=null, importArchive=null, importPreview=null, boardDirty=false;
 let importSelectedIndex=0, importListLimit=100, importPreviewRequest=0;
 let importIncluded=new Set(),importExcludedLinks=new Set(),importReuse=new Map(),importEditIndex=null,importReviewChanged=false;
@@ -373,12 +374,19 @@ function renderNav(){
   renderDraftShelf();
 }
 function pageHeading(eyebrow,title,description,action=''){return `<div class="page-heading"><div><span class="eyebrow">${eyebrow}</span><h1>${title}</h1><p>${description}</p></div><div class="heading-actions">${action}</div></div>`;}
-function render(){renderNav();const views={library:renderLibrary,courses:renderCourses,timeline:renderTimeline,atlas:renderAtlas,boards:renderAtlas,experiments:renderExperiments};$('#workspace').innerHTML=(views[state.view]||renderLibrary)();bindAtlas();}
+function renderAtlasNavigation(){
+  const current=atlasNavigation?.current(),route=current?.route;if(!route)return '';
+  const links=window.ShardAtlasNavigation.returnLinks(route,{qa:window.SHARD_ATLAS_NATIVE?.qa===true});
+  const missing=current.status==='missing',deferred=current.status==='deferred';
+  if(!links&&!missing&&!deferred)return '';
+  return `<nav class="atlas-return-nav" aria-label="Cross-atlas navigation">${missing?`<div><strong>Requested shard unavailable</strong><p>The record <code>${esc(route.shardId)}</code> is not in this device's current collection. Its ID and return link are retained. Synchronize or restore it if appropriate.</p></div>`:deferred?'<p>The requested shard is waiting. Finish or close the current edit or dialog to open it.</p>':''}${links?`<div class="atlas-return-actions"><a class="secondary" href="${esc(links.native)}" data-history-return>Return to History Atlas ↗</a><a class="text-button" href="${esc(links.browser)}" target="_blank" rel="noopener noreferrer">Open in browser ↗</a></div>`:''}</nav>`;
+}
+function render(){renderNav();const views={library:renderLibrary,courses:renderCourses,timeline:renderTimeline,atlas:renderAtlas,boards:renderAtlas,experiments:renderExperiments};$('#workspace').innerHTML=renderAtlasNavigation()+(views[state.view]||renderLibrary)();bindAtlas();}
 function filterMarkup({includeCodeRole=true}={}){
   return `<div class="filter-row">${includeCodeRole?`<select id="code-role-filter" aria-label="Filter by code reference type"><option value="all">All shard roles</option>${Object.entries(codeRoles).map(([value,label])=>`<option value="${value}" ${state.codeRole===value?'selected':''}>${esc(label)}</option>`).join('')}<option value="none" ${state.codeRole==='none'?'selected':''}>Other notes</option></select>`:''}<select id="kind-filter" aria-label="Filter by kind"><option value="all">All kinds</option>${Object.entries(kinds).map(([v,t])=>`<option value="${v}" ${state.kind===v?'selected':''}>${t}</option>`).join('')}</select><select id="status-filter" aria-label="Filter by understanding"><option value="all">Any understanding</option>${Object.entries(statuses).map(([v,t])=>`<option value="${v}" ${state.status===v?'selected':''}>${t}</option>`).join('')}</select><select id="verification-filter" aria-label="Filter by source verification"><option value="all">Any source verification</option>${Object.entries({'unverified':'Unverified','source-checked':'Source checked','needs-correction':'Needs correction'}).map(([value,label])=>`<option value="${value}" ${state.verificationFilter===value?'selected':''}>${label}</option>`).join('')}</select><select id="sort-filter" aria-label="Sort shards"><option value="updated" ${state.sort==='updated'?'selected':''}>Recently edited</option><option value="created" ${state.sort==='created'?'selected':''}>Recently captured</option><option value="title" ${state.sort==='title'?'selected':''}>Title A–Z</option></select></div>${state.tags.length?`<div class="selected-topics"><label>Match<select id="tag-mode" aria-label="Match selected topics"><option value="all" ${state.tagMode==='all'?'selected':''}>all topics</option><option value="any" ${state.tagMode==='any'?'selected':''}>any topic</option></select></label><div>${state.tags.map(t=>`<button class="tag" data-tag="${esc(t)}" title="Remove this topic filter">${esc(t)} ×</button>`).join('')}</div></div>`:''}`;
 }
 function renderLibrary(){
-  const shards=filteredShards();if(!shards.some(s=>s.id===state.selectedId))state.selectedId=shards[0]?.id||null;
+  const shards=filteredShards(),requested=atlasNavigation?.current().route?.shardId;if(!shards.some(s=>s.id===state.selectedId)&&!(requested===state.selectedId&&!byId(requested)))state.selectedId=shards[0]?.id||null;
   const connected=new Set(state.data.links.flatMap(l=>[l.fromId,l.toId])).size,selected=byId(state.selectedId);
   return pageHeading('COLLECT. CONNECT. UNDERSTAND.','Build your technical understanding.','Programming, computer science, and the ideas behind machine learning and AI. Explore your knowledge across subjects, courses, and connected explanations.',`<button class="primary" data-action="new">＋ New shard</button>${window.CodeSolutions?.renderCaptureMenu()||''}`)+
   `<div class="stats-row"><div class="stat-card"><span class="stat-value">${state.data.shards.length}</span><span class="stat-label">shards in your atlas</span></div><div class="stat-card"><span class="stat-value">${state.data.links.length}</span><span class="stat-label">meaningful connections</span></div><div class="stat-card"><span class="stat-value">${allTags().length}</span><span class="stat-label">topics to explore</span></div></div>`+
@@ -717,7 +725,7 @@ async function openReleaseColumn(id){
 
 function usePersonalTopicNames(){const tags=allTags();state.tags=[...new Set(state.tags.map(tag=>tags.find(personal=>personal.toLocaleLowerCase()===tag.toLocaleLowerCase())||tag))];}
 function changeView(view){if(view==='graph'){view='atlas';Object.assign(state,{atlasMode:'connections',atlasSelectedId:state.selectedId,atlasInspectId:state.selectedId,atlasExpandedIds:[]});}if(view==='boards')view='atlas';if(!['library','timeline','atlas','courses','experiments'].includes(view))return;releaseNavigationToken++;if(state.view==='timeline'&&state.timelineMode==='releases'&&view!=='timeline')usePersonalTopicNames();state.view=view;document.body.classList.remove('sidebar-open');render();}
-function selectShard(id){if(!byId(id))return;state.selectedId=id;state.view='library';if(!filteredShards().some(s=>s.id===id))clearFilters();render();}
+function selectShard(id){if(!byId(id))return;state.selectedId=id;state.view='library';if(!filteredShards().some(s=>s.id===id))clearFilters();atlasNavigation?.selected(id);render();}
 function toggleTag(tag){if(state.view==='experiments')state.view='library';const releaseMode=state.view==='timeline'&&state.timelineMode==='releases',matches=t=>releaseMode?t.toLocaleLowerCase()===tag.toLocaleLowerCase():t===tag;state.tags=state.tags.some(matches)?state.tags.filter(t=>!matches(t)):[...state.tags,tag];render();}
 
 function draftForm(kind){return $(kind==='editor'?'#editor-form':'#link-form');}
@@ -1209,16 +1217,29 @@ function canRefreshAtlas(manual=false){return document.visibilityState!=='hidden
 async function refreshAtlas(manual=false){
   if(!canRefreshAtlas(manual))return {changed:false,skipped:true};if(atlasRefreshLoading)return atlasRefreshLoading;
   const baseline=JSON.stringify([state.data.shards,state.data.links,state.data.boards]);
-  atlasRefreshLoading=(async()=>{const data=await api('/api/state');if(!canRefreshAtlas(manual)||JSON.stringify([state.data.shards,state.data.links,state.data.boards])!==baseline)return {changed:false,skipped:true};window.ShardAtlasPlatform?.acceptState(data);const changed=JSON.stringify([data.shards,data.links,data.boards])!==baseline;if(changed){state.data=mergeBoardDrafts(data);if(!byId(state.selectedId))state.selectedId=filteredShards()[0]?.id||data.shards[0]?.id||null;render();$('#save-status').textContent='Latest notes are ready.';}return {changed,skipped:false};})();
+  atlasRefreshLoading=(async()=>{const data=await api('/api/state');if(!canRefreshAtlas(manual)||JSON.stringify([state.data.shards,state.data.links,state.data.boards])!==baseline)return {changed:false,skipped:true};window.ShardAtlasPlatform?.acceptState(data);const changed=JSON.stringify([data.shards,data.links,data.boards])!==baseline;if(changed){state.data=mergeBoardDrafts(data);if(!byId(state.selectedId)&&atlasNavigation?.current().route?.shardId!==state.selectedId)state.selectedId=filteredShards()[0]?.id||data.shards[0]?.id||null;atlasNavigation?.flush();render();$('#save-status').textContent='Latest notes are ready.';}return {changed,skipped:false};})();
   try{return await atlasRefreshLoading;}catch(error){if(manual)throw error;return {changed:false,failed:true};}finally{atlasRefreshLoading=null;}
 }
 function scheduleAtlasRefresh(){setTimeout(async()=>{await refreshAtlas();scheduleAtlasRefresh();},15000);}
 window.addEventListener('focus',()=>{void refreshAtlas();});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='hidden')void refreshAtlas();});
+if(window.ShardAtlasNavigation){
+  const navigationBase=window.location?.href||window.ShardAtlasNavigation.SITE;
+  atlasNavigation=window.ShardAtlasNavigation.createRouter({qa:window.SHARD_ATLAS_NATIVE?.qa===true,baseUrl:navigationBase,
+    ready:()=>atlasNavigationReady,canNavigate:()=>!hasUnsavedLibraryChanges()&&!document.querySelector('dialog[open]'),
+    hasShard:id=>!!byId(id),selectShard:id=>{selectShard(id);document.dispatchEvent(new CustomEvent('shard-atlas-navigated',{detail:{id}}));},
+    showMissing:id=>{state.selectedId=id;state.view='library';clearFilters();render();},changed:()=>{if(atlasNavigationReady)render();},message:toast,
+    replaceUrl:hash=>{if(window.history?.replaceState)window.history.replaceState(null,'',hash);}});
+  window.ShardAtlasOpenLink=value=>{try{return atlasNavigation.open(value);}catch(error){toast(error.message);return {accepted:false,error:error.message};}};
+  if(window.location?.hash)window.ShardAtlasOpenLink(window.location.href);
+  window.addEventListener('hashchange',()=>{if(window.location?.hash)window.ShardAtlasOpenLink(window.location.href);});
+  const resumeAtlasNavigation=()=>{atlasNavigation.flush();setTimeout(resumeAtlasNavigation,1000);};
+  setTimeout(resumeAtlasNavigation,1000);
+}
 async function initialize(){
-  try{const results=await Promise.allSettled([api('/api/state'),api('/api/health')]);if(results[0].status==='rejected')throw results[0].reason;window.ShardAtlasPlatform?.acceptState(results[0].value);state.data=results[0].value;state.selectedId=byId('cpp-raii')?.id||state.data.shards[0]?.id;
+  try{const results=await Promise.allSettled([api('/api/state'),api('/api/health')]);if(results[0].status==='rejected')throw results[0].reason;window.ShardAtlasPlatform?.acceptState(results[0].value);state.data=results[0].value;state.selectedId=atlasNavigation?.current().route?.shardId||byId('cpp-raii')?.id||state.data.shards[0]?.id;
     if(results[1].status==='fulfilled'){const health=results[1].value;localDraftKey='shard-atlas-drafts:'+String(health.dbPath||'default');$('#settings-path').textContent='Notes: '+(health.dbPath||'stored locally')+'\nBackups: '+(health.backupMode==='cloud'||window.shardAtlasBackupUI?.active?'Google Drive through the cloud backup service':health.backupDirectory||'project backups folder');if(health.lastBackupError){$('#save-status').textContent='Notes saved. Backup needs attention.';toast('Your notes are saved, but a backup needs attention: '+health.lastBackupError);}}
-    loadBoardRecovery();render();await loadDrafts();
+    loadBoardRecovery();render();await loadDrafts();atlasNavigationReady=true;atlasNavigation?.flush();
   }catch(error){$('#workspace').innerHTML='<div class="error-state"><h1>Your atlas could not open.</h1><p>'+esc(error.message)+'</p><button class="primary" id="retry-open">Try again</button></div>';$('#retry-open').addEventListener('click',initialize);}
 }
 window.LearningAtlas?.bindDetail(document);

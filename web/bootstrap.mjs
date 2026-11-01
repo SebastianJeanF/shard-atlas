@@ -149,6 +149,7 @@ function customizeShell() {
   document.addEventListener('click', event => { if (event.target.closest('[data-graph-id]')) showNote(); }, true);
   $('#search').addEventListener('input', showLibrary);
   document.addEventListener('shard-atlas-saved', showNote);
+  document.addEventListener('shard-atlas-navigated', showNote);
   $('#topic-search').addEventListener('input', showLibrary);
   const observer = new MutationObserver(() => {
     const label = $('#view-label')?.textContent;

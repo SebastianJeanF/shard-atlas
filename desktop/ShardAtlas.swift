@@ -7,6 +7,48 @@ import Darwin
 // Info.plist here would let an old executable borrow a newer bundle's identity.
 private let shardAtlasCompiledNativeId = "__SHARD_ATLAS_NATIVE_ID__"
 
+// URL routing carries only stable record identities, never a callback URL or saved data.
+struct AtlasNavigationLink {
+    let url: URL
+
+    static func matches(_ value: String, _ pattern: String) -> Bool {
+        value.range(of: pattern, options: .regularExpression) == value.startIndex..<value.endIndex
+    }
+
+    static func components(_ url: URL, scheme: String, host: String, fields: Set<String>) -> (String, [String: String])? {
+        guard let parsed = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              parsed.scheme == scheme, parsed.host == host, parsed.port == nil,
+              parsed.user == nil, parsed.password == nil, parsed.fragment == nil,
+              parsed.percentEncodedPath.hasPrefix("/"),
+              let id = String(parsed.percentEncodedPath.dropFirst()).removingPercentEncoding else { return nil }
+        var values: [String: String] = [:]
+        for item in parsed.queryItems ?? [] {
+            guard fields.contains(item.name), values[item.name] == nil, let value = item.value else { return nil }
+            values[item.name] = value
+        }
+        return (id, values)
+    }
+
+    static func parse(_ url: URL, qa: Bool) -> AtlasNavigationLink? {
+        guard let (id, values) = components(url, scheme: qa ? "shardatlas-qa" : "shardatlas", host: "shard", fields: ["historyCollection", "historyRecord"]),
+              matches(id, "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$") else { return nil }
+        if !values.isEmpty {
+            guard values.count == 2, let collection = values["historyCollection"], let record = values["historyRecord"],
+                  matches(collection, "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"),
+                  matches(record, "^[a-z0-9]+(?:-[a-z0-9]+)*$"), record.count <= 120 else { return nil }
+        }
+        return AtlasNavigationLink(url: url)
+    }
+
+    static func historyReturn(_ url: URL, qa: Bool) -> Bool {
+        guard let (id, values) = components(url, scheme: qa ? "historyatlas-qa" : "historyatlas", host: "event", fields: ["collection"]),
+              matches(id, "^[a-z0-9]+(?:-[a-z0-9]+)*$"), id.count <= 120,
+              values.count == 1, let collection = values["collection"],
+              matches(collection, "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$") else { return false }
+        return true
+    }
+}
+
 struct DesktopConfiguration {
     let database: URL
     let backups: URL
@@ -208,6 +250,7 @@ final class DesktopDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, 
     private var quitting = false
     private var checkingQuit = false
     private var starting = false
+    private var pendingAtlasLink: URL?
     private var downloads: [ObjectIdentifier: (temporary: URL, destination: URL)] = [:]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -236,7 +279,7 @@ final class DesktopDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, 
         settings.userContentController.add(self, name: "nativeClipboard")
         let nativeIdentity = try? JSONSerialization.data(withJSONObject: ["nativeId": shardAtlasCompiledNativeId], options: [.sortedKeys])
         let identityJSON = nativeIdentity.flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
-        let nativeScript = "window.isShardAtlasDesktop = true; window.SHARD_ATLAS_NATIVE = Object.freeze(\(identityJSON));"
+        let nativeScript = "window.isShardAtlasDesktop = true; window.SHARD_ATLAS_NATIVE = Object.freeze({...\(identityJSON), qa: \(configuration.isQA ? "true" : "false")});"
         settings.userContentController.addUserScript(WKUserScript(source: nativeScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         webView = WKWebView(frame: .zero, configuration: settings)
         webView.navigationDelegate = self
@@ -458,6 +501,30 @@ final class DesktopDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, 
         window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return true
     }
 
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls where AtlasNavigationLink.parse(url, qa: configuration.isQA) != nil { pendingAtlasLink = url }
+        guard window != nil else { return }
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
+        deliverAtlasLink()
+    }
+
+    private func deliverAtlasLink() {
+        guard loaded, let pending = pendingAtlasLink,
+              let encoded = try? JSONSerialization.data(withJSONObject: pending.absoluteString, options: [.fragmentsAllowed]),
+              let literal = String(data: encoded, encoding: .utf8) else { return }
+        let script = "typeof window.ShardAtlasOpenLink === 'function' ? window.ShardAtlasOpenLink(\(literal)) : null"
+        webView.evaluateJavaScript(script) { result, error in
+            guard self.pendingAtlasLink == pending else { self.deliverAtlasLink(); return }
+            if let response = result as? [String: Any], response["accepted"] as? Bool == true {
+                // The shared router now retains this target through any unsaved-edit guard.
+                self.pendingAtlasLink = nil
+            } else if error == nil, result == nil {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { self.deliverAtlasLink() }
+            }
+        }
+    }
+
     private func isLocal(_ url: URL?) -> Bool {
         guard let url, let baseURL else { return false }
         return url.scheme == "http" && url.host == "127.0.0.1" && url.port == baseURL.port && url.user == nil && url.password == nil
@@ -471,7 +538,7 @@ final class DesktopDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, 
             else { decisionHandler(.allow) }
             return
         }
-        if navigationAction.navigationType == .linkActivated, let url, ["http", "https"].contains(url.scheme ?? ""), url.user == nil, url.password == nil {
+        if navigationAction.navigationType == .linkActivated, let url, (["http", "https"].contains(url.scheme ?? "") || AtlasNavigationLink.historyReturn(url, qa: self.configuration.isQA)), url.user == nil, url.password == nil {
             NSWorkspace.shared.open(url)
         }
         decisionHandler(.cancel)
@@ -484,7 +551,7 @@ final class DesktopDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, 
         decisionHandler(attachment || !navigationResponse.canShowMIMEType ? .download : .allow)
     }
 
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { loaded = true }
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { loaded = true; deliverAtlasLink() }
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { navigationFailure(error) }
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { navigationFailure(error) }
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
@@ -507,7 +574,7 @@ final class DesktopDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, 
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         if isLocal(navigationAction.request.url) { webView.load(navigationAction.request) }
         else if navigationAction.navigationType == .linkActivated, let url = navigationAction.request.url,
-                ["http", "https"].contains(url.scheme ?? ""), url.user == nil, url.password == nil {
+                (["http", "https"].contains(url.scheme ?? "") || AtlasNavigationLink.historyReturn(url, qa: self.configuration.isQA)), url.user == nil, url.password == nil {
             NSWorkspace.shared.open(url)
         }
         return nil

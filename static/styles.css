@@ -1336,3 +1336,9 @@ body[data-saving] dialog form { opacity: .75; }
 .cloud-backups-summary[data-backup-state="attention"],.cloud-backups-summary[data-backup-state="unavailable"]{border-color:#ae793c}
 .cloud-backups-actions{display:flex;gap:.7rem;flex-wrap:wrap;margin:1rem 0}.cloud-backups-dialog .cloud-backups-state{font-weight:650}.cloud-backups-dialog section{margin-top:1.5rem}.cloud-backups-dialog .recovery-card{align-items:center}.cloud-backups-dialog .recovery-card>div{min-width:0}.cloud-backups-local,.cloud-backups-time{color:var(--muted,#687267);font-size:.9rem}
 @media(max-width:600px){.cloud-backups-summary{align-items:stretch;flex-direction:column}.cloud-backups-actions>button{flex:1}.cloud-backups-dialog .recovery-card{align-items:stretch;flex-direction:column}}
+/* Navigation context is transient and separate from the saved explanation. */
+.atlas-return-nav{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 20px;padding:14px 18px;border:1px solid var(--border,#d9dfd4);border-radius:12px;background:var(--surface,#fff)}
+.atlas-return-nav p{margin:4px 0;max-width:75ch;overflow-wrap:anywhere}
+.atlas-return-nav code{overflow-wrap:anywhere;word-break:break-word}
+.atlas-return-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.atlas-return-actions a{display:inline-flex;text-decoration:none;white-space:normal}

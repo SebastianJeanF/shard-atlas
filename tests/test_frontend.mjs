@@ -193,8 +193,10 @@ try {
   const require = createRequire(import.meta.url);
   const windowListeners = new Map();
   const w = { document, matchMedia: () => ({ matches: reducedMotion }), addEventListener(name, callback) { const listeners = windowListeners.get(name) || []; listeners.push(callback); windowListeners.set(name, listeners); }, katex: require(path.join(project, 'static/vendor/katex/katex.min.js')), confirm: () => true };
-  context = vm.createContext({ window: w, document, fetch: browserFetch, FormData: FixtureFormData, FileReader: FixtureFileReader, navigator: { clipboard: { writeText: async text => { if (failClipboard) throw new Error('Clipboard permission denied'); clipboardWrites.push(text); } } }, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key=>storage.delete(key) }, setTimeout: trackedSetTimeout, clearTimeout: timer => { timers.delete(timer); clearTimeout(timer); }, console, Blob, URL: FixtureURL, atob: value => Buffer.from(value, 'base64').toString('binary') });
-  for (const filename of ['academic.js','learning.js','experiments.js','import-review.js','image-editor.js']) vm.runInContext(fs.readFileSync(path.join(project,'static',filename),'utf8'),context,{filename});
+  w.location = {href: base + '/', hash: ''};
+  w.history = {replaceState(_state, _title, value) { const url = new URL(value, w.location.href); w.location.href=url.href; w.location.hash=url.hash; }};
+  context = vm.createContext({ CustomEvent: FixtureEvent, URLSearchParams, window: w, document, fetch: browserFetch, FormData: FixtureFormData, FileReader: FixtureFileReader, navigator: { clipboard: { writeText: async text => { if (failClipboard) throw new Error('Clipboard permission denied'); clipboardWrites.push(text); } } }, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key=>storage.delete(key) }, setTimeout: trackedSetTimeout, clearTimeout: timer => { timers.delete(timer); clearTimeout(timer); }, console, Blob, URL: FixtureURL, atob: value => Buffer.from(value, 'base64').toString('binary') });
+  for (const filename of ['academic.js','learning.js','experiments.js','import-review.js','image-editor.js','atlas-navigation.js']) vm.runInContext(fs.readFileSync(path.join(project,'static',filename),'utf8'),context,{filename});
   const code = fs.readFileSync(path.join(project, 'static/app.js'), 'utf8');
   vm.runInContext(code + '\nwindow.testAtlas={renderExperiments,saveExperimentConfiguration,attachExperimentDraft,copyExperimentSetup,canRefreshAtlas,state,drafts,openImageViewer,imageViewerLoaded,imageViewerFailed,fitImageViewer,setImageViewerScale,zoomImageViewer,handleImageViewerKey,get imageViewer(){return imageViewer},filteredShards,subjectMemberships,renderCourses,reviewedImport,revalidateImport,get importIncluded(){return importIncluded},markdown,stabilizeWikiLinks,renderNav,renderLibrary,renderTimeline,renderBoards,atlasModel,atlasRelationshipModel,renderAtlas,renderDetail,dateLabel,previewImport,clearImportPreview,selectImportShard,get importImageUrls(){return importImageUrls},saveBoard,openBoardEditor,fitBoard,boardBounds,recognizeImage,imageIdsInEditor,changeView,boardSaves,boardRecovery,loadBoardRecovery,markBoardChanged,renderDraftShelf,renderUndoSummary,jumpToBoardSection,jumpToBoardItem,sectionBoardBounds,shardReleaseIds,filteredReleaseFeatures,filteredReleaseShards,renderReleaseFeature,loadReleaseCatalog,loadSpiralCatalog,setTimelineTheme,savedTimelineTheme,filteredSpiralExamples,handlePortalKey,openEditor,openLink,linkDirty,scheduleDraft,persistDraft,deleteDraft,writeRequest,runAction,closeDialog,showHistory,showRecovery,get editorImages(){return editorImages},showWikiSuggestions,clearFilters,refreshAtlas,get pending(){return pendingWrites},get busy(){return busy},get editing(){return editingId}};', context, { filename: 'static/app.js' });
   const t = w.testAtlas, $ = selector => document.querySelector(selector), results = [];
@@ -1646,6 +1648,33 @@ try {
 
   await check('Original arrows connect shared heading notes without duplicate cards', async () => {
     const board=t.state.data.boards[0],originalSections=board.sections,originalItems=board.items,originalLinks=t.state.data.links,heading=t.state.data.shards[0],child=t.state.data.shards[1];t.state.boardId=board.id;board.sections=[{id:'heading-section',title:'Ownership',shardId:heading.id,x:0,y:0,width:900,height:600,collapsed:false}];board.items=[{shardId:heading.id,x:0,y:0,width:900,height:70,sectionId:''},{shardId:child.id,x:120,y:140,width:250,height:180,sectionId:'heading-section'}];t.state.data.links=[{id:'heading-arrow',fromId:heading.id,toId:child.id,type:'supports',note:'Original heading connection'}];let output=t.renderBoards();assert.match(output,new RegExp('class="section-note-open" data-shard-id="'+heading.id+'"'));assert.match(output,/aria-label="Move section Ownership"/);assert.equal((output.match(/data-board-card=/g)||[]).length,1);const edges=output.split('class="board-connections"')[1].split('</svg>')[0];assert.match(edges,/<line /);assert.match(edges,/supports/);board.sections[0].shardId='missing-heading-note';output=t.renderBoards();assert.match(output,/saved canvas reference.*reference unavailable notes/);assert.match(output,/Recently deleted/);board.sections=originalSections;board.items=originalItems;t.state.data.links=originalLinks;
+  });
+
+  await check('History links open exact Shard IDs, clear filters and retain a transient return link without knowledge writes', async () => {
+    const target=t.state.data.shards[1],before=JSON.stringify(t.state.data),writes=apiWrites;
+    t.state.tags=['not-an-existing-topic'];
+    const result=w.ShardAtlasOpenLink(base+'/#shard='+encodeURIComponent(target.id)+'&historyCollection=qa-history-collection&historyRecord=history-context');
+    assert.equal(result.accepted,true);assert.equal(result.status,'opened');assert.equal(t.state.selectedId,target.id);assert.equal(t.state.tags.length,0);
+    assert.match($('#workspace').innerHTML,/Return to History Atlas/);
+    assert.match($('#workspace').innerHTML,/historyatlas:\/\/event\/history-context\?collection=qa-history-collection/);
+    assert.match($('#workspace').innerHTML,/event=history-context&amp;atlas=qa-history-collection/);
+    assert.equal(JSON.stringify(t.state.data),before);assert.equal(apiWrites,writes);
+  });
+  await check('Incoming History navigation preserves an open dirty editor and resumes only after it closes', async () => {
+    const original=t.state.data.shards[0],target=t.state.data.shards[1];
+    t.openEditor(original.id);$('#shard-title').value='Unsaved navigation guard';const before=JSON.stringify(t.state.data),writes=apiWrites,selected=t.state.selectedId;
+    const result=w.ShardAtlasOpenLink('shardatlas://shard/'+encodeURIComponent(target.id)+'?historyCollection=qa-history-collection&historyRecord=history-context');
+    assert.equal(result.status,'deferred');assert.equal(t.state.selectedId,selected);assert.ok($('#editor-dialog').open);assert.equal($('#shard-title').value,'Unsaved navigation guard');
+    assert.equal(JSON.stringify(t.state.data),before);assert.equal(apiWrites,writes);
+    $('#editor-dialog').close();await t.deleteDraft('editor');await until(()=>t.state.selectedId===target.id&&$('#workspace').innerHTML.includes('Return to History Atlas'));
+    assert.equal(JSON.stringify(t.state.data),before);
+  });
+  await check('Unavailable linked shards retain their IDs across rendering instead of selecting the first record', async () => {
+    const before=JSON.stringify(t.state.data),writes=apiWrites;
+    const result=w.ShardAtlasOpenLink(base+'/#shard=missing-history-target&historyCollection=qa-history-collection&historyRecord=history-context');
+    assert.equal(result.status,'missing');assert.equal(t.state.selectedId,'missing-history-target');
+    assert.match($('#workspace').innerHTML,/Requested shard unavailable/);assert.match($('#workspace').innerHTML,/missing-history-target/);assert.match($('#workspace').innerHTML,/Return to History Atlas/);
+    t.changeView('library');assert.equal(t.state.selectedId,'missing-history-target');assert.equal(JSON.stringify(t.state.data),before);assert.equal(apiWrites,writes);
   });
 
   console.log(results.length + ' frontend checks passed.');

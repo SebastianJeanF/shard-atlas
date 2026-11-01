@@ -17,6 +17,10 @@ SPEC.loader.exec_module(desktop_build)
 
 
 class BundleConfigurationTests(unittest.TestCase):
+    def test_qa_and_working_apps_register_only_their_own_navigation_scheme(self):
+        self.assertEqual(desktop_build.url_types()[0]["CFBundleURLSchemes"], ["shardatlas"])
+        self.assertEqual(desktop_build.url_types(True)[0]["CFBundleURLSchemes"], ["shardatlas-qa"])
+
     def test_native_identity_is_compiled_instead_of_borrowed_from_info_plist(self):
         identity = "a" * 64
         stamped = desktop_build.compiled_native_source(identity)
