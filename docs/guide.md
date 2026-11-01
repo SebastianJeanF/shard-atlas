@@ -78,6 +78,18 @@ An approach's identity stays stable when you rename it or edit its code. Before 
 
 Topics answer which area a shard belongs to. Connections explain how ideas contribute to one another. Sharing a topic does not establish that a technique solves a problem. Applicability suggestions are not generated automatically in this release.
 
+## Follow an idea from History Atlas
+
+**History Atlas can link a historical account to its technical explanation in Shard Atlas.** The link is optional for both dated events and undated context. General history can remain unlinked. Historical accounts stay in History Atlas, while reusable technical explanations stay in Shard Atlas.
+
+In a History Atlas record's editor, open **Connections → Optional concept links**. Search for an existing Shard Atlas concept and choose **Link concept**, or choose **Add reference by stable ID**. Add a short relevance note when useful. **Preview concept** reads the current explanation without saving the historical record. Save the History Atlas record to retain the reference. Linking an explanation does not establish historical influence.
+
+While reading that record, choose **Open in Shard Atlas** to open the exact shard in the Mac app, or **Open website** for the private website. A reference uses the shard's stable ID and collection identity, so renaming the concept preserves the connection. The card distinguishes the current title from an optional saved label. If the local app is unavailable, the target is missing, or the collection differs, the reference stays available with its identity and status. Use **Retry** when the intended collection is ready.
+
+Shard Atlas displays **Return to History Atlas** when opened through a link carrying historical context. This returns to the originating History record and collection. **Open in browser** offers the local History Atlas browser fallback. A missing Shard target retains its requested ID and return link instead of opening a different note.
+
+**Incoming links wait for unfinished work.** An open editor or dialog, unsaved experiment preview, active canvas gesture, or pending save keeps the current workspace intact. Resolve that work before the requested shard opens. For an experiment preview, save the configuration or restore its original settings. Runtime previews remain separate from recoverable editor drafts. The return context belongs to navigation and does not add a historical record to the Shard collection.
+
 ## Follow subjects and courses
 
 **Generic · all subjects** shows the shared collection. Choose **C++**, **Computer science**, **Mathematics**, or **Machine learning** to focus on a subject. These views can overlap. An idea can belong to several subjects without becoming several notes. Subject focus changes what you see, rather than moving or copying knowledge.
