@@ -1650,6 +1650,38 @@ try {
     const board=t.state.data.boards[0],originalSections=board.sections,originalItems=board.items,originalLinks=t.state.data.links,heading=t.state.data.shards[0],child=t.state.data.shards[1];t.state.boardId=board.id;board.sections=[{id:'heading-section',title:'Ownership',shardId:heading.id,x:0,y:0,width:900,height:600,collapsed:false}];board.items=[{shardId:heading.id,x:0,y:0,width:900,height:70,sectionId:''},{shardId:child.id,x:120,y:140,width:250,height:180,sectionId:'heading-section'}];t.state.data.links=[{id:'heading-arrow',fromId:heading.id,toId:child.id,type:'supports',note:'Original heading connection'}];let output=t.renderBoards();assert.match(output,new RegExp('class="section-note-open" data-shard-id="'+heading.id+'"'));assert.match(output,/aria-label="Move section Ownership"/);assert.equal((output.match(/data-board-card=/g)||[]).length,1);const edges=output.split('class="board-connections"')[1].split('</svg>')[0];assert.match(edges,/<line /);assert.match(edges,/supports/);board.sections[0].shardId='missing-heading-note';output=t.renderBoards();assert.match(output,/saved canvas reference.*reference unavailable notes/);assert.match(output,/Recently deleted/);board.sections=originalSections;board.items=originalItems;t.state.data.links=originalLinks;
   });
 
+  await check('Deferred History navigation preserves DOM-only experiment settings until the preview is explicitly resolved', async () => {
+    t.changeView('experiments');const workspace=$('#workspace'),markup=workspace.innerHTML;
+    const cardMarkup=markup.match(/<article class="experiment-runtime"[\s\S]*?<\/article>/)[0];
+    const card=new Element('article',attributes(cardMarkup.match(/^<article([^>]*)>/)[1]),document),config=new Element('div',{'data-experiment-config':'A'},document);
+    const configNames=new Set(Object.keys(w.ExperimentAtlas.defaultExperiment('gradient-descent').config)),metadataFields=[],configFields=[];
+    for(const match of cardMarkup.matchAll(/<(input|textarea)([^>]*)(?:>([\s\S]*?)<\/\1>|\s*\/?>)/g)){
+      const attrs=attributes(match[2]);if(!attrs['data-experiment-field'])continue;
+      const field=new Element(match[1],attrs,document);if(match[1]==='textarea')field.value=decode(match[3]||'');
+      const owner=configNames.has(field.dataset.experimentField)?config:card;field.closest=()=>owner;
+      (owner===config?configFields:metadataFields).push(field);
+    }
+    config.querySelectorAll=selector=>selector==='[data-experiment-field]'?configFields:[];
+    card.querySelectorAll=selector=>selector==='[data-experiment-field]'?[...metadataFields,...configFields]:[];
+    card.querySelector=selector=>selector==='[data-experiment-config="A"]'?config:selector==='[data-experiment-comparison]'?{checked:false}:null;
+    const originalQuery=document.querySelectorAll;
+    document.querySelectorAll=function(selector){return selector==='[data-experiment-runtime]'?[card]:originalQuery.call(this,selector);};
+    try{
+      assert.equal(w.ExperimentAtlas.hasPreviewChanges(document),false,'The actual experiment reader must recognize the rendered baseline');
+      const learningRate=configFields.find(field=>field.dataset.experimentField==='learningRate'),initial=learningRate.value;
+      learningRate.value='0.375';assert.equal(w.ExperimentAtlas.hasPreviewChanges(document),true);assert.equal(t.canRefreshAtlas(),false);
+      const before=JSON.stringify(t.state.data),writes=apiWrites,target=t.state.data.shards[0];
+      const result=w.ShardAtlasOpenLink('shardatlas://shard/'+encodeURIComponent(target.id)+'?historyCollection=qa-history-collection&historyRecord=history-context');
+      assert.equal(result.status,'deferred');assert.equal(workspace.innerHTML,markup,'Deferral must not replace the experiment workspace');
+      assert.equal(learningRate.value,'0.375');assert.equal(w.ExperimentAtlas.hasPreviewChanges(document),true);
+      await delay(1100);assert.equal(workspace.innerHTML,markup);assert.equal(learningRate.value,'0.375');
+      assert.equal(JSON.stringify(t.state.data),before);assert.equal(apiWrites,writes);
+      learningRate.value=initial;assert.equal(w.ExperimentAtlas.hasPreviewChanges(document),false);
+      document.querySelectorAll=originalQuery;
+      await until(()=>t.state.view==='library'&&t.state.selectedId===target.id);
+    }finally{document.querySelectorAll=originalQuery;}
+  });
+
   await check('History links open exact Shard IDs, clear filters and retain a transient return link without knowledge writes', async () => {
     const target=t.state.data.shards[1],before=JSON.stringify(t.state.data),writes=apiWrites;
     t.state.tags=['not-an-existing-topic'];

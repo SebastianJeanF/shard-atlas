@@ -69,3 +69,11 @@ print(String(data: data, encoding: .utf8)!)
             with self.subTest(url=url):
                 self.assertFalse(self.parse(url)["historyReturn"])
         self.assertFalse(self.parse(link, qa=True)["historyReturn"])
+
+    def test_long_history_ids_roundtrip_without_relaxing_collection_or_url_limits(self):
+        history_id = "long-history-record-" * 20 + "end"
+        collection = "a" * 120
+        self.assertTrue(self.parse(f"shardatlas://shard/target?historyCollection={collection}&historyRecord={history_id}")["accepted"])
+        self.assertTrue(self.parse(f"historyatlas://event/{history_id}?collection={collection}")["historyReturn"])
+        self.assertFalse(self.parse(f"historyatlas://event/{history_id}?collection={collection}x")["historyReturn"])
+        self.assertFalse(self.parse("historyatlas://event/" + "a" * 8192 + "?collection=atlas")["historyReturn"])

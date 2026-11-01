@@ -3,8 +3,13 @@
   'use strict';
   const SITE = 'https://shard-atlas.deltamaster64.chatgpt.site';
   const SHARD_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/;
-  const HISTORY_ID = /^(?=.{1,120}$)[a-z0-9]+(?:-[a-z0-9]+)*$/;
-  const COLLECTION_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
+  const HISTORY_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  const COLLECTION_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$/;
+  const MAX_URL_LENGTH = 8192;
+  function bounded(value) {
+    if (typeof value !== 'string' || value.length > MAX_URL_LENGTH) throw new Error('The atlas link is too long. Open the app and find the record directly; no record IDs or knowledge have been changed.');
+    return value;
+  }
   const fullMatch = (value, pattern) => typeof value === 'string' && value.match(pattern)?.[0] === value;
   function validate(route) {
     if (!route || !fullMatch(route.shardId, SHARD_ID)) throw new Error('The shard link has an invalid record ID.');
@@ -23,7 +28,8 @@
     return result;
   }
   function parse(value, {qa = false, baseUrl = SITE} = {}) {
-    const url = new URL(value, baseUrl);
+    const url = new URL(bounded(value), baseUrl);
+    bounded(url.href);
     const scheme = qa ? 'shardatlas-qa:' : 'shardatlas:';
     if (url.protocol === scheme) {
       if (url.hostname !== 'shard' || url.port || url.username || url.password || url.hash) throw new Error('This is not a supported shard link.');
@@ -40,7 +46,7 @@
   function fragment(value) {
     const route = validate(value), params = new URLSearchParams({shard: route.shardId});
     if (route.historyCollection != null) { params.set('historyCollection', route.historyCollection); params.set('historyRecord', route.historyRecord); }
-    return '#' + params;
+    return bounded('#' + params);
   }
   function returnLinks(value, {qa = false} = {}) {
     const route = validate(value);
@@ -48,7 +54,7 @@
     const query = new URLSearchParams({collection: route.historyCollection});
     const browser = new URL('http://127.0.0.1:18766/');
     browser.search = new URLSearchParams({event: route.historyRecord, atlas: route.historyCollection});
-    return {native: `${qa ? 'historyatlas-qa' : 'historyatlas'}://event/${encodeURIComponent(route.historyRecord)}?${query}`, browser: browser.href};
+    return {native: bounded(`${qa ? 'historyatlas-qa' : 'historyatlas'}://event/${encodeURIComponent(route.historyRecord)}?${query}`), browser: bounded(browser.href)};
   }
   function createRouter({qa = false, baseUrl = SITE, ready = () => true, canNavigate = () => true,
     hasShard, selectShard, showMissing, changed = () => {}, replaceUrl = () => {}, message = () => {}}) {
@@ -59,7 +65,9 @@
       if (!route || !ready()) return snapshot();
       if (status === 'opened' && hasShard(route.shardId)) return snapshot();
       if (!canNavigate()) {
-        if (setStatus('deferred')) { message('Finish or close the current edit or dialog to open the requested shard. Its link is retained.'); changed(snapshot()); }
+        // Never replace protected workspace DOM: experiment previews and canvas
+        // gestures can contain unsaved state that is not represented in data.
+        if (setStatus('deferred')) message('Finish or close the current edit or dialog to open the requested shard. Its link is retained.');
         return snapshot();
       }
       if (!hasShard(route.shardId)) {

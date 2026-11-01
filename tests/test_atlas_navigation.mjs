@@ -46,15 +46,26 @@ test('return URLs are generated from identities and keep production and QA apps 
   assert.equal(nav.returnLinks({shardId:'id'}),null);
 });
 
+test('History IDs over120 characters roundtrip, while collection IDs and complete URLs stay bounded',()=>{
+  const historyRecord='long-history-record-'.repeat(20)+'end',historyCollection='a'.repeat(120);
+  const route={shardId:'target',historyCollection,historyRecord};
+  assert.deepEqual(plain(nav.parse('shardatlas://shard/target?'+new URLSearchParams({historyCollection,historyRecord}))),route);
+  assert.deepEqual(plain(nav.parse(site+'/'+nav.fragment(route))),route);
+  assert.equal(new URL(nav.returnLinks(route).native).pathname,'/'+historyRecord);
+  assert.throws(()=>nav.parse('shardatlas://shard/target?'+new URLSearchParams({historyCollection:historyCollection+'x',historyRecord})),/valid collection/);
+  assert.throws(()=>nav.parse('shardatlas://shard/target?'+new URLSearchParams({historyCollection,historyRecord:'a'.repeat(8192)})),/too long/);
+});
+
 test('startup and unsaved guards defer navigation while retaining the exact requested route',()=>{
   let ready=false,protectedEdit=true,selected='first';
-  const messages=[],urls=[];
+  const messages=[],urls=[],changed=[];
   const router=nav.createRouter({ready:()=>ready,canNavigate:()=>!protectedEdit,hasShard:id=>id==='target',
-    selectShard:id=>{selected=id;},showMissing:()=>assert.fail('Target exists'),replaceUrl:url=>urls.push(url),message:value=>messages.push(value)});
+    selectShard:id=>{selected=id;},showMissing:()=>assert.fail('Target exists'),replaceUrl:url=>urls.push(url),message:value=>messages.push(value),changed:value=>changed.push(value)});
   assert.equal(router.open(`shardatlas://shard/target?${returnQuery}`).accepted,true);
   assert.equal(selected,'first');assert.equal(router.current().status,'pending');
   ready=true;router.flush();router.flush();
   assert.equal(router.current().status,'deferred');assert.equal(messages.length,1);assert.equal(selected,'first');
+  assert.equal(changed.length,0,'A protected workspace must not be replaced by a changed callback');
   assert.equal(router.current().route.shardId,'target');assert.match(urls[0],/^#shard=target/);
   protectedEdit=false;router.flush();assert.equal(selected,'target');assert.equal(router.current().status,'opened');
   protectedEdit=true;router.flush();assert.equal(router.current().status,'opened');assert.equal(messages.length,1,'Opening a later editor must not requeue an already opened link');

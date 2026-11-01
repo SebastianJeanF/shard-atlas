@@ -16,7 +16,8 @@ struct AtlasNavigationLink {
     }
 
     static func components(_ url: URL, scheme: String, host: String, fields: Set<String>) -> (String, [String: String])? {
-        guard let parsed = URLComponents(url: url, resolvingAgainstBaseURL: false),
+        guard url.absoluteString.utf8.count <= 8192,
+              let parsed = URLComponents(url: url, resolvingAgainstBaseURL: false),
               parsed.scheme == scheme, parsed.host == host, parsed.port == nil,
               parsed.user == nil, parsed.password == nil, parsed.fragment == nil,
               parsed.percentEncodedPath.hasPrefix("/"),
@@ -34,17 +35,17 @@ struct AtlasNavigationLink {
               matches(id, "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$") else { return nil }
         if !values.isEmpty {
             guard values.count == 2, let collection = values["historyCollection"], let record = values["historyRecord"],
-                  matches(collection, "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"),
-                  matches(record, "^[a-z0-9]+(?:-[a-z0-9]+)*$"), record.count <= 120 else { return nil }
+                  matches(collection, "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$"),
+                  matches(record, "^[a-z0-9]+(?:-[a-z0-9]+)*$") else { return nil }
         }
         return AtlasNavigationLink(url: url)
     }
 
     static func historyReturn(_ url: URL, qa: Bool) -> Bool {
         guard let (id, values) = components(url, scheme: qa ? "historyatlas-qa" : "historyatlas", host: "event", fields: ["collection"]),
-              matches(id, "^[a-z0-9]+(?:-[a-z0-9]+)*$"), id.count <= 120,
+              matches(id, "^[a-z0-9]+(?:-[a-z0-9]+)*$"),
               values.count == 1, let collection = values["collection"],
-              matches(collection, "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$") else { return false }
+              matches(collection, "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$") else { return false }
         return true
     }
 }
